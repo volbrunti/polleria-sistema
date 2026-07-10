@@ -1,0 +1,380 @@
+// Schema Prisma — Sistema de Gestión Pollería
+// Módulo 1 + entidades transversales completas (ver CLAUDE.md §9)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum TipoSucursal {
+  PRODUCCION
+  VENTA
+}
+
+enum Rol {
+  ADMINISTRADOR
+  SOCIO
+  ENCARGADO
+  CAJERO
+  PRODUCCION
+}
+
+enum TipoProducto {
+  MATERIA_PRIMA
+  ELABORADO
+  REVENTA
+}
+
+enum UnidadDeMedida {
+  KG
+  UNIDAD
+}
+
+enum TipoMovimientoStock {
+  INGRESO_COMPRA
+  CONSUMO_PRODUCCION
+  PRODUCCION_ALTA
+  DESPERDICIO_PRODUCCION
+  TRANSFERENCIA_SALIDA
+  TRANSFERENCIA_ENTRADA
+  VENTA
+  ANULACION_REPOSICION
+  ATENCION
+  MERMA_QUEMADO
+  RETORNO_A_PRODUCCION
+  MARCADO_POLLO
+  AJUSTE
+}
+
+enum TipoAlerta {
+  DESVIO_PRODUCCION
+  DISCREPANCIA_TRANSFERENCIA
+  DISCREPANCIA_CAJA
+  BLOQUEO_TURNO
+  STOCK_MINIMO
+}
+
+enum EstadoLoteProduccion {
+  ABIERTO
+  CERRADO
+}
+
+enum EstadoTransferencia {
+  PENDIENTE_RECEPCION
+  CONFIRMADA
+  CONFIRMADA_CON_DISCREPANCIA
+}
+
+// ─────────────────────────────────────────────
+// TRANSVERSALES
+// ─────────────────────────────────────────────
+
+model Sucursal {
+  id        Int          @id @default(autoincrement())
+  nombre    String       @unique
+  tipo      TipoSucursal
+  direccion String?
+  activa    Boolean      @default(true)
+
+  movimientosStock         MovimientoStock[]
+  ingresosMercaderia       IngresoMercaderia[]
+  transferenciasOrigen     Transferencia[]     @relation("TransferenciaOrigen")
+  transferenciasDestino    Transferencia[]     @relation("TransferenciaDestino")
+
+  @@map("sucursales")
+}
+
+model Usuario {
+  id           Int     @id @default(autoincrement())
+  nombre       String
+  username     String  @unique
+  passwordHash String
+  rol          Rol
+  activo       Boolean @default(true)
+
+  refreshTokens        RefreshToken[]
+  movimientosStock     MovimientoStock[]
+  registrosAuditoria   RegistroAuditoria[]
+  preciosCreados       Precio[]
+  ingresosMercaderia   IngresoMercaderia[]
+  lotesProduccion      LoteDeProduccion[]
+  transferenciasEmitidas  Transferencia[] @relation("TransferenciaEmisor")
+  transferenciasRecibidas Transferencia[] @relation("TransferenciaReceptor")
+
+  @@map("usuarios")
+}
+
+model RefreshToken {
+  id         Int      @id @default(autoincrement())
+  tokenHash  String   @unique
+  usuario    Usuario  @relation(fields: [usuarioId], references: [id])
+  usuarioId  Int
+  expiraEn   DateTime
+  revocado   Boolean  @default(false)
+  creadoEn   DateTime @default(now())
+
+  @@map("refresh_tokens")
+}
+
+model Producto {
+  id             Int            @id @default(autoincrement())
+  nombre         String         @unique
+  categoria      String
+  tipo           TipoProducto
+  unidadDeMedida UnidadDeMedida
+  activo         Boolean        @default(true)
+
+  precios            Precio[]
+  movimientosStock   MovimientoStock[]
+  lineasIngreso      LineaIngreso[]
+  fichaTecnica       FichaTecnica?
+  ingredientesDondeEsInsumo IngredienteDeReceta[]
+  insumosUsados      InsumoUsado[]
+  lotesProduccion    LoteDeProduccion[]
+  lineasTransferencia LineaDeTransferencia[]
+
+  @@map("productos")
+}
+
+model Precio {
+  id         Int      @id @default(autoincrement())
+  producto   Producto @relation(fields: [productoId], references: [id])
+  productoId Int
+  monto      Decimal  @db.Decimal(12, 2)
+  fechaDesde DateTime @default(now())
+  usuario    Usuario  @relation(fields: [usuarioId], references: [id])
+  usuarioId  Int
+
+  @@index([productoId, fechaDesde])
+  @@map("precios")
+}
+
+// LA ENTIDAD CENTRAL: stock actual = SUM(cantidad) por producto+sucursal
+model MovimientoStock {
+  id         Int                 @id @default(autoincrement())
+  producto   Producto            @relation(fields: [productoId], references: [id])
+  productoId Int
+  sucursal   Sucursal            @relation(fields: [sucursalId], references: [id])
+  sucursalId Int
+  tipo       TipoMovimientoStock
+  cantidad   Decimal             @db.Decimal(12, 3) // positiva o negativa
+  fechaHora  DateTime            @default(now())
+  usuario    Usuario             @relation(fields: [usuarioId], references: [id])
+  usuarioId  Int
+  // referencia polimórfica al documento origen
+  tipoOrigen String
+  origenId   Int
+
+  @@index([productoId, sucursalId])
+  @@index([tipoOrigen, origenId])
+  @@map("movimientos_stock")
+}
+
+model RegistroAuditoria {
+  id              Int      @id @default(autoincrement())
+  accion          String
+  entidad         String
+  entidadId       Int
+  usuario         Usuario  @relation(fields: [usuarioId], references: [id])
+  usuarioId       Int
+  fechaHora       DateTime @default(now())
+  datosAnteriores Json?
+  datosNuevos     Json?
+
+  @@index([entidad, entidadId])
+  @@index([usuarioId])
+  @@index([fechaHora])
+  @@map("registros_auditoria")
+}
+
+model Alerta {
+  id         Int        @id @default(autoincrement())
+  tipo       TipoAlerta
+  // referencia polimórfica al objeto disparador
+  tipoOrigen String
+  origenId   Int
+  fechaHora  DateTime   @default(now())
+  vista      Boolean    @default(false)
+  detalle    Json // snapshot de datos relevantes (producto, cantidades, usuarios, desvío)
+
+  @@index([vista])
+  @@index([tipo])
+  @@map("alertas")
+}
+
+// ─────────────────────────────────────────────
+// MÓDULO 1 — FLUJO 1: INGRESO DE MERCADERÍA
+// ─────────────────────────────────────────────
+
+model Proveedor {
+  id       Int     @id @default(autoincrement())
+  nombre   String  @unique
+  contacto String?
+  activo   Boolean @default(true)
+  esOtro   Boolean @default(false)
+
+  ingresos IngresoMercaderia[]
+
+  @@map("proveedores")
+}
+
+model IngresoMercaderia {
+  id                     Int       @id @default(autoincrement())
+  proveedor              Proveedor @relation(fields: [proveedorId], references: [id])
+  proveedorId            Int
+  comentarioProveedorOtro String?
+  sucursal               Sucursal  @relation(fields: [sucursalId], references: [id])
+  sucursalId             Int
+  fechaHora              DateTime  @default(now())
+  usuario                Usuario   @relation(fields: [usuarioId], references: [id])
+  usuarioId              Int
+  fotoRemitoUrl          String?
+
+  lineas LineaIngreso[]
+
+  @@map("ingresos_mercaderia")
+}
+
+// = lote de ingreso trazable ("10 kg de nalga del 3/7")
+model LineaIngreso {
+  id                         Int               @id @default(autoincrement())
+  ingresoMercaderia          IngresoMercaderia @relation(fields: [ingresoMercaderiaId], references: [id])
+  ingresoMercaderiaId        Int
+  producto                   Producto          @relation(fields: [productoId], references: [id])
+  productoId                 Int
+  cantidadSegunRemito        Decimal           @db.Decimal(12, 3)
+  cantidadRealPesada         Decimal           @db.Decimal(12, 3)
+  cantidadRestanteDisponible Decimal           @db.Decimal(12, 3)
+
+  insumosUsados InsumoUsado[]
+
+  @@index([productoId])
+  @@map("lineas_ingreso")
+}
+
+// ─────────────────────────────────────────────
+// MÓDULO 1 — FLUJO 2: PRODUCCIÓN
+// ─────────────────────────────────────────────
+
+model FichaTecnica {
+  id                 Int      @id @default(autoincrement())
+  productoElaborado  Producto @relation(fields: [productoElaboradoId], references: [id])
+  productoElaboradoId Int     @unique
+
+  versiones FichaTecnicaVersion[]
+
+  @@map("fichas_tecnicas")
+}
+
+model FichaTecnicaVersion {
+  id                      Int          @id @default(autoincrement())
+  fichaTecnica            FichaTecnica @relation(fields: [fichaTecnicaId], references: [id])
+  fichaTecnicaId          Int
+  numeroVersion           Int
+  fechaDesde              DateTime     @default(now())
+  activa                  Boolean      @default(true)
+  // unidades esperadas por unidad (KG) de insumo principal — referencia del cliente
+  rendimientoEsperado     Decimal      @db.Decimal(12, 3)
+  desperdicioEsperadoPct  Decimal      @db.Decimal(5, 2)
+  umbralDesvioAlertaPct   Decimal      @db.Decimal(5, 2)
+
+  ingredientes    IngredienteDeReceta[]
+  lotesProduccion LoteDeProduccion[]
+
+  @@unique([fichaTecnicaId, numeroVersion])
+  @@map("fichas_tecnicas_versiones")
+}
+
+model IngredienteDeReceta {
+  id                        Int                 @id @default(autoincrement())
+  fichaTecnicaVersion       FichaTecnicaVersion @relation(fields: [fichaTecnicaVersionId], references: [id])
+  fichaTecnicaVersionId     Int
+  productoInsumo            Producto            @relation(fields: [productoInsumoId], references: [id])
+  productoInsumoId          Int
+  cantidadPorUnidadProducida Decimal            @db.Decimal(12, 4)
+  esPrincipal               Boolean             @default(false) // insumo principal: base del cálculo de rendimiento
+
+  @@unique([fichaTecnicaVersionId, productoInsumoId])
+  @@map("ingredientes_receta")
+}
+
+model LoteDeProduccion {
+  id                       Int                  @id @default(autoincrement())
+  productoElaborado        Producto             @relation(fields: [productoElaboradoId], references: [id])
+  productoElaboradoId      Int
+  fichaTecnicaVersion      FichaTecnicaVersion  @relation(fields: [fichaTecnicaVersionId], references: [id])
+  fichaTecnicaVersionId    Int // versión CONGELADA al abrir el lote
+  fechaHora                DateTime             @default(now())
+  usuarioOperario          Usuario              @relation(fields: [usuarioOperarioId], references: [id])
+  usuarioOperarioId        Int
+  estado                   EstadoLoteProduccion @default(ABIERTO)
+  unidadesProducidasReales Decimal?             @db.Decimal(12, 3)
+  desperdicioRealKg        Decimal?             @db.Decimal(12, 3)
+  // CAMPOS CIEGOS — jamás serializar para rol PRODUCCION
+  unidadesEsperadas        Decimal?             @db.Decimal(12, 3)
+  desvioPct                Decimal?             @db.Decimal(7, 2)
+  alertaDisparada          Boolean              @default(false)
+
+  insumosUsados InsumoUsado[]
+
+  @@map("lotes_produccion")
+}
+
+model InsumoUsado {
+  id                 Int              @id @default(autoincrement())
+  loteDeProduccion   LoteDeProduccion @relation(fields: [loteDeProduccionId], references: [id])
+  loteDeProduccionId Int
+  productoInsumo     Producto         @relation(fields: [productoInsumoId], references: [id])
+  productoInsumoId   Int
+  lineaIngresoOrigen LineaIngreso     @relation(fields: [lineaIngresoOrigenId], references: [id])
+  lineaIngresoOrigenId Int
+  cantidadUsada      Decimal          @db.Decimal(12, 3)
+
+  @@map("insumos_usados")
+}
+
+// ─────────────────────────────────────────────
+// MÓDULO 1 — FLUJO 3: TRANSFERENCIAS
+// ─────────────────────────────────────────────
+
+model Transferencia {
+  id                 Int                 @id @default(autoincrement())
+  sucursalOrigen     Sucursal            @relation("TransferenciaOrigen", fields: [sucursalOrigenId], references: [id])
+  sucursalOrigenId   Int
+  sucursalDestino    Sucursal            @relation("TransferenciaDestino", fields: [sucursalDestinoId], references: [id])
+  sucursalDestinoId  Int
+  fechaHoraEnvio     DateTime            @default(now())
+  usuarioEmisor      Usuario             @relation("TransferenciaEmisor", fields: [usuarioEmisorId], references: [id])
+  usuarioEmisorId    Int
+  usuarioReceptor    Usuario?            @relation("TransferenciaReceptor", fields: [usuarioReceptorId], references: [id])
+  usuarioReceptorId  Int?
+  fechaHoraRecepcion DateTime?
+  estado             EstadoTransferencia @default(PENDIENTE_RECEPCION)
+
+  lineas LineaDeTransferencia[]
+
+  @@map("transferencias")
+}
+
+model LineaDeTransferencia {
+  id               Int           @id @default(autoincrement())
+  transferencia    Transferencia @relation(fields: [transferenciaId], references: [id])
+  transferenciaId  Int
+  producto         Producto      @relation(fields: [productoId], references: [id])
+  productoId       Int
+  // CAMPO CIEGO para el receptor antes de confirmar
+  cantidadEnviada  Decimal       @db.Decimal(12, 3)
+  cantidadRecibida Decimal?      @db.Decimal(12, 3)
+  diferencia       Decimal?      @db.Decimal(12, 3)
+
+  @@unique([transferenciaId, productoId])
+  @@map("lineas_transferencia")
+}
