@@ -1,0 +1,1393 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; font-family:'Archivo',system-ui,sans-serif; color:#17251c; background:#e7eae1; }
+  a { color:#1a7f3f; } a:hover { color:#135c2d; }
+  input, button, select { font-family:inherit; }
+  @keyframes pop { 0%{transform:scale(.4);opacity:0} 70%{transform:scale(1.08)} 100%{transform:scale(1);opacity:1} }
+</style>
+</helmet>
+
+<sc-if value="{{ offline }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;top:0;left:0;right:0;z-index:99;background:#c2321e;color:#fff;text-align:center;padding:12px;font-size:16px;font-weight:700">Sin conexión — los datos no se están guardando</div>
+</sc-if>
+
+<!-- ============ LOGIN ============ -->
+<sc-if value="{{ isLogin }}" hint-placeholder-val="{{ true }}">
+  <div data-screen-label="Login" style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px">
+    <div style="width:min(430px,100%);display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:10px;padding-bottom:8px">
+        <div style="width:68px;height:68px;border-radius:20px;background:#f4c531;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:24px;color:#17251c;letter-spacing:-0.5px">L&amp;C</div>
+        <div style="font-size:24px;font-weight:800;letter-spacing:0.06em">LIMÓN &amp; CHIMI</div>
+        <div style="font-size:14px;color:#5f6d60">Sistema de gestión · Módulo 1</div>
+      </div>
+      <div style="background:#fff;border:1px solid #dfe4d9;border-radius:18px;padding:24px;display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label for="lu" style="font-size:15px;font-weight:600">Usuario</label>
+          <input id="lu" onChange="{{ onLoginU }}" style="height:56px;border:2px solid #c7d1c2;border-radius:12px;font-size:19px;padding:0 16px;outline-color:#1a7f3f"></input>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label for="lp" style="font-size:15px;font-weight:600">Contraseña</label>
+          <input id="lp" type="password" onChange="{{ onLoginP }}" style="height:56px;border:2px solid #c7d1c2;border-radius:12px;font-size:19px;padding:0 16px;outline-color:#1a7f3f"></input>
+        </div>
+        <sc-if value="{{ hasLoginErr }}" hint-placeholder-val="{{ false }}">
+          <div style="background:#faeae7;color:#a02514;border-radius:10px;padding:12px 14px;font-size:15px;font-weight:600">Usuario o contraseña incorrectos</div>
+        </sc-if>
+        <button onClick="{{ doLogin }}" style="width:100%;min-height:64px;border:none;border-radius:14px;background:#1a7f3f;color:#fff;font-size:20px;font-weight:800;cursor:pointer;letter-spacing:0.04em" style-hover="background:#146130">ENTRAR</button>
+        <sc-if value="{{ showApi }}" hint-placeholder-val="{{ false }}"><div style="font-family:ui-monospace,monospace;font-size:11px;color:#7a8579;background:#eef1ea;border-radius:6px;padding:4px 8px;align-self:flex-start">POST /api/auth/login</div></sc-if>
+      </div>
+      <div style="background:#fff;border:1px dashed #c7d1c2;border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+        <div style="font-size:13px;color:#5f6d60;font-weight:600">DEMO — entrar directo como:</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <sc-for list="{{ demoUsers }}" as="d" hint-placeholder-count="5">
+            <button onClick="{{ d.onTap }}" style="min-height:44px;padding:0 14px;border:2px solid #c7d1c2;border-radius:10px;background:#fff;font-size:15px;font-weight:600;cursor:pointer;color:#17251c" style-hover="border-color:#1a7f3f;color:#1a7f3f">{{ d.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<!-- ============ PRODUCCIÓN (celular) ============ -->
+<sc-if value="{{ isProd }}" hint-placeholder-val="{{ false }}">
+  <div style="min-height:100vh;display:flex;justify-content:center;align-items:flex-start;padding:28px 12px">
+    <div data-screen-label="App Producción (celular)" style="width:min(402px,100%);min-height:800px;background:#f4f6f0;border-radius:28px;box-shadow:0 30px 70px rgba(20,35,25,0.22);border:1px solid #d6dccf;overflow:hidden;position:relative;display:flex;flex-direction:column">
+
+      <div style="background:#fff;border-bottom:1px solid #e2e7dc;padding:12px 16px;display:flex;align-items:center;gap:10px">
+        <div style="width:36px;height:36px;border-radius:10px;background:#f4c531;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px">L&amp;C</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:15px;font-weight:700">Hola, {{ userName }}</div>
+          <div style="font-size:12px;color:#5f6d60">{{ roleLabel }}</div>
+        </div>
+        <button onClick="{{ logout }}" style="min-height:40px;padding:0 14px;border:1px solid #c7d1c2;border-radius:10px;background:#fff;font-size:14px;font-weight:600;cursor:pointer;color:#5f6d60" style-hover="color:#17251c">Salir</button>
+      </div>
+
+      <!-- MENÚ -->
+      <sc-if value="{{ pIsMenu }}" hint-placeholder-val="{{ true }}">
+        <div data-screen-label="Menú Producción" style="padding:20px 16px;display:flex;flex-direction:column;gap:14px;flex:1">
+          <sc-if value="{{ hasLote }}" hint-placeholder-val="{{ false }}">
+            <button onClick="{{ goLote }}" style="width:100%;min-height:72px;border:2px solid #d8a800;border-radius:14px;background:#fff7d9;text-align:left;padding:14px 16px;cursor:pointer;display:flex;flex-direction:column;gap:2px" style-hover="background:#fdf0be">
+              <span style="font-size:13px;font-weight:800;color:#7a5d00;letter-spacing:0.06em">LOTE ABIERTO</span>
+              <span style="font-size:17px;font-weight:700;color:#17251c">{{ loteProd }} — tocá para cargar el resultado</span>
+            </button>
+          </sc-if>
+          <button onClick="{{ goIngreso }}" style="width:100%;min-height:96px;border:2px solid #dfe4d9;border-radius:16px;background:#fff;text-align:left;padding:18px 20px;cursor:pointer;display:flex;flex-direction:column;gap:4px" style-hover="border-color:#1a7f3f">
+            <span style="font-size:22px;font-weight:800;letter-spacing:0.02em">LLEGÓ MERCADERÍA</span>
+            <span style="font-size:15px;color:#5f6d60">Registrar un ingreso del proveedor</span>
+          </button>
+          <button onClick="{{ goProducir }}" style="width:100%;min-height:96px;border:2px solid #dfe4d9;border-radius:16px;background:#fff;text-align:left;padding:18px 20px;cursor:pointer;display:flex;flex-direction:column;gap:4px" style-hover="border-color:#1a7f3f">
+            <span style="font-size:22px;font-weight:800;letter-spacing:0.02em">PRODUCIR</span>
+            <span style="font-size:15px;color:#5f6d60">Empezar un lote de producción</span>
+          </button>
+          <button onClick="{{ goEnviar }}" style="width:100%;min-height:96px;border:2px solid #dfe4d9;border-radius:16px;background:#fff;text-align:left;padding:18px 20px;cursor:pointer;display:flex;flex-direction:column;gap:4px" style-hover="border-color:#1a7f3f">
+            <span style="font-size:22px;font-weight:800;letter-spacing:0.02em">ENVIAR A LOCAL</span>
+            <span style="font-size:15px;color:#5f6d60">Mandar mercadería a un local</span>
+          </button>
+          <div style="flex:1"></div>
+          <button onClick="{{ goEnvios }}" style="width:100%;min-height:56px;border:none;border-radius:12px;background:transparent;font-size:16px;font-weight:600;color:#1a7f3f;cursor:pointer" style-hover="background:#e9eee4">Ver mis envíos ›</button>
+        </div>
+      </sc-if>
+
+      <!-- FLUJO 1: INGRESO -->
+      <sc-if value="{{ pIsIngreso }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Wizard Ingreso" style="display:flex;flex-direction:column;flex:1;min-height:0">
+          <div style="padding:14px 16px 10px;display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <button onClick="{{ ingBack }}" style="width:44px;height:44px;border:1px solid #c7d1c2;border-radius:10px;background:#fff;font-size:20px;cursor:pointer">‹</button>
+              <div style="flex:1;font-size:18px;font-weight:800">Llegó mercadería</div>
+              <div style="font-size:13px;font-weight:700;color:#5f6d60;background:#e9eee4;border-radius:8px;padding:6px 10px">Paso {{ ingStep }} de 4</div>
+            </div>
+            <div style="height:6px;background:#e2e7dc;border-radius:3px;overflow:hidden"><div style="height:100%;background:#1a7f3f;border-radius:3px;width:{{ ingProg }}"></div></div>
+          </div>
+
+          <sc-if value="{{ ingS1 }}" hint-placeholder-val="{{ true }}">
+            <div style="padding:6px 16px 20px;display:flex;flex-direction:column;gap:10px;overflow:auto;flex:1">
+              <div style="font-size:21px;font-weight:800;padding:4px 0 6px">¿De dónde vino?</div>
+              <sc-for list="{{ provCards }}" as="p" hint-placeholder-count="4">
+                <button onClick="{{ p.onTap }}" style="width:100%;min-height:58px;border:2px solid #dfe4d9;border-radius:14px;background:#fff;text-align:left;padding:14px 18px;font-size:18px;font-weight:700;cursor:pointer;color:#17251c" style-hover="border-color:#1a7f3f">{{ p.label }}</button>
+              </sc-for>
+              <sc-if value="{{ ingShowOtro }}" hint-placeholder-val="{{ false }}">
+                <div style="background:#fff;border:2px solid #1a7f3f;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px">
+                  <label for="otroprov" style="font-size:16px;font-weight:700">¿De dónde vino? (obligatorio)</label>
+                  <input id="otroprov" onChange="{{ onOtroTxt }}" placeholder="Escribí el nombre…" style="height:56px;border:2px solid #c7d1c2;border-radius:12px;font-size:18px;padding:0 14px;outline-color:#1a7f3f"></input>
+                  <button onClick="{{ ingOtroGo }}" disabled="{{ ingOtroDis }}" style="width:100%;min-height:56px;border:none;border-radius:12px;background:#1a7f3f;color:#fff;font-size:18px;font-weight:700;cursor:pointer" style-hover="background:#146130">CONTINUAR</button>
+                </div>
+              </sc-if>
+              <sc-if value="{{ showApi }}" hint-placeholder-val="{{ false }}"><div style="font-family:ui-monospace,monospace;font-size:11px;color:#7a8579;background:#eef1ea;border-radius:6px;padding:4px 8px;align-self:flex-start">GET /api/proveedores</div></sc-if>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ ingS2 }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:6px 16px 20px;display:flex;flex-direction:column;gap:10px;overflow:auto;flex:1">
+              <div style="font-size:21px;font-weight:800;padding:4px 0 2px">Productos del remito</div>
+              <div style="font-size:15px;color:#5f6d60">Cargá lo que dice el remito y lo que pesaste vos.</div>
+              <sc-for list="{{ ingLineas }}" as="l" hint-placeholder-count="1">
+                <div style="background:#fff;border:1px solid #dfe4d9;border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px">
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:17px;font-weight:700">{{ l.nombre }}</div>
+                    <div style="font-size:14px;color:#5f6d60">{{ l.det }}</div>
+                  </div>
+                  <button onClick="{{ l.onDel }}" aria-label="Borrar" style="width:44px;height:44px;border:1px solid #e4c9c4;border-radius:10px;background:#fff;color:#c2321e;font-size:18px;font-weight:700;cursor:pointer" style-hover="background:#faeae7">✕</button>
+                </div>
+              </sc-for>
+              <button onClick="{{ ingAddProd }}" style="width:100%;min-height:62px;border:2px dashed #9fae9c;border-radius:14px;background:transparent;font-size:18px;font-weight:700;color:#1a7f3f;cursor:pointer" style-hover="background:#e9eee4">＋ AGREGAR PRODUCTO</button>
+              <div style="flex:1"></div>
+              <button onClick="{{ ingNext2 }}" disabled="{{ ingNext2Dis }}" style="width:100%;min-height:60px;border:none;border-radius:14px;background:#1a7f3f;color:#fff;font-size:19px;font-weight:800;cursor:pointer;opacity:{{ ingNext2Op }}" style-hover="background:#146130">CONTINUAR</button>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ ingS3 }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:6px 16px 20px;display:flex;flex-direction:column;gap:12px;overflow:auto;flex:1">
+              <div style="font-size:21px;font-weight:800;padding:4px 0 2px">Foto del remito</div>
+              <div style="font-size:15px;color:#5f6d60">Es opcional. Si podés, sacale una foto.</div>
+              <sc-if value="{{ ingFoto }}" hint-placeholder-val="{{ false }}">
+                <div style="background:#fff;border:2px solid #1a7f3f;border-radius:14px;padding:18px;display:flex;align-items:center;gap:14px">
+                  <div style="width:64px;height:64px;border-radius:12px;background:repeating-linear-gradient(45deg,#e9eee4,#e9eee4 6px,#f4f6f0 6px,#f4f6f0 12px);border:1px solid #c7d1c2;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,monospace;font-size:10px;color:#7a8579">foto</div>
+                  <div style="flex:1">
+                    <div style="font-size:16px;font-weight:700;color:#1a7f3f">✓ Foto cargada</div>
+                    <div style="font-size:13px;color:#5f6d60">remito_100726.jpg</div>
+                  </div>
+                </div>
+              </sc-if>
+              <button onClick="{{ ingSacarFoto }}" style="width:100%;min-height:64px;border:2px solid #1a7f3f;border-radius:14px;background:#fff;font-size:18px;font-weight:800;color:#1a7f3f;cursor:pointer" style-hover="background:#e9eee4">SACAR FOTO DEL REMITO</button>
+              <sc-if value="{{ showApi }}" hint-placeholder-val="{{ false }}"><div style="font-family:ui-monospace,monospace;font-size:11px;color:#7a8579;background:#eef1ea;border-radius:6px;padding:4px 8px;align-self:flex-start">POST /api/ingresos/foto (multipart)</div></sc-if>
+              <div style="flex:1"></div>
+              <button onClick="{{ ingNext3 }}" style="width:100%;min-height:60px;border:none;border-radius:14px;background:#1a7f3f;color:#fff;font-size:19px;font-weight:800;cursor:pointer" style-hover="background:#146130">{{ ingNext3Label }}</button>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ ingS4 }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:6px 16px 20px;display:flex;flex-direction:column;gap:12px;overflow:auto;flex:1">
+              <div style="font-size:21px;font-weight:800;padding:4px 0 2px">Revisá antes de confirmar</div>
+              <div style="background:#fff;border:1px solid #dfe4d9;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;justify-content:space-between;gap:10px"><span style="font-size:15px;color:#5f6d60">Proveedor</span><span style="font-size:16px;font-weight:700;text-align:right">{{ ingProvTxt }}</span></div>
+                <div style="display:flex;justify-content:space-between;gap:10px"><span style="font-size:15px;color:#5f6d60">Foto del remito</span><span style="font-size:16px;font-weight:700">{{ ingFotoTxt }}</span></div>
+              </div>
+              <sc-for list="{{ ingLineas }}" as="l" hint-placeholder-count="2">
+                <div style="background:#fff;border:1px solid #dfe4d9;border-radius:14px;padding:14px 16px">
+                  <div style="font-size:17px;font-weight:700">{{ l.nombre }}</div>
+                  <div style="font-size:14px;color:#5f6d60">{{ l.det }}</div>
+                </div>
+              </sc-for>
+              <sc-if value="{{ showApi }}" hint-placeholder-val="{{ false }}"><div style="font-family:ui-monospace,monospace;font-size:11px;color:#7a8579;background:#eef1ea;border-radius:6px;padding:4px 8px;align-self:flex-start">POST /api/ingresos</div></sc-if>
+              <div style="flex:1"></div>
+              <button onClick="{{ ingConfirm }}" disabled="{{ sending }}" style="width:100%;min-height:64px;border:none;border-radius:14px;background:#1a7f3f;color:#fff;font-size:20px;font-weight:800;cursor:pointer" style-hover="background:#146130">{{ ingConfirmLabel }}</button>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- FLUJO 2: PRODUCIR -->
+      <sc-if value="{{ pIsProducir }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Wizard Producir" style="display:flex;flex-direction:column;flex:1;min-height:0">
+          <div style="padding:14px 16px 10px;display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <button onClick="{{ prBack }}" style="width:44px;height:44px;border:1px solid #c7d1c2;border-radius:10px;background:#fff;font-size:20px;cursor:pointer">‹</button>
+              <div style="flex:1;font-size:18px;font-weight:800">Producir</div>
+              <div style="font-size:13px;font-weight:700;color:#5f6d60;background:#e9eee4;border-radius:8px;padding:6px 10px">Paso {{ prStep }} de 3</div>
+            </div>
+            <div style="height:6px;background:#e2e7dc;border-radius:3px;overflow:hidden"><div style="height:100%;background:#1a7f3f;border-radius:3px;width:{{ prProg }}"></div></div>
+          </div>
+
+          <sc-if value="{{ prS1 }}" hint-placeholder-val="{{ true }}">
+            <div style="padding:6px 16px 20px;display:flex;flex-direction:column;gap:10px;overflow:auto;flex:1">
+              <div style="font-size:21px;font-weight:800;padding:4px 0 6px">¿Qué vas a producir?</div>
+              <sc-for list="{{ prProdCards }}" as="p" hint-placeholder-count="3">
+                <button onClick="{{ p.onTap }}" style="width:100%;min-height:72px;border:2px solid #dfe4d9;border-radius:14px;background:#fff;text-align:left;padding:16px 18px;font-size:20px;font-weight:800;cursor:pointer;color:#17251c" style-hover="border-color:#1a7f3f">{{ p.label }}</button>
+              </sc-for>
+              <sc-if value="{{ showApi }}" hint-placeholder-val="{{ false }}"><div style="font-family:ui-monospace,monospace;font-size:11px;color:#7a8579;background:#eef1ea;border-radius:6px;padding:4px 8px;align-self:flex-start">GET /api/productos?tipo=ELABORADO</div></sc-if>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ prS2 }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:6px 16px 20px;display:flex;flex-direction:column;gap:10px;overflow:auto;flex:1">
+              <div style="font-size:21px;font-weight:800;padding:4px 0 2px">Insumos que usaste</div>
+              <div style="font-size:15px;color:#5f6d60">Elegí cada insumo y de qué partida lo sacaste.</div>
+              <sc-for list="{{ prInsumos }}" as="i" hint-placeholder-count="1">
+                <div style="background:#fff;border:1px solid #dfe4d9;border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px">
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:17px;font-weight:700">{{ i.titulo }}</div>
+                    <div style="font-size:14px;color:#5f6d60">{{ i.det }}</div>
+                  </div>
+                  <button onClick="{{ i.onDel }}" aria-label="Borrar" style="width:44px;height:44px;border:1px solid #e4c9c4;border-radius:10px;background:#fff;color:#c2321e;font-size:18px;font-weight:700;cursor:pointer" style-hover="background:#faeae7">✕</button>
+                </div>
+              </sc-for>
+              <button onClick="{{ prAddInsumo }}" style="width:100%;min-height:62px;border:2px dashed #9fae9c;border-radius:14px;background:transparent;font-size:18px;font-weight:700;color:#1a7f3f;cursor:pointer" style-hover="background:#e9eee4">＋ AGREGAR INSUMO</button>
+              <sc-if value="{{ showApi }}" hint-placeholder-val="{{ false }}"><div style="font-family:ui-monospace,monospace;font-size:11px;color:#7a8579;background:#eef1ea;border-radius:6px;padding:4px 8px;align-self:flex-start">GET /api/ingresos/lineas-disponibles?productoId=X</div></sc-if>
+              <div style="flex:1"></div>
+              <button onClick="{{ prNext2 }}" disabled="{{ prNext2Dis }}" style="width:100%;min-height:60px;border:none;border-radius:14px;background:#1a7f3f;color:#fff;font-size:19px;font-weight:800;cursor:pointer;opacity:{{ prNext2Op }}" style-hover="background:#146130">CONTINUAR</button>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ prS3 }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:6px 16px 20px;display:flex;flex-direction:column;gap:12px;overflow:auto;flex:1">
+              <div style="font-size:21px;font-weight:800;padding:4px 0 2px">Revisá antes de empezar</div>
+              <div style="background:#fff;border:1px solid #dfe4d9;border-radius:14px;padding:16px">
+                <div style="font-size:15px;color:#5f6d60">Vas a producir</div>
+                <div style="font-size:20px;font-weight:800">{{ prProdNombre }}</div>
+              </div>
+              <sc-for list="{{ prInsumos }}" as="i" hint-placeholder-count="2">
+                <div style="background:#fff;border:1px solid #dfe4d9;border-radius:14px;padding:14px 16px">
+                  <div style="font-size:17px;font-weight:700">{{ i.titulo }}</div>
+                  <div style="font-size:14px;color:#5f6d60">{{ i.det }}</div>
+                </div>
+              </sc-for>
+              <sc-if value="{{ showApi }}" hint-placeholder-val="{{ false }}"><div style="font-family:ui-monospace,monospace;font-size:11px;color:#7a8579;background:#eef1ea;border-radius:6px;padding:4px 8px;align-self:flex-start">POST /api/produccion/lotes</div></sc-if>
+              <div style="flex:1"></div>
+              <button onClick="{{ prConfirm }}" disabled="{{ sending }}" style="width:100%;min-height:64px;border:none;border-radius:14px;background:#1a7f3f;color:#fff;font-size:20px;font-weight:800;cursor:pointer" style-hover="background:#146130">{{ prConfirmLabel }}</button>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- LOTE ABIERTO -->
+      <sc-if value="{{ pIsLote }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Lote abierto" style="padding:20px 16px;display:flex;flex-direction:column;gap:14px;flex:1;overflow:auto">
+          <button onClick="{{ pBackMenu }}" style="align-self:flex-start;min-height:44px;padding:0 14px;border:1px solid #c7d1c2;border-radius:10px;background:#fff;font-size:15px;font-weight:600;cursor:pointer;color:#5f6d60">‹ Menú</button>
+          <div style="background:#fff;border:1px solid #dfe4d9;border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:12px">
+            <div style="align-self:flex-start;background:#fff7d9;color:#7a5d00;font-size:13px;font-weight:800;letter-spacing:0.06em;border-radius:8px;padding:6px 10px">LOTE ABIERTO</div>
+            <div style="font-size:24px;font-weight:800">{{ loteProd }}</div>
+            <div style="font-size:15px;color:#5f6d60">Lote {{ loteId }} · empezó {{ loteHora }}</div>
+            <div style="border-top:1px solid #e2e7dc;padding-top:12px;display:flex;flex-direction:column;gap:8px">
+              <div style="font-size:14px;font-weight:700;color:#5f6d60">INSUMOS DEL LOTE</div>
+              <sc-for list="{{ loteInsumos }}" as="i" hint-placeholder-count="2">
+                <div style="font-size:16px">{{ i.txt }}</div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="flex:1"></div>
+          <sc-if value="{{ showApi }}" hint-placeholder-val="{{ false }}"><div style="font-family:ui-monospace,monospace;font-size:11px;color:#7a8579;background:#eef1ea;border-radius:6px;padding:4px 8px;align-self:flex-start">POST /api/produccion/lotes/{id}/cerrar</div></sc-if>
+          <button onClick="{{ loteCerrar }}" style="width:100%;min-height:76px;border:none;border-radius:16px;background:#1a7f3f;color:#fff;font-size:20px;font-weight:800;cursor:pointer" style-hover="background:#146130">TERMINÉ — CARGAR RESULTADO</button>
+        </div>
+      </sc-if>
+
+      <!-- FLUJO 3: ENVIAR -->
+      <sc-if value="{{ pIsEnviar }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Wizard Enviar a local" style="display:flex;flex-direction:column;flex:1;min-height:0">
+          <div style="padding:14px 16px 10px;display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <button onClick="{{ envBack }}" style="width:44px;height:44px;border:1px solid #c7d1c2;border-radius:10px;background:#fff;font-size:20px;cursor:pointer">‹</button>
+              <div style="flex:1;font-size:18px;font-weight:800">Enviar a local</div>
+              <div style="font-size:13px;font-weight:700;color:#5f6d60;background:#e9eee4;border-radius:8px;padding:6px 10px">Paso {{ envStep }} de 3</div>
+            </div>
+            <div style="height:6px;background:#e2e7dc;border-radius:3px;overflow:hidden"><div style="height:100%;background:#1a7f3f;border-radius:3px;width:{{ envProg }}"></div></div>
+          </div>
+
+          <sc-if value="{{ envS1 }}" hint-placeholder-val="{{ true }}">
+            <div style="padding:6px 16px 20px;display:flex;flex-direction:column;gap:12px;overflow:auto;flex:1">
+              <div style="font-size:21px;font-weight:800;padding:4px 0 6px">¿A dónde lo mandás?</div>
+              <sc-for list="{{ envDestCards }}" as="d" hint-placeholder-count="2">
+                <button onClick="{{ d.onTap }}" style="width:100%;min-height:110px;border:2px solid #dfe4d9;border-radius:16px;background:#fff;font-size:26px;font-weight:800;cursor:pointer;color:#17251c;letter-spacing:0.04em" style-hover="border-color:#1a7f3f">{{ d.label }}</button>
+              </sc-for>
+              <sc-if value="{{ showApi }}" hint-placeholder-val="{{ false }}"><div style="font-family:ui-monospace,monospace;font-size:11px;color:#7a8579;background:#eef1ea;border-radius:6px;padding:4px 8px;align-self:flex-start">GET /api/sucursales</div></sc-if>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ envS2 }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:6px 16px 20px;display:flex;flex-direction:column;gap:10px;overflow:auto;flex:1">
+              <div style="font-size:21px;font-weight:800;padding:4px 0 2px">¿Qué mandás a {{ envDestTxt }}?</div>
+              <div style="font-size:15px;color:#5f6d60">Cantidades en unidades.</div>
+              <sc-for list="{{ envLineas }}" as="l" hint-placeholder-count="1">
+                <div style="background:#fff;border:1px solid #dfe4d9;border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px">
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:17px;font-weight:700">{{ l.nombre }}</div>
+                    <div style="font-size:14px;color:#5f6d60">{{ l.det }}</div>
+                  </div>
+                  <button onClick="{{ l.onDel }}" aria-label="Borrar" style="width:44px;height:44px;border:1px solid #e4c9c4;border-radius:10px;background:#fff;color:#c2321e;font-size:18px;font-weight:700;cursor:pointer" style-hover="background:#faeae7">✕</button>
+                </div>
+              </sc-for>
+              <button onClick="{{ envAddProd }}" style="width:100%;min-height:62px;border:2px dashed #9fae9c;border-radius:14px;background:transparent;font-size:18px;font-weight:700;color:#1a7f3f;cursor:pointer" style-hover="background:#e9eee4">＋ AGREGAR PRODUCTO</button>
+              <div style="flex:1"></div>
+              <button onClick="{{ envNext2 }}" disabled="{{ envNext2Dis }}" style="width:100%;min-height:60px;border:none;border-radius:14px;background:#1a7f3f;color:#fff;font-size:19px;font-weight:800;cursor:pointer;opacity:{{ envNext2Op }}" style-hover="background:#146130">CONTINUAR</button>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ envS3 }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:6px 16px 20px;display:flex;flex-direction:column;gap:12px;overflow:auto;flex:1">
+              <div style="font-size:21px;font-weight:800;padding:4px 0 2px">Revisá el envío</div>
+              <div style="background:#fff;border:1px solid #dfe4d9;border-radius:14px;padding:16px">
+                <div style="font-size:15px;color:#5f6d60">Destino</div>
+                <div style="font-size:20px;font-weight:800">{{ envDestTxt }}</div>
+              </div>
+              <sc-for list="{{ envLineas }}" as="l" hint-placeholder-count="2">
+                <div style="background:#fff;border:1px solid #dfe4d9;border-radius:14px;padding:14px 16px">
+                  <div style="font-size:17px;font-weight:700">{{ l.nombre }}</div>
+                  <div style="font-size:14px;color:#5f6d60">{{ l.det }}</div>
+                </div>
+              </sc-for>
+              <sc-if value="{{ showApi }}" hint-placeholder-val="{{ false }}"><div style="font-family:ui-monospace,monospace;font-size:11px;color:#7a8579;background:#eef1ea;border-radius:6px;padding:4px 8px;align-self:flex-start">POST /api/transferencias</div></sc-if>
+              <div style="flex:1"></div>
+              <button onClick="{{ envConfirm }}" disabled="{{ sending }}" style="width:100%;min-height:64px;border:none;border-radius:14px;background:#1a7f3f;color:#fff;font-size:20px;font-weight:800;cursor:pointer" style-hover="background:#146130">{{ envConfirmLabel }}</button>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- MIS ENVÍOS -->
+      <sc-if value="{{ pIsEnvios }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Mis envíos" style="padding:20px 16px;display:flex;flex-direction:column;gap:12px;flex:1;overflow:auto">
+          <div style="display:flex;align-items:center;gap:10px">
+            <button onClick="{{ pBackMenu }}" style="width:44px;height:44px;border:1px solid #c7d1c2;border-radius:10px;background:#fff;font-size:20px;cursor:pointer">‹</button>
+            <div style="font-size:20px;font-weight:800">Mis envíos</div>
+          </div>
+          <sc-for list="{{ enviosVM }}" as="e" hint-placeholder-count="2">
+            <div style="background:#fff;border:1px solid #dfe4d9;border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:6px">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+                <span style="font-family:ui-monospace,monospace;font-size:13px;color:#5f6d60">{{ e.remito }}</span>
+                <span style="font-size:13px;font-weight:800;border-radius:8px;padding:5px 10px;color:{{ e.estColor }};background:{{ e.estBg }}">{{ e.estado }}</span>
+              </div>
+              <div style="font-size:17px;font-weight:700">{{ e.dest }} · {{ e.fecha }}</div>
+              <div style="font-size:15px;color:#5f6d60">{{ e.det }}</div>
+            </div>
+          </sc-for>
+          <sc-if value="{{ showApi }}" hint-placeholder-val="{{ false }}"><div style="font-family:ui-monospace,monospace;font-size:11px;color:#7a8579;background:#eef1ea;border-radius:6px;padding:4px 8px;align-self:flex-start">GET /api/transferencias?origen=produccion</div></sc-if>
+        </div>
+      </sc-if>
+
+      <!-- OVERLAY: PICKER -->
+      <sc-if value="{{ pkOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;inset:0;background:rgba(20,30,22,0.45);display:flex;align-items:flex-end;z-index:10">
+          <div style="width:100%;max-height:82%;background:#fff;border-radius:20px 20px 0 0;display:flex;flex-direction:column;overflow:hidden">
+            <div style="padding:16px 18px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #e2e7dc">
+              <div style="flex:1;font-size:18px;font-weight:800">{{ pkTitle }}</div>
+              <button onClick="{{ pkCancel }}" aria-label="Cerrar" style="width:44px;height:44px;border:1px solid #c7d1c2;border-radius:10px;background:#fff;font-size:18px;cursor:pointer">✕</button>
+            </div>
+            <sc-if value="{{ pkSearchable }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:12px 18px 0"><input onChange="{{ onPkSearch }}" placeholder="Buscar…" style="width:100%;box-sizing:border-box;height:52px;border:2px solid #c7d1c2;border-radius:12px;font-size:17px;padding:0 14px;outline-color:#1a7f3f"></input></div>
+            </sc-if>
+            <div style="padding:14px 18px 24px;display:flex;flex-direction:column;gap:10px;overflow:auto">
+              <sc-for list="{{ pkItems }}" as="it" hint-placeholder-count="4">
+                <button onClick="{{ it.onTap }}" style="width:100%;min-height:58px;border:2px solid #dfe4d9;border-radius:14px;background:#fff;text-align:left;padding:12px 16px;cursor:pointer;display:flex;flex-direction:column;gap:2px" style-hover="border-color:#1a7f3f">
+                  <span style="font-size:17px;font-weight:700;color:#17251c">{{ it.label }}</span>
+                  <sc-if value="{{ it.hasSub }}" hint-placeholder-val="{{ false }}"><span style="font-size:14px;color:#5f6d60">{{ it.sub }}</span></sc-if>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- OVERLAY: TECLADO NUMÉRICO -->
+      <sc-if value="{{ kpOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;inset:0;background:rgba(20,30,22,0.45);display:flex;align-items:flex-end;z-index:20">
+          <div style="width:100%;background:#fff;border-radius:20px 20px 0 0;padding:18px 18px 22px;box-sizing:border-box;display:flex;flex-direction:column;gap:12px">
+            <div style="font-size:19px;font-weight:800">{{ kpTitle }}</div>
+            <div style="font-size:14px;color:#5f6d60;margin-top:-8px">{{ kpSub }}</div>
+            <div style="background:#f4f6f0;border:2px solid #c7d1c2;border-radius:14px;padding:14px 18px;display:flex;align-items:baseline;justify-content:flex-end;gap:8px;min-height:64px;box-sizing:border-box">
+              <span style="font-size:38px;font-weight:800;letter-spacing:0.02em">{{ kpDisplay }}</span>
+              <span style="font-size:18px;font-weight:600;color:#5f6d60">{{ kpUnit }}</span>
+            </div>
+            <sc-if value="{{ kpHasErr }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#faeae7;color:#a02514;border-radius:12px;padding:12px 14px;font-size:16px;font-weight:700">{{ kpErr }}</div>
+            </sc-if>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+              <sc-for list="{{ kpKeys }}" as="k" hint-placeholder-count="12">
+                <button onClick="{{ k.onTap }}" style="min-height:60px;border:1px solid #dfe4d9;border-radius:12px;background:#f8faf5;font-size:24px;font-weight:700;cursor:pointer;color:#17251c" style-hover="background:#e9eee4" style-active="background:#dce4d6">{{ k.k }}</button>
+              </sc-for>
+            </div>
+            <div style="display:flex;gap:10px">
+              <button onClick="{{ kpCancel }}" style="flex:1;min-height:60px;border:2px solid #c7d1c2;border-radius:14px;background:#fff;font-size:17px;font-weight:700;cursor:pointer;color:#5f6d60">Cancelar</button>
+              <button onClick="{{ kpOk }}" style="flex:2;min-height:60px;border:none;border-radius:14px;background:#1a7f3f;color:#fff;font-size:19px;font-weight:800;cursor:pointer" style-hover="background:#146130">CONFIRMAR</button>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- OVERLAY: ÉXITO -->
+      <sc-if value="{{ doneOpen }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Pantalla de éxito" style="position:absolute;inset:0;background:#1a7f3f;z-index:30;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:28px;text-align:center">
+          <div style="width:116px;height:116px;border-radius:50%;background:#fff;color:#1a7f3f;font-size:64px;font-weight:800;display:flex;align-items:center;justify-content:center;animation:pop 0.4s ease-out">✓</div>
+          <div style="color:#fff;font-size:26px;font-weight:800">{{ doneTitle }}</div>
+          <div style="color:#d6ecd9;font-size:18px;max-width:280px">{{ doneSub }}</div>
+          <button onClick="{{ doneOk }}" style="min-width:200px;min-height:60px;border:none;border-radius:14px;background:#fff;color:#1a7f3f;font-size:19px;font-weight:800;cursor:pointer;margin-top:10px">LISTO</button>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+</sc-if>
+
+<!-- ============ CAJERO / ENCARGADO (tablet) ============ -->
+<sc-if value="{{ isCaj }}" hint-placeholder-val="{{ false }}">
+  <div style="min-height:100vh;display:flex;justify-content:center;align-items:flex-start;padding:28px 16px">
+    <div data-screen-label="App Local (tablet)" style="width:min(880px,100%);min-height:660px;background:#f4f6f0;border-radius:22px;box-shadow:0 30px 70px rgba(20,35,25,0.22);border:1px solid #d6dccf;overflow:hidden;position:relative;display:flex;flex-direction:column">
+      <div style="background:#fff;border-bottom:1px solid #e2e7dc;padding:14px 22px;display:flex;align-items:center;gap:12px">
+        <div style="width:40px;height:40px;border-radius:11px;background:#f4c531;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px">L&amp;C</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:16px;font-weight:700">Hola, {{ userName }}</div>
+          <div style="font-size:13px;color:#5f6d60">{{ roleLabel }} · Local 1</div>
+        </div>
+        <sc-if value="{{ isEnc }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;gap:8px;background:#e9eee4;border-radius:12px;padding:5px">
+            <button onClick="{{ encTabRecibir }}" style="min-height:46px;padding:0 18px;border:none;border-radius:9px;font-size:16px;font-weight:700;cursor:pointer;background:{{ encRecBg }};color:{{ encRecColor }}">Recibir</button>
+            <button onClick="{{ encTabStock }}" style="min-height:46px;padding:0 18px;border:none;border-radius:9px;font-size:16px;font-weight:700;cursor:pointer;background:{{ encStkBg }};color:{{ encStkColor }}">Stock</button>
+          </div>
+        </sc-if>
+        <button onClick="{{ logout }}" style="min-height:44px;padding:0 16px;border:1px solid #c7d1c2;border-radius:10px;background:#fff;font-size:15px;font-weight:600;cursor:pointer;color:#5f6d60" style-hover="color:#17251c">Salir</button>
+      </div>
+
+      <!-- LISTA PENDIENTES -->
+      <sc-if value="{{ cIsLista }}" hint-placeholder-val="{{ true }}">
+        <div data-screen-label="Entregas pendientes" style="padding:24px;display:flex;flex-direction:column;gap:14px;flex:1;overflow:auto">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+            <div>
+              <div style="font-size:24px;font-weight:800">Entregas pendientes</div>
+              <div style="font-size:15px;color:#5f6d60">Cuando llegue el reparto, tocá la entrega y contá lo que llegó.</div>
+            </div>
+            <button onClick="{{ cGoHist }}" style="min-height:48px;padding:0 16px;border:1px solid #c7d1c2;border-radius:10px;background:#fff;font-size:15px;font-weight:600;cursor:pointer;color:#1a7f3f">Mis recepciones ›</button>
+          </div>
+          <sc-if value="{{ cPendEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:40px">
+              <div style="width:84px;height:84px;border-radius:50%;background:#e9eee4;display:flex;align-items:center;justify-content:center;font-size:34px;color:#9fae9c">✓</div>
+              <div style="font-size:19px;font-weight:700;color:#5f6d60">No hay entregas pendientes por ahora.</div>
+            </div>
+          </sc-if>
+          <sc-for list="{{ cPend }}" as="t" hint-placeholder-count="2">
+            <div style="background:#fff;border:1px solid #dfe4d9;border-radius:16px;padding:18px 20px;display:flex;align-items:center;gap:18px">
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
+                <div style="display:flex;align-items:center;gap:12px">
+                  <span style="font-family:ui-monospace,monospace;font-size:14px;color:#5f6d60">{{ t.remito }}</span>
+                  <span style="font-size:15px;font-weight:700">{{ t.fecha }}</span>
+                  <span style="font-size:14px;color:#5f6d60">desde {{ t.origen }}</span>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:8px">
+                  <sc-for list="{{ t.prods }}" as="p" hint-placeholder-count="2">
+                    <span style="background:#e9eee4;border-radius:9px;padding:8px 14px;font-size:16px;font-weight:700">{{ p.nombre }}</span>
+                  </sc-for>
+                </div>
+              </div>
+              <button onClick="{{ t.onOpen }}" style="min-height:58px;padding:0 26px;border:none;border-radius:14px;background:#1a7f3f;color:#fff;font-size:18px;font-weight:800;cursor:pointer" style-hover="background:#146130">CONTAR ›</button>
+            </div>
+          </sc-for>
+          <sc-if value="{{ showApi }}" hint-placeholder-val="{{ false }}"><div style="font-family:ui-monospace,monospace;font-size:11px;color:#7a8579;background:#eef1ea;border-radius:6px;padding:4px 8px;align-self:flex-start">GET /api/transferencias?estado=PENDIENTE</div></sc-if>
+        </div>
+      </sc-if>
+
+      <!-- CONTEO CIEGO -->
+      <sc-if value="{{ cIsConteo }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Conteo ciego" style="padding:24px;display:flex;flex-direction:column;gap:14px;flex:1;overflow:auto">
+          <div style="display:flex;align-items:center;gap:12px">
+            <button onClick="{{ cBackLista }}" style="width:48px;height:48px;border:1px solid #c7d1c2;border-radius:10px;background:#fff;font-size:20px;cursor:pointer">‹</button>
+            <div>
+              <div style="font-size:22px;font-weight:800">Contá y cargá cuántas unidades llegaron</div>
+              <div style="font-size:15px;color:#5f6d60">{{ cTransfTxt }}</div>
+            </div>
+          </div>
+          <sc-for list="{{ cRows }}" as="r" hint-placeholder-count="2">
+            <div style="background:#fff;border:1px solid #dfe4d9;border-radius:16px;padding:18px 20px;display:flex;align-items:center;gap:18px">
+              <div style="flex:1;font-size:20px;font-weight:800">{{ r.nombre }}</div>
+              <sc-if value="{{ r.hasVal }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;align-items:center;gap:12px">
+                  <span style="font-size:24px;font-weight:800">{{ r.valTxt }}</span>
+                  <button onClick="{{ r.onTap }}" style="min-height:48px;padding:0 16px;border:1px solid #c7d1c2;border-radius:10px;background:#fff;font-size:15px;font-weight:700;color:#1a7f3f;cursor:pointer">Cambiar</button>
+                </div>
+              </sc-if>
+              <sc-if value="{{ r.noVal }}" hint-placeholder-val="{{ true }}">
+                <button onClick="{{ r.onTap }}" style="min-height:58px;padding:0 26px;border:2px solid #1a7f3f;border-radius:14px;background:#fff;color:#1a7f3f;font-size:18px;font-weight:800;cursor:pointer" style-hover="background:#e9eee4">CARGAR</button>
+              </sc-if>
+            </div>
+          </sc-for>
+          <div style="flex:1"></div>
+          <sc-if value="{{ showApi }}" hint-placeholder-val="{{ false }}"><div style="font-family:ui-monospace,monospace;font-size:11px;color:#7a8579;background:#eef1ea;border-radius:6px;padding:4px 8px;align-self:flex-start">POST /api/transferencias/{id}/recepcion</div></sc-if>
+          <button onClick="{{ cConfirm }}" disabled="{{ cConfirmDis }}" style="width:100%;min-height:64px;border:none;border-radius:16px;background:#1a7f3f;color:#fff;font-size:20px;font-weight:800;cursor:pointer;opacity:{{ cConfirmOp }}" style-hover="background:#146130">{{ cConfirmLabel }}</button>
+        </div>
+      </sc-if>
+
+      <!-- RESULTADO: COINCIDE -->
+      <sc-if value="{{ cIsOk }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Recepción OK" style="flex:1;background:#1a7f3f;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:28px;text-align:center">
+          <div style="width:120px;height:120px;border-radius:50%;background:#fff;color:#1a7f3f;font-size:66px;font-weight:800;display:flex;align-items:center;justify-content:center;animation:pop 0.4s ease-out">✓</div>
+          <div style="color:#fff;font-size:30px;font-weight:800">Todo en orden.</div>
+          <div style="color:#d6ecd9;font-size:19px">Mercadería ingresada.</div>
+          <button onClick="{{ cVolverLista }}" style="min-width:220px;min-height:60px;border:none;border-radius:14px;background:#fff;color:#1a7f3f;font-size:19px;font-weight:800;cursor:pointer;margin-top:10px">LISTO</button>
+        </div>
+      </sc-if>
+
+      <!-- RESULTADO: NO COINCIDE (neutral) -->
+      <sc-if value="{{ cIsDiff }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="No coincide (neutral)" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:28px;text-align:center">
+          <div style="width:104px;height:104px;border-radius:50%;background:#e6e9e2;color:#5f6d60;font-size:44px;font-weight:700;display:flex;align-items:center;justify-content:center">≠</div>
+          <div style="font-size:28px;font-weight:800;max-width:420px">Los números no coinciden.</div>
+          <div style="font-size:17px;color:#5f6d60;max-width:420px">Podés volver a contar las veces que necesites.</div>
+          <div style="display:flex;flex-direction:column;gap:12px;width:min(380px,100%);margin-top:8px">
+            <button onClick="{{ cRecontar }}" style="width:100%;min-height:64px;border:none;border-radius:14px;background:#1a7f3f;color:#fff;font-size:19px;font-weight:800;cursor:pointer" style-hover="background:#146130">VOLVER A CONTAR</button>
+            <button onClick="{{ cConfirmIgual }}" disabled="{{ sending }}" style="width:100%;min-height:64px;border:2px solid #c7d1c2;border-radius:14px;background:#fff;color:#17251c;font-size:18px;font-weight:800;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px" style-hover="border-color:#5f6d60">
+              <span>CONFIRMAR IGUAL</span>
+              <span style="font-size:13px;font-weight:600;color:#5f6d60">Se registrará tu conteo</span>
+            </button>
+          </div>
+          <sc-if value="{{ showApi }}" hint-placeholder-val="{{ false }}"><div style="font-family:ui-monospace,monospace;font-size:11px;color:#7a8579;background:#eef1ea;border-radius:6px;padding:4px 8px">POST /api/transferencias/{id}/confirmar-con-discrepancia</div></sc-if>
+        </div>
+      </sc-if>
+
+      <!-- RESULTADO: REGISTRADO (neutral) -->
+      <sc-if value="{{ cIsReg }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Conteo registrado (neutral)" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:28px;text-align:center">
+          <div style="width:104px;height:104px;border-radius:50%;background:#e6e9e2;color:#17251c;font-size:48px;font-weight:800;display:flex;align-items:center;justify-content:center;animation:pop 0.4s ease-out">✓</div>
+          <div style="font-size:26px;font-weight:800">Listo. Tu conteo quedó registrado.</div>
+          <button onClick="{{ cVolverLista }}" style="min-width:220px;min-height:60px;border:none;border-radius:14px;background:#1a7f3f;color:#fff;font-size:19px;font-weight:800;cursor:pointer;margin-top:10px">VOLVER AL INICIO</button>
+        </div>
+      </sc-if>
+
+      <!-- HISTORIAL CAJERO -->
+      <sc-if value="{{ cIsHist }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Mis recepciones" style="padding:24px;display:flex;flex-direction:column;gap:14px;flex:1;overflow:auto">
+          <div style="display:flex;align-items:center;gap:12px">
+            <button onClick="{{ cBackLista }}" style="width:48px;height:48px;border:1px solid #c7d1c2;border-radius:10px;background:#fff;font-size:20px;cursor:pointer">‹</button>
+            <div style="font-size:22px;font-weight:800">Mis recepciones</div>
+          </div>
+          <div style="font-size:14px;color:#5f6d60">Se muestra solo lo que contaste vos.</div>
+          <sc-for list="{{ cHistVM }}" as="h" hint-placeholder-count="2">
+            <div style="background:#fff;border:1px solid #dfe4d9;border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:4px">
+              <div style="display:flex;justify-content:space-between;gap:10px">
+                <span style="font-family:ui-monospace,monospace;font-size:13px;color:#5f6d60">{{ h.remito }}</span>
+                <span style="font-size:14px;color:#5f6d60">{{ h.fecha }}</span>
+              </div>
+              <div style="font-size:17px;font-weight:700">{{ h.det }}</div>
+              <div style="font-size:14px;color:#5f6d60">Estado: Registrado</div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <!-- STOCK (solo ENCARGADO) -->
+      <sc-if value="{{ encIsStock }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Stock del local (Encargado)" style="padding:24px;display:flex;flex-direction:column;gap:14px;flex:1;overflow:auto">
+          <div style="font-size:24px;font-weight:800">Stock — Local 1</div>
+          <div style="background:#fff;border:1px solid #dfe4d9;border-radius:16px;overflow:hidden">
+            <div style="display:grid;grid-template-columns:1fr 140px 110px;background:#e9eee4;padding:12px 20px;font-size:13px;font-weight:800;color:#5f6d60;letter-spacing:0.04em"><span>PRODUCTO</span><span style="text-align:right">CANTIDAD</span><span style="text-align:right">UNIDAD</span></div>
+            <sc-for list="{{ encStockRows }}" as="r" hint-placeholder-count="4">
+              <div style="display:grid;grid-template-columns:1fr 140px 110px;padding:16px 20px;border-top:1px solid #eef1ea;font-size:17px"><span style="font-weight:700">{{ r.prod }}</span><span style="text-align:right;font-weight:700">{{ r.cant }}</span><span style="text-align:right;color:#5f6d60">{{ r.unidad }}</span></div>
+            </sc-for>
+          </div>
+          <sc-if value="{{ showApi }}" hint-placeholder-val="{{ false }}"><div style="font-family:ui-monospace,monospace;font-size:11px;color:#7a8579;background:#eef1ea;border-radius:6px;padding:4px 8px;align-self:flex-start">GET /api/stock?sucursalId=2</div></sc-if>
+        </div>
+      </sc-if>
+
+      <!-- OVERLAY: TECLADO (tablet) -->
+      <sc-if value="{{ kpOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;inset:0;background:rgba(20,30,22,0.45);display:flex;align-items:center;justify-content:center;z-index:20;padding:24px">
+          <div style="width:min(440px,100%);background:#fff;border-radius:20px;padding:20px;box-sizing:border-box;display:flex;flex-direction:column;gap:12px">
+            <div style="font-size:20px;font-weight:800">{{ kpTitle }}</div>
+            <div style="font-size:15px;color:#5f6d60;margin-top:-8px">{{ kpSub }}</div>
+            <div style="background:#f4f6f0;border:2px solid #c7d1c2;border-radius:14px;padding:14px 18px;display:flex;align-items:baseline;justify-content:flex-end;gap:8px;min-height:66px;box-sizing:border-box">
+              <span style="font-size:40px;font-weight:800">{{ kpDisplay }}</span>
+              <span style="font-size:18px;font-weight:600;color:#5f6d60">{{ kpUnit }}</span>
+            </div>
+            <sc-if value="{{ kpHasErr }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#faeae7;color:#a02514;border-radius:12px;padding:12px 14px;font-size:16px;font-weight:700">{{ kpErr }}</div>
+            </sc-if>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+              <sc-for list="{{ kpKeys }}" as="k" hint-placeholder-count="12">
+                <button onClick="{{ k.onTap }}" style="min-height:64px;border:1px solid #dfe4d9;border-radius:12px;background:#f8faf5;font-size:26px;font-weight:700;cursor:pointer;color:#17251c" style-hover="background:#e9eee4" style-active="background:#dce4d6">{{ k.k }}</button>
+              </sc-for>
+            </div>
+            <div style="display:flex;gap:10px">
+              <button onClick="{{ kpCancel }}" style="flex:1;min-height:60px;border:2px solid #c7d1c2;border-radius:14px;background:#fff;font-size:17px;font-weight:700;cursor:pointer;color:#5f6d60">Cancelar</button>
+              <button onClick="{{ kpOk }}" style="flex:2;min-height:60px;border:none;border-radius:14px;background:#1a7f3f;color:#fff;font-size:19px;font-weight:800;cursor:pointer" style-hover="background:#146130">CONFIRMAR</button>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+</sc-if>
+
+<!-- ============ ADMIN / SOCIO (PC) ============ -->
+<sc-if value="{{ isAdminShell }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="Dashboard Admin/Socio" style="min-height:100vh;display:flex;background:#f2f4ee">
+    <div style="width:236px;flex-shrink:0;background:#14281c;color:#fff;display:flex;flex-direction:column;padding:20px 14px;gap:6px;position:sticky;top:0;height:100vh;box-sizing:border-box">
+      <div style="display:flex;align-items:center;gap:10px;padding:0 8px 18px">
+        <div style="width:38px;height:38px;border-radius:10px;background:#f4c531;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:#17251c">L&amp;C</div>
+        <div>
+          <div style="font-size:15px;font-weight:800;letter-spacing:0.04em">LIMÓN &amp; CHIMI</div>
+          <div style="font-size:11px;color:#8fae97">Módulo 1</div>
+        </div>
+      </div>
+      <sc-for list="{{ navVM }}" as="n" hint-placeholder-count="6">
+        <button onClick="{{ n.onTap }}" style="display:flex;align-items:center;gap:10px;min-height:46px;padding:0 12px;border:none;border-radius:10px;text-align:left;font-size:15px;font-weight:600;cursor:pointer;width:100%;background:{{ n.bg }};color:{{ n.color }}" style-hover="background:#1e3a29">
+          <span style="flex:1">{{ n.label }}</span>
+          <sc-if value="{{ n.hasBadge }}" hint-placeholder-val="{{ false }}"><span style="background:#c2321e;color:#fff;border-radius:99px;min-width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;padding:0 6px">{{ n.badge }}</span></sc-if>
+        </button>
+      </sc-for>
+      <div style="flex:1"></div>
+      <div style="border-top:1px solid #274a34;padding:14px 8px 0;display:flex;align-items:center;gap:10px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:700">Hola, {{ userName }}</div>
+          <div style="font-size:12px;color:#8fae97">{{ roleLabel }}</div>
+        </div>
+        <button onClick="{{ logout }}" style="min-height:38px;padding:0 12px;border:1px solid #3c5c47;border-radius:8px;background:transparent;color:#c9dccf;font-size:13px;font-weight:600;cursor:pointer" style-hover="background:#1e3a29">Salir</button>
+      </div>
+    </div>
+
+    <div style="flex:1;min-width:0;padding:28px 32px;max-width:1180px">
+
+      <!-- ALERTAS -->
+      <sc-if value="{{ aIsAlertas }}" hint-placeholder-val="{{ true }}">
+        <div data-screen-label="Admin: Alertas" style="display:flex;flex-direction:column;gap:16px">
+          <div>
+            <h1 style="margin:0;font-size:26px;font-weight:800">Alertas</h1>
+            <div style="font-size:14px;color:#5f6d60;margin-top:4px">Llegan en tiempo real (WebSocket). Solo vos ves esta pantalla.</div>
+          </div>
+          <sc-for list="{{ alertasVM }}" as="a" hint-placeholder-count="3">
+            <div style="background:#fff;border:1px solid #dfe4d9;border-radius:14px;padding:18px 20px;display:flex;flex-direction:column;gap:12px;opacity:{{ a.op }}">
+              <div style="display:flex;align-items:center;gap:12px">
+                <span style="font-size:13px;font-weight:800;border-radius:8px;padding:6px 10px;letter-spacing:0.03em;background:{{ a.chipBg }};color:{{ a.chipColor }}">{{ a.tipo }}</span>
+                <span style="flex:1"></span>
+                <span style="font-size:13px;color:#5f6d60">{{ a.fecha }}</span>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px 18px">
+                <sc-for list="{{ a.lines }}" as="f" hint-placeholder-count="4">
+                  <div>
+                    <div style="font-size:12px;color:#5f6d60;font-weight:600">{{ f.k }}</div>
+                    <div style="font-size:16px;font-weight:700;color:{{ f.color }}">{{ f.v }}</div>
+                  </div>
+                </sc-for>
+              </div>
+              <sc-if value="{{ a.showVista }}" hint-placeholder-val="{{ false }}">
+                <button onClick="{{ a.onVista }}" style="align-self:flex-start;min-height:44px;padding:0 16px;border:1px solid #c7d1c2;border-radius:10px;background:#fff;font-size:14px;font-weight:700;color:#1a7f3f;cursor:pointer" style-hover="background:#e9eee4">Marcar como vista</button>
+              </sc-if>
+              <sc-if value="{{ a.vista }}" hint-placeholder-val="{{ false }}">
+                <div style="font-size:13px;color:#5f6d60;font-weight:600">✓ Vista</div>
+              </sc-if>
+            </div>
+          </sc-for>
+          <sc-if value="{{ showApi }}" hint-placeholder-val="{{ false }}"><div style="font-family:ui-monospace,monospace;font-size:11px;color:#7a8579;background:#eef1ea;border-radius:6px;padding:4px 8px;align-self:flex-start">GET /api/alertas · PATCH /api/alertas/{id}/vista · WS /ws/alertas</div></sc-if>
+        </div>
+      </sc-if>
+
+      <!-- STOCK -->
+      <sc-if value="{{ aIsStock }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Admin: Stock" style="display:flex;flex-direction:column;gap:16px">
+          <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+            <h1 style="margin:0;font-size:26px;font-weight:800;flex:1">Stock</h1>
+            <div style="display:flex;gap:6px;background:#e6e9e2;border-radius:12px;padding:5px">
+              <sc-for list="{{ stockTabs }}" as="s" hint-placeholder-count="3">
+                <button onClick="{{ s.onTap }}" style="min-height:42px;padding:0 16px;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;background:{{ s.bg }};color:{{ s.color }}">{{ s.label }}</button>
+              </sc-for>
+            </div>
+            <button onClick="{{ toggleMov }}" style="min-height:42px;padding:0 16px;border:1px solid #c7d1c2;border-radius:10px;background:#fff;font-size:14px;font-weight:700;color:#1a7f3f;cursor:pointer">{{ movBtnLabel }}</button>
+          </div>
+          <sc-if value="{{ stockIsTabla }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#fff;border:1px solid #dfe4d9;border-radius:14px;overflow-x:auto">
+              <div style="display:grid;grid-template-columns:1fr 160px 120px;background:#e9eee4;padding:12px 20px;font-size:12px;font-weight:800;color:#5f6d60;letter-spacing:0.04em"><span>PRODUCTO</span><span style="text-align:right">CANTIDAD</span><span style="text-align:right">UNIDAD</span></div>
+              <sc-for list="{{ stockRows }}" as="r" hint-placeholder-count="5">
+                <div style="display:grid;grid-template-columns:1fr 160px 120px;padding:14px 20px;border-top:1px solid #eef1ea;font-size:15px"><span style="font-weight:600">{{ r.prod }}</span><span style="text-align:right;font-weight:700">{{ r.cant }}</span><span style="text-align:right;color:#5f6d60">{{ r.unidad }}</span></div>
+              </sc-for>
+            </div>
+            <sc-if value="{{ showApi }}" hint-placeholder-val="{{ false }}"><div style="font-family:ui-monospace,monospace;font-size:11px;color:#7a8579;background:#eef1ea;border-radius:6px;padding:4px 8px;align-self:flex-start">GET /api/stock?sucursalId=X</div></sc-if>
+          </sc-if>
+          <sc-if value="{{ stockIsMov }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <select style="height:44px;border:1px solid #c7d1c2;border-radius:10px;font-size:14px;padding:0 10px;background:#fff"><option>Todos los productos</option><option>Nalga</option><option>Milanesa de nalga</option></select>
+              <select style="height:44px;border:1px solid #c7d1c2;border-radius:10px;font-size:14px;padding:0 10px;background:#fff"><option>Todas las sucursales</option><option>Producción</option><option>Local 1</option><option>Local 2</option></select>
+              <input type="date" style="height:44px;border:1px solid #c7d1c2;border-radius:10px;font-size:14px;padding:0 10px;box-sizing:border-box"></input>
+              <input type="date" style="height:44px;border:1px solid #c7d1c2;border-radius:10px;font-size:14px;padding:0 10px;box-sizing:border-box"></input>
+            </div>
+            <div style="background:#fff;border:1px solid #dfe4d9;border-radius:14px;overflow-x:auto">
+              <div style="display:grid;grid-template-columns:120px 150px 1fr 130px 110px 120px;gap:0 12px;background:#e9eee4;padding:12px 20px;font-size:12px;font-weight:800;color:#5f6d60;letter-spacing:0.04em"><span>FECHA</span><span>TIPO</span><span>PRODUCTO</span><span>SUCURSAL</span><span style="text-align:right">CANT.</span><span>USUARIO</span></div>
+              <sc-for list="{{ movRows }}" as="m" hint-placeholder-count="5">
+                <div style="display:grid;grid-template-columns:120px 150px 1fr 130px 110px 120px;gap:0 12px;padding:13px 20px;border-top:1px solid #eef1ea;font-size:14px"><span style="color:#5f6d60">{{ m.fecha }}</span><span style="font-weight:600">{{ m.tipo }}</span><span>{{ m.prod }}</span><span style="color:#5f6d60">{{ m.suc }}</span><span style="text-align:right;font-weight:700">{{ m.cant }}</span><span style="color:#5f6d60">{{ m.usuario }}</span></div>
+              </sc-for>
+            </div>
+            <sc-if value="{{ showApi }}" hint-placeholder-val="{{ false }}"><div style="font-family:ui-monospace,monospace;font-size:11px;color:#7a8579;background:#eef1ea;border-radius:6px;padding:4px 8px;align-self:flex-start">GET /api/stock/movimientos?producto=&amp;sucursal=&amp;desde=&amp;hasta=</div></sc-if>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- PRODUCCIÓN -->
+      <sc-if value="{{ aIsProduccion }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Admin: Producción" style="display:flex;flex-direction:column;gap:16px">
+          <div>
+            <h1 style="margin:0;font-size:26px;font-weight:800">Producción — Lotes</h1>
+            <div style="font-size:14px;color:#5f6d60;margin-top:4px">Esperado vs. real, desvíos y trazabilidad completa.</div>
+          </div>
+          <div style="background:#fff;border:1px solid #dfe4d9;border-radius:14px;overflow-x:auto">
+            <div style="display:grid;grid-template-columns:90px 110px 1fr 130px 90px 80px 90px 110px 80px 110px;gap:0 12px;min-width:1060px;box-sizing:border-box;background:#e9eee4;padding:12px 18px;font-size:12px;font-weight:800;color:#5f6d60;letter-spacing:0.03em"><span>LOTE</span><span>FECHA</span><span>PRODUCTO</span><span>OPERARIO</span><span style="text-align:right">ESPERADO</span><span style="text-align:right">REAL</span><span style="text-align:right">DESVÍO</span><span style="text-align:right">DESPERDICIO</span><span>FICHA</span><span></span></div>
+            <sc-for list="{{ lotesVM }}" as="l" hint-placeholder-count="4">
+              <div style="border-top:1px solid #eef1ea">
+                <div style="display:grid;grid-template-columns:90px 110px 1fr 130px 90px 80px 90px 110px 80px 110px;gap:0 12px;min-width:1060px;box-sizing:border-box;padding:13px 18px;font-size:14px;align-items:center"><span style="font-family:ui-monospace,monospace;color:#5f6d60">{{ l.id }}</span><span style="color:#5f6d60">{{ l.fecha }}</span><span style="font-weight:600">{{ l.prod }}</span><span>{{ l.operario }}</span><span style="text-align:right">{{ l.esp }}</span><span style="text-align:right;font-weight:700">{{ l.real }}</span><span style="text-align:right;font-weight:800;color:{{ l.desvColor }}">{{ l.desv }}</span><span style="text-align:right;color:#5f6d60">{{ l.desp }}</span><span style="color:#5f6d60">{{ l.ficha }}</span><button onClick="{{ l.onToggle }}" style="min-height:36px;border:1px solid #c7d1c2;border-radius:8px;background:#fff;font-size:13px;font-weight:700;color:#1a7f3f;cursor:pointer">{{ l.btnTxt }}</button></div>
+                <sc-if value="{{ l.open }}" hint-placeholder-val="{{ false }}">
+                  <div style="background:#f8faf5;padding:14px 18px 16px;display:flex;flex-direction:column;gap:6px">
+                    <div style="font-size:12px;font-weight:800;color:#5f6d60;letter-spacing:0.04em">INSUMOS USADOS (TRAZABILIDAD)</div>
+                    <sc-for list="{{ l.insumos }}" as="i" hint-placeholder-count="2">
+                      <div style="font-size:14px">{{ i.txt }}</div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+          <sc-if value="{{ showApi }}" hint-placeholder-val="{{ false }}"><div style="font-family:ui-monospace,monospace;font-size:11px;color:#7a8579;background:#eef1ea;border-radius:6px;padding:4px 8px;align-self:flex-start">GET /api/produccion/lotes · GET /api/produccion/lotes/{id}</div></sc-if>
+        </div>
+      </sc-if>
+
+      <!-- TRANSFERENCIAS -->
+      <sc-if value="{{ aIsTransf }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Admin: Transferencias" style="display:flex;flex-direction:column;gap:16px">
+          <div>
+            <h1 style="margin:0;font-size:26px;font-weight:800">Transferencias</h1>
+            <div style="font-size:14px;color:#5f6d60;margin-top:4px">Enviado vs. recibido, con ambas firmas.</div>
+          </div>
+          <div style="background:#fff;border:1px solid #dfe4d9;border-radius:14px;overflow-x:auto">
+            <div style="display:grid;grid-template-columns:90px 110px 150px 1fr 90px 90px 80px 170px 110px;gap:0 12px;min-width:1060px;box-sizing:border-box;background:#e9eee4;padding:12px 18px;font-size:12px;font-weight:800;color:#5f6d60;letter-spacing:0.03em"><span>REMITO</span><span>FECHA</span><span>RUTA</span><span>PRODUCTO</span><span style="text-align:right">ENVIADO</span><span style="text-align:right">RECIBIDO</span><span style="text-align:right">DIF.</span><span>FIRMAS</span><span>ESTADO</span></div>
+            <sc-for list="{{ transfVM }}" as="t" hint-placeholder-count="4">
+              <div style="display:grid;grid-template-columns:90px 110px 150px 1fr 90px 90px 80px 170px 110px;gap:0 12px;min-width:1060px;box-sizing:border-box;padding:13px 18px;border-top:1px solid #eef1ea;font-size:14px;align-items:center"><span style="font-family:ui-monospace,monospace;color:#5f6d60">{{ t.remito }}</span><span style="color:#5f6d60">{{ t.fecha }}</span><span>{{ t.ruta }}</span><span style="font-weight:600">{{ t.prod }}</span><span style="text-align:right">{{ t.env }}</span><span style="text-align:right">{{ t.rec }}</span><span style="text-align:right;font-weight:800;color:{{ t.difColor }}">{{ t.dif }}</span><span style="color:#5f6d60;font-size:13px">{{ t.firmas }}</span><span style="font-size:13px;font-weight:800;color:{{ t.estColor }}">{{ t.estado }}</span></div>
+            </sc-for>
+          </div>
+          <sc-if value="{{ showApi }}" hint-placeholder-val="{{ false }}"><div style="font-family:ui-monospace,monospace;font-size:11px;color:#7a8579;background:#eef1ea;border-radius:6px;padding:4px 8px;align-self:flex-start">GET /api/transferencias</div></sc-if>
+        </div>
+      </sc-if>
+
+      <!-- FICHAS TÉCNICAS -->
+      <sc-if value="{{ aIsFichas }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Admin: Fichas técnicas" style="display:flex;flex-direction:column;gap:16px">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="flex:1">
+              <h1 style="margin:0;font-size:26px;font-weight:800">Fichas técnicas</h1>
+              <div style="font-size:14px;color:#5f6d60;margin-top:4px">Recetas con versión. La versión nueva desactiva la anterior.</div>
+            </div>
+            <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ toggleFichaForm }}" style="min-height:48px;padding:0 20px;border:none;border-radius:12px;background:#1a7f3f;color:#fff;font-size:15px;font-weight:800;cursor:pointer" style-hover="background:#146130">＋ NUEVA FICHA</button>
+            </sc-if>
+          </div>
+          <sc-if value="{{ fichaFormOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#fff;border:2px solid #1a7f3f;border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px">
+              <div style="font-size:17px;font-weight:800">Nueva versión de ficha</div>
+              <div style="background:#fff7d9;color:#7a5d00;border-radius:10px;padding:12px 14px;font-size:14px;font-weight:600">Ojo: al guardar, la versión anterior de esta ficha queda desactivada.</div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
+                <div><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Producto</label><select style="width:100%;height:46px;border:1px solid #c7d1c2;border-radius:10px;font-size:14px;padding:0 10px;background:#fff"><option>Milanesa de nalga</option><option>Milanesa de pollo</option><option>Empanada de pollo</option></select></div>
+                <div><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Rendimiento esperado (u / kg del principal)</label><input style="width:100%;box-sizing:border-box;height:46px;border:1px solid #c7d1c2;border-radius:10px;font-size:14px;padding:0 12px"></input></div>
+                <div><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">% desperdicio esperado</label><input style="width:100%;box-sizing:border-box;height:46px;border:1px solid #c7d1c2;border-radius:10px;font-size:14px;padding:0 12px"></input></div>
+                <div><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Umbral de alerta (%)</label><input style="width:100%;box-sizing:border-box;height:46px;border:1px solid #c7d1c2;border-radius:10px;font-size:14px;padding:0 12px"></input></div>
+              </div>
+              <div style="font-size:13px;font-weight:600">Ingredientes (marcá cuál es el principal — exactamente uno)</div>
+              <sc-for list="{{ fichaFormIngs }}" as="g" hint-placeholder-count="3">
+                <div style="display:flex;gap:10px;align-items:center">
+                  <input type="radio" name="principal" style="width:20px;height:20px"></input>
+                  <input placeholder="Ingrediente" value="{{ g.nombre }}" style="flex:2;height:46px;border:1px solid #c7d1c2;border-radius:10px;font-size:14px;padding:0 12px;box-sizing:border-box"></input>
+                  <input placeholder="Cantidad por unidad" value="{{ g.cant }}" style="flex:1;height:46px;border:1px solid #c7d1c2;border-radius:10px;font-size:14px;padding:0 12px;box-sizing:border-box"></input>
+                </div>
+              </sc-for>
+              <div style="display:flex;gap:10px">
+                <button onClick="{{ toggleFichaForm }}" style="min-height:48px;padding:0 18px;border:2px solid #c7d1c2;border-radius:12px;background:#fff;font-size:15px;font-weight:700;color:#5f6d60;cursor:pointer">Cancelar</button>
+                <button onClick="{{ toggleFichaForm }}" style="min-height:48px;padding:0 22px;border:none;border-radius:12px;background:#1a7f3f;color:#fff;font-size:15px;font-weight:800;cursor:pointer">GUARDAR VERSIÓN</button>
+              </div>
+            </div>
+          </sc-if>
+          <sc-for list="{{ fichasVM }}" as="f" hint-placeholder-count="3">
+            <div style="background:#fff;border:1px solid #dfe4d9;border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                <div style="font-size:18px;font-weight:800;flex:1">{{ f.prod }}</div>
+                <span style="background:#e3f2e7;color:#1a7f3f;font-size:13px;font-weight:800;border-radius:8px;padding:6px 10px">{{ f.version }} · ACTIVA</span>
+                <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ false }}">
+                  <button onClick="{{ toggleFichaForm }}" style="min-height:42px;padding:0 14px;border:1px solid #c7d1c2;border-radius:10px;background:#fff;font-size:14px;font-weight:700;color:#1a7f3f;cursor:pointer">Nueva versión</button>
+                </sc-if>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px 18px">
+                <div><div style="font-size:12px;color:#5f6d60;font-weight:600">Rendimiento esperado</div><div style="font-size:15px;font-weight:700">{{ f.rend }}</div></div>
+                <div><div style="font-size:12px;color:#5f6d60;font-weight:600">% desperdicio esperado</div><div style="font-size:15px;font-weight:700">{{ f.desp }}</div></div>
+                <div><div style="font-size:12px;color:#5f6d60;font-weight:600">Umbral de alerta</div><div style="font-size:15px;font-weight:700">{{ f.umbral }}</div></div>
+                <div><div style="font-size:12px;color:#5f6d60;font-weight:600">Versiones anteriores</div><div style="font-size:15px;font-weight:700;color:#5f6d60">{{ f.anteriores }}</div></div>
+              </div>
+              <div style="border-top:1px solid #eef1ea;padding-top:10px;display:flex;flex-wrap:wrap;gap:8px">
+                <sc-for list="{{ f.ings }}" as="i" hint-placeholder-count="3">
+                  <span style="background:#f4f6f0;border:1px solid #dfe4d9;border-radius:9px;padding:7px 12px;font-size:14px;font-weight:600">{{ i.txt }}</span>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+          <sc-if value="{{ showApi }}" hint-placeholder-val="{{ false }}"><div style="font-family:ui-monospace,monospace;font-size:11px;color:#7a8579;background:#eef1ea;border-radius:6px;padding:4px 8px;align-self:flex-start">GET /api/fichas · POST /api/fichas · POST /api/fichas/{id}/versiones</div></sc-if>
+        </div>
+      </sc-if>
+
+      <!-- CATÁLOGO -->
+      <sc-if value="{{ aIsCatalogo }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Admin: Catálogo" style="display:flex;flex-direction:column;gap:16px">
+          <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+            <h1 style="margin:0;font-size:26px;font-weight:800;flex:1">Catálogo</h1>
+            <div style="display:flex;gap:6px;background:#e6e9e2;border-radius:12px;padding:5px">
+              <sc-for list="{{ catTabs }}" as="c" hint-placeholder-count="4">
+                <button onClick="{{ c.onTap }}" style="min-height:42px;padding:0 16px;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;background:{{ c.bg }};color:{{ c.color }}">{{ c.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+
+          <sc-if value="{{ catIsProductos }}" hint-placeholder-val="{{ true }}">
+            <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ false }}">
+              <button style="align-self:flex-start;min-height:48px;padding:0 20px;border:none;border-radius:12px;background:#1a7f3f;color:#fff;font-size:15px;font-weight:800;cursor:pointer" style-hover="background:#146130">＋ NUEVO PRODUCTO</button>
+            </sc-if>
+            <div style="background:#fff;border:1px solid #dfe4d9;border-radius:14px;overflow-x:auto">
+              <div style="display:grid;grid-template-columns:1fr 160px 170px 110px 110px;background:#e9eee4;padding:12px 20px;font-size:12px;font-weight:800;color:#5f6d60;letter-spacing:0.04em"><span>NOMBRE</span><span>CATEGORÍA</span><span>TIPO</span><span>UNIDAD</span><span></span></div>
+              <sc-for list="{{ catProds }}" as="p" hint-placeholder-count="5">
+                <div style="display:grid;grid-template-columns:1fr 160px 170px 110px 110px;padding:13px 20px;border-top:1px solid #eef1ea;font-size:14px;align-items:center"><span style="font-weight:600">{{ p.nombre }}</span><span style="color:#5f6d60">{{ p.cat }}</span><span style="font-family:ui-monospace,monospace;font-size:12px;color:#5f6d60">{{ p.tipo }}</span><span style="color:#5f6d60">{{ p.unidad }}</span>
+                  <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ false }}"><button style="min-height:36px;border:1px solid #c7d1c2;border-radius:8px;background:#fff;font-size:13px;font-weight:700;color:#1a7f3f;cursor:pointer">Editar</button></sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ catIsPrecios }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#fff7d9;color:#7a5d00;border-radius:10px;padding:12px 14px;font-size:14px;font-weight:600;align-self:flex-start">Cambiar un precio crea un registro nuevo — el historial se conserva siempre.</div>
+            <div style="background:#fff;border:1px solid #dfe4d9;border-radius:14px;overflow-x:auto">
+              <div style="display:grid;grid-template-columns:1fr 150px 170px 140px;background:#e9eee4;padding:12px 20px;font-size:12px;font-weight:800;color:#5f6d60;letter-spacing:0.04em"><span>PRODUCTO</span><span style="text-align:right">PRECIO ACTUAL</span><span>VIGENTE DESDE</span><span></span></div>
+              <sc-for list="{{ catPrecios }}" as="p" hint-placeholder-count="3">
+                <div style="border-top:1px solid #eef1ea">
+                  <div style="display:grid;grid-template-columns:1fr 150px 170px 140px;padding:13px 20px;font-size:14px;align-items:center"><span style="font-weight:600">{{ p.prod }}</span><span style="text-align:right;font-weight:800">{{ p.precio }}</span><span style="color:#5f6d60">{{ p.desde }}</span>
+                    <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ false }}"><button style="min-height:36px;border:1px solid #c7d1c2;border-radius:8px;background:#fff;font-size:13px;font-weight:700;color:#1a7f3f;cursor:pointer">Cambiar precio</button></sc-if>
+                  </div>
+                  <div style="background:#f8faf5;padding:8px 20px 12px;font-size:13px;color:#5f6d60">Historial: {{ p.hist }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ catIsProvs }}" hint-placeholder-val="{{ false }}">
+            <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ false }}">
+              <button style="align-self:flex-start;min-height:48px;padding:0 20px;border:none;border-radius:12px;background:#1a7f3f;color:#fff;font-size:15px;font-weight:800;cursor:pointer" style-hover="background:#146130">＋ NUEVO PROVEEDOR</button>
+            </sc-if>
+            <div style="background:#fff;border:1px solid #dfe4d9;border-radius:14px;overflow-x:auto">
+              <div style="display:grid;grid-template-columns:1fr 200px 110px;background:#e9eee4;padding:12px 20px;font-size:12px;font-weight:800;color:#5f6d60;letter-spacing:0.04em"><span>NOMBRE</span><span>TELÉFONO</span><span></span></div>
+              <sc-for list="{{ catProvs }}" as="p" hint-placeholder-count="5">
+                <div style="display:grid;grid-template-columns:1fr 200px 110px;padding:13px 20px;border-top:1px solid #eef1ea;font-size:14px;align-items:center"><span style="font-weight:600">{{ p.nombre }}</span><span style="color:#5f6d60">{{ p.tel }}</span>
+                  <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ false }}"><button style="min-height:36px;border:1px solid #c7d1c2;border-radius:8px;background:#fff;font-size:13px;font-weight:700;color:#1a7f3f;cursor:pointer">Editar</button></sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ catIsSucs }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#fff;border:1px solid #dfe4d9;border-radius:14px;overflow-x:auto">
+              <div style="display:grid;grid-template-columns:1fr 1fr 160px;background:#e9eee4;padding:12px 20px;font-size:12px;font-weight:800;color:#5f6d60;letter-spacing:0.04em"><span>SUCURSAL</span><span>DIRECCIÓN</span><span>TIPO</span></div>
+              <sc-for list="{{ catSucs }}" as="s" hint-placeholder-count="3">
+                <div style="display:grid;grid-template-columns:1fr 1fr 160px;padding:13px 20px;border-top:1px solid #eef1ea;font-size:14px"><span style="font-weight:600">{{ s.nombre }}</span><span style="color:#5f6d60">{{ s.dir }}</span><span style="font-family:ui-monospace,monospace;font-size:12px;color:#5f6d60">{{ s.tipo }}</span></div>
+              </sc-for>
+            </div>
+          </sc-if>
+          <sc-if value="{{ showApi }}" hint-placeholder-val="{{ false }}"><div style="font-family:ui-monospace,monospace;font-size:11px;color:#7a8579;background:#eef1ea;border-radius:6px;padding:4px 8px;align-self:flex-start">GET/POST /api/productos · /api/precios · /api/proveedores · /api/sucursales</div></sc-if>
+        </div>
+      </sc-if>
+
+      <!-- USUARIOS -->
+      <sc-if value="{{ aIsUsuarios }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Admin: Usuarios" style="display:flex;flex-direction:column;gap:16px">
+          <div style="display:flex;align-items:center;gap:14px">
+            <h1 style="margin:0;font-size:26px;font-weight:800;flex:1">Usuarios</h1>
+            <button style="min-height:48px;padding:0 20px;border:none;border-radius:12px;background:#1a7f3f;color:#fff;font-size:15px;font-weight:800;cursor:pointer" style-hover="background:#146130">＋ NUEVO USUARIO</button>
+          </div>
+          <div style="background:#fff;border:1px solid #dfe4d9;border-radius:14px;overflow-x:auto">
+            <div style="display:grid;grid-template-columns:1fr 160px 180px 100px 110px;background:#e9eee4;padding:12px 20px;font-size:12px;font-weight:800;color:#5f6d60;letter-spacing:0.04em"><span>NOMBRE</span><span>USUARIO</span><span>ROL</span><span>ACTIVO</span><span></span></div>
+            <sc-for list="{{ usersVM }}" as="u" hint-placeholder-count="5">
+              <div style="display:grid;grid-template-columns:1fr 160px 180px 100px 110px;padding:13px 20px;border-top:1px solid #eef1ea;font-size:14px;align-items:center"><span style="font-weight:600">{{ u.nombre }}</span><span style="font-family:ui-monospace,monospace;font-size:13px;color:#5f6d60">{{ u.username }}</span><span>{{ u.rol }}</span><span style="font-weight:700;color:{{ u.actColor }}">{{ u.activo }}</span><button style="min-height:36px;border:1px solid #c7d1c2;border-radius:8px;background:#fff;font-size:13px;font-weight:700;color:#1a7f3f;cursor:pointer">Editar</button></div>
+            </sc-for>
+          </div>
+          <sc-if value="{{ showApi }}" hint-placeholder-val="{{ false }}"><div style="font-family:ui-monospace,monospace;font-size:11px;color:#7a8579;background:#eef1ea;border-radius:6px;padding:4px 8px;align-self:flex-start">GET/POST/PATCH /api/usuarios</div></sc-if>
+        </div>
+      </sc-if>
+
+      <!-- AUDITORÍA -->
+      <sc-if value="{{ aIsAuditoria }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Admin: Auditoría" style="display:flex;flex-direction:column;gap:16px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <h1 style="margin:0;font-size:26px;font-weight:800;flex:1">Auditoría</h1>
+            <span style="background:#e6e9e2;color:#5f6d60;font-size:13px;font-weight:800;border-radius:8px;padding:6px 12px">SOLO LECTURA</span>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <input type="date" style="height:44px;border:1px solid #c7d1c2;border-radius:10px;font-size:14px;padding:0 10px;box-sizing:border-box"></input>
+            <select style="height:44px;border:1px solid #c7d1c2;border-radius:10px;font-size:14px;padding:0 10px;background:#fff"><option>Todos los usuarios</option><option>Juan Pérez</option><option>Marcos Gil</option></select>
+            <select style="height:44px;border:1px solid #c7d1c2;border-radius:10px;font-size:14px;padding:0 10px;background:#fff"><option>Todas las acciones</option><option>CREAR</option><option>CERRAR</option><option>CONFIRMAR</option></select>
+            <select style="height:44px;border:1px solid #c7d1c2;border-radius:10px;font-size:14px;padding:0 10px;background:#fff"><option>Todas las entidades</option><option>Ingreso</option><option>Lote</option><option>Transferencia</option></select>
+          </div>
+          <div style="background:#fff;border:1px solid #dfe4d9;border-radius:14px;overflow-x:auto">
+            <div style="display:grid;grid-template-columns:150px 150px 140px 150px 1fr;background:#e9eee4;padding:12px 20px;font-size:12px;font-weight:800;color:#5f6d60;letter-spacing:0.04em"><span>FECHA / HORA</span><span>USUARIO</span><span>ACCIÓN</span><span>ENTIDAD</span><span>DETALLE</span></div>
+            <sc-for list="{{ audRows }}" as="a" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:150px 150px 140px 150px 1fr;padding:13px 20px;border-top:1px solid #eef1ea;font-size:14px"><span style="color:#5f6d60">{{ a.fecha }}</span><span style="font-weight:600">{{ a.usuario }}</span><span style="font-family:ui-monospace,monospace;font-size:12px">{{ a.accion }}</span><span style="color:#5f6d60">{{ a.entidad }}</span><span style="color:#5f6d60">{{ a.det }}</span></div>
+            </sc-for>
+          </div>
+          <sc-if value="{{ showApi }}" hint-placeholder-val="{{ false }}"><div style="font-family:ui-monospace,monospace;font-size:11px;color:#7a8579;background:#eef1ea;border-radius:6px;padding:4px 8px;align-self:flex-start">GET /api/auditoria?fecha=&amp;usuario=&amp;accion=&amp;entidad=</div></sc-if>
+        </div>
+      </sc-if>
+
+    </div>
+  </div>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;sinConexion&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: false, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Estados&quot;}, &quot;resultadoConteo&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;auto&quot;, &quot;options&quot;: [&quot;auto&quot;, &quot;coincide&quot;, &quot;no_coincide&quot;], &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Estados&quot;}, &quot;mostrarEndpoints&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Anotaciones&quot;}}">
+class Component extends DCLogic {
+  state = {
+    role: null, userName: '', loginU: '', loginP: '', loginErr: false,
+    // producción
+    pScreen: 'menu',
+    ing: { step: 1, prov: null, otro: '', showOtro: false, lineas: [], foto: false },
+    pr: { step: 1, prod: null, insumos: [] },
+    lote: null,
+    env: { step: 1, dest: null, lineas: [] },
+    enviosHist: [
+      { remito: 'T-00228', fecha: 'Ayer 17:20', dest: 'Local 2', det: 'Milanesa de nalga × 30 · Empanada de pollo × 48', estado: 'Confirmado' },
+      { remito: 'T-00227', fecha: 'Ayer 10:05', dest: 'Local 1', det: 'Milanesa de pollo × 24', estado: 'Confirmado' }
+    ],
+    sending: false,
+    // cajero / encargado
+    cScreen: 'lista', encTab: 'recibir',
+    cTransf: null, cCounts: {},
+    cHist: [{ remito: 'T-00226', fecha: 'Ayer 12:30', det: 'Milanesa de nalga × 30 · Empanada de pollo × 46' }],
+    transfPend: [
+      { id: 't1', remito: 'T-00229', fecha: 'Hoy 09:40', origen: 'Producción', lineas: [{ prod: 'Milanesa de nalga', enviado: 40 }, { prod: 'Empanada de pollo', enviado: 60 }] },
+      { id: 't2', remito: 'T-00230', fecha: 'Hoy 11:15', origen: 'Producción', lineas: [{ prod: 'Milanesa de pollo', enviado: 30 }] }
+    ],
+    // admin
+    aTab: 'alertas', stockSuc: 'prod', stockView: 'tabla', catTab: 'productos',
+    loteOpen: null, fichaFormOpen: false,
+    alertas: [
+      { id: 'a1', tipo: 'DESVIO', visto: false, fecha: 'Hoy 08:55', lines: [
+        { k: 'Producto', v: 'Milanesa de nalga' }, { k: 'Lote', v: 'L-0139' }, { k: 'Operario', v: 'Juan Pérez' },
+        { k: 'Unidades esperadas', v: '46' }, { k: 'Unidades reales', v: '40' }, { k: 'Desvío', v: '−13 %', red: true },
+        { k: 'Desperdicio', v: '1,2 kg' } ] },
+      { id: 'a2', tipo: 'DISCREPANCIA', visto: false, fecha: 'Ayer 18:40', lines: [
+        { k: 'Producto', v: 'Empanada de pollo' }, { k: 'Cantidad enviada', v: '60' }, { k: 'Cantidad recibida', v: '55' },
+        { k: 'Diferencia', v: '−5', red: true }, { k: 'Envió', v: 'Juan Pérez (Producción)' }, { k: 'Recibió', v: 'Marcos Gil (Local 1)' } ] },
+      { id: 'a3', tipo: 'DESVIO', visto: true, fecha: '7/7 14:10', lines: [
+        { k: 'Producto', v: 'Empanada de pollo' }, { k: 'Lote', v: 'L-0135' }, { k: 'Operario', v: 'Juan Pérez' },
+        { k: 'Unidades esperadas', v: '120' }, { k: 'Unidades reales', v: '104' }, { k: 'Desvío', v: '−13 %', red: true },
+        { k: 'Desperdicio', v: '0,8 kg' } ] }
+    ],
+    // overlays
+    kp: null, picker: null, done: null
+  };
+
+  provs = ['Granja San José', 'Avícola Río II', 'Pollos del Valle', 'Distribuidora El Centro', 'Frigorífico Alta Gracia', 'Huevos La Falda', 'Carnes Malagueño', 'Insumos Córdoba', 'Granja El Ceibo', 'Avícola Sinsacate'];
+  prodsMP = [
+    { id: 'p1', nombre: 'Nalga', unidad: 'kg' }, { id: 'p2', nombre: 'Pechuga de pollo', unidad: 'kg' },
+    { id: 'p3', nombre: 'Pollo entero', unidad: 'kg' }, { id: 'p4', nombre: 'Pan rallado', unidad: 'kg' },
+    { id: 'p5', nombre: 'Huevo líquido', unidad: 'kg' }, { id: 'p6', nombre: 'Tapa de empanada', unidad: 'u' },
+    { id: 'p7', nombre: 'Condimento provenzal', unidad: 'kg' }
+  ];
+  prodsEl = [{ id: 'e1', nombre: 'Milanesa de nalga' }, { id: 'e2', nombre: 'Milanesa de pollo' }, { id: 'e3', nombre: 'Empanada de pollo' }];
+  partidas = {
+    p1: [{ id: 'ING-0231', desc: '10 kg — llegó el 3/7 — Granja San José', queda: 8.2, un: 'kg' }, { id: 'ING-0224', desc: '15 kg — llegó el 30/6 — Frigorífico Alta Gracia', queda: 3.5, un: 'kg' }],
+    p2: [{ id: 'ING-0233', desc: '12 kg — llegó el 4/7 — Avícola Río II', queda: 12, un: 'kg' }],
+    p3: [{ id: 'ING-0234', desc: '30 kg — llegó el 4/7 — Pollos del Valle', queda: 22.5, un: 'kg' }],
+    p4: [{ id: 'ING-0210', desc: '25 kg — llegó el 26/6 — Insumos Córdoba', queda: 14.8, un: 'kg' }],
+    p5: [{ id: 'ING-0228', desc: '20 kg — llegó el 2/7 — Huevos La Falda', queda: 9.4, un: 'kg' }],
+    p6: [{ id: 'ING-0235', desc: '600 u — llegó el 5/7 — Distribuidora El Centro', queda: 480, un: 'u' }],
+    p7: [{ id: 'ING-0201', desc: '5 kg — llegó el 20/6 — Insumos Córdoba', queda: 3.1, un: 'kg' }]
+  };
+  stockProdEl = { e1: 64, e2: 120, e3: 85 };
+  _tmp = {};
+  _remitoN = 231;
+
+  fmt(n) { return String(n).replace('.', ','); }
+
+  setIng(p) { this.setState(s => ({ ing: { ...s.ing, ...p } })); }
+  setPr(p) { this.setState(s => ({ pr: { ...s.pr, ...p } })); }
+  setEnv(p) { this.setState(s => ({ env: { ...s.env, ...p } })); }
+
+  login(role, name) {
+    const home = { PRODUCCION: 'menu', CAJERO: 'lista', ENCARGADO: 'lista' };
+    this.setState({ role, userName: name, loginErr: false, pScreen: 'menu', cScreen: 'lista', encTab: 'recibir', aTab: role === 'SOCIO' ? 'stock' : 'alertas' });
+  }
+  doLogin() {
+    const users = { juan: ['PRODUCCION', 'Juan'], marcos: ['CAJERO', 'Marcos'], carla: ['ENCARGADO', 'Carla'], diego: ['ADMINISTRADOR', 'Diego'], silvia: ['SOCIO', 'Silvia'] };
+    const u = users[(this.state.loginU || '').trim().toLowerCase()];
+    if (u && (this.state.loginP || '').length > 0) this.login(u[0], u[1]);
+    else this.setState({ loginErr: true });
+  }
+  logout() { this.setState({ role: null, loginErr: false, kp: null, picker: null, done: null }); }
+
+  send(fn) { this.setState({ sending: true }); setTimeout(() => { this.setState({ sending: false }); fn(); }, 700); }
+
+  // ---------- teclado ----------
+  openKp(cfg) { this.setState({ kp: { val: '', err: '', decimal: true, allowZero: false, max: null, unidad: '', ...cfg } }); }
+  kpPress(k) {
+    this.setState(s => {
+      const kp = { ...s.kp, err: '' };
+      if (k === '⌫') kp.val = kp.val.slice(0, -1);
+      else if (k === ',') { if (kp.decimal && kp.val && !kp.val.includes(',')) kp.val += ','; }
+      else if (kp.val.replace(',', '').length < 6) kp.val += k;
+      return { kp };
+    });
+  }
+  kpOk() {
+    const kp = this.state.kp; if (!kp) return;
+    const v = parseFloat((kp.val || '').replace(',', '.'));
+    if (!kp.val || isNaN(v)) return this.setState({ kp: { ...kp, err: 'Cargá un número.' } });
+    if (v <= 0 && !kp.allowZero) return this.setState({ kp: { ...kp, err: 'Tiene que ser mayor que 0.' } });
+    if (v < 0) return this.setState({ kp: { ...kp, err: 'Tiene que ser 0 o más.' } });
+    if (kp.max != null && v > kp.max) return this.setState({ kp: { ...kp, err: kp.maxMsg } });
+    this.setState({ kp: null });
+    this.kpDone(kp.target, v);
+  }
+  kpDone(t, v) {
+    const T = this._tmp;
+    if (t === 'ingRemito') { T.remito = v; this.openKp({ target: 'ingPesada', title: '¿Cuánto pesaste vos?', sub: T.prod.nombre, unidad: T.prod.unidad, decimal: T.prod.unidad === 'kg' }); }
+    else if (t === 'ingPesada') { this.setIng({ lineas: [...this.state.ing.lineas, { prod: T.prod, remito: T.remito, pesada: v }] }); }
+    else if (t === 'prCant') { this.setPr({ insumos: [...this.state.pr.insumos, { prod: T.insumo, partida: T.partida, cant: v }] }); }
+    else if (t === 'cerrarU') { T.unidades = v; this.openKp({ target: 'cerrarD', title: '¿Cuántos kg tiraste?', sub: 'Desperdicio del lote (puede ser 0)', unidad: 'kg', decimal: true, allowZero: true }); }
+    else if (t === 'cerrarD') { this.cerrarLote(T.unidades, v); }
+    else if (t === 'envCant') { this.setEnv({ lineas: [...this.state.env.lineas, { prod: T.envProd, cant: v }] }); }
+    else if (t === 'cajN') { this.setState(s => ({ cCounts: { ...s.cCounts, [T.cajIdx]: v } })); }
+  }
+
+  // ---------- picker ----------
+  openPk(cfg) { this.setState({ picker: { search: '', searchable: false, ...cfg } }); }
+  pkDone(t, item) {
+    const T = this._tmp;
+    this.setState({ picker: null });
+    if (t === 'ingProd') { T.prod = item; this.openKp({ target: 'ingRemito', title: '¿Cuánto dice el remito?', sub: item.nombre, unidad: item.unidad, decimal: item.unidad === 'kg' }); }
+    else if (t === 'prInsumo') {
+      T.insumo = item;
+      const parts = this.partidas[item.id] || [];
+      this.openPk({ target: 'prPartida', title: 'Elegí la partida — ' + item.nombre, items: parts.map(p => ({ label: p.desc, sub: 'Quedan ' + this.fmt(p.queda) + ' ' + p.un, ref: p })) });
+    }
+    else if (t === 'prPartida') {
+      const p = item.ref; T.partida = p;
+      this.openKp({ target: 'prCant', title: '¿Cuánto usaste?', sub: T.insumo.nombre + ' · partida ' + p.id, unidad: p.un, decimal: p.un === 'kg', max: p.queda, maxMsg: 'No alcanza. En esa partida quedan ' + this.fmt(p.queda) + ' ' + p.un + '.' });
+    }
+    else if (t === 'envProd') {
+      const stock = this.stockProdEl[item.id] || 0; T.envProd = item;
+      this.openKp({ target: 'envCant', title: '¿Cuántas unidades mandás?', sub: item.nombre, unidad: 'u', decimal: false, max: stock, maxMsg: 'No hay suficiente. En producción quedan ' + stock + ' unidades.' });
+    }
+  }
+
+  // ---------- flujos producción ----------
+  resetFlows() { this.setState({ ing: { step: 1, prov: null, otro: '', showOtro: false, lineas: [], foto: false }, pr: { step: 1, prod: null, insumos: [] }, env: { step: 1, dest: null, lineas: [] } }); }
+  confirmIngreso() {
+    const n = this.state.ing.lineas.length, prov = this.state.ing.prov;
+    this.send(() => {
+      this.setState({ done: { title: '¡Ingreso registrado!', sub: n + (n === 1 ? ' producto' : ' productos') + ' de ' + prov + '. Quedó firmado a tu nombre.' } });
+      this.resetFlows();
+    });
+  }
+  empezarProduccion() {
+    const pr = this.state.pr;
+    this.send(() => {
+      const hora = new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+      this.setState({ lote: { id: 'L-0142', prod: pr.prod.nombre, insumos: pr.insumos, hora }, pScreen: 'lote' });
+      this.resetFlows();
+    });
+  }
+  cerrarLote(unidades, desp) {
+    const prod = this.state.lote.prod;
+    this.send(() => {
+      this.setState({ done: { title: 'Lote cerrado.', sub: 'Se produjeron ' + unidades + ' unidades de ' + prod.toLowerCase() + '.' }, lote: null, pScreen: 'menu' });
+    });
+  }
+  confirmEnvio() {
+    const env = this.state.env;
+    this.send(() => {
+      this._remitoN += 1;
+      const remito = 'T-00' + this._remitoN;
+      const det = env.lineas.map(l => l.prod.nombre + ' × ' + l.cant).join(' · ');
+      this.setState(s => ({
+        enviosHist: [{ remito, fecha: 'Hoy', dest: env.dest, det, estado: 'Pendiente' }, ...s.enviosHist],
+        done: { title: '¡Envío confirmado!', sub: 'Remito virtual ' + remito + ' → ' + env.dest + '.' }
+      }));
+      this.resetFlows();
+    });
+  }
+
+  // ---------- cajero ----------
+  cConfirmar() {
+    const t = this.state.cTransf, counts = this.state.cCounts;
+    const forced = this.props.resultadoConteo ?? 'auto';
+    this.send(() => {
+      let ok;
+      if (forced === 'coincide') ok = true;
+      else if (forced === 'no_coincide') ok = false;
+      else ok = t.lineas.every((l, i) => counts[i] === l.enviado);
+      if (ok) { this.finishRecep(t, counts); this.setState({ cScreen: 'ok' }); }
+      else this.setState({ cScreen: 'diff' });
+    });
+  }
+  cConfirmIgual() { const t = this.state.cTransf; this.send(() => { this.finishRecep(t, this.state.cCounts); this.setState({ cScreen: 'reg' }); }); }
+  finishRecep(t, counts) {
+    const det = t.lineas.map((l, i) => l.prod + ' × ' + (counts[i] ?? 0)).join(' · ');
+    this.setState(s => ({
+      transfPend: s.transfPend.filter(x => x.id !== t.id),
+      cHist: [{ remito: t.remito, fecha: 'Hoy', det }, ...s.cHist],
+      cTransf: null, cCounts: {}
+    }));
+  }
+
+  renderVals() {
+    const s = this.state, P = this.props;
+    const offline = P.sinConexion ?? false;
+    const showApi = P.mostrarEndpoints ?? true;
+    const role = s.role;
+    const roleLabels = { PRODUCCION: 'Producción', CAJERO: 'Cajero', ENCARGADO: 'Encargado', ADMINISTRADOR: 'Administrador', SOCIO: 'Socio (solo lectura)' };
+    const canWrite = role === 'ADMINISTRADOR';
+
+    // login
+    const demoUsers = [['Producción', 'PRODUCCION', 'Juan'], ['Cajero', 'CAJERO', 'Marcos'], ['Encargado', 'ENCARGADO', 'Carla'], ['Administrador', 'ADMINISTRADOR', 'Diego'], ['Socio', 'SOCIO', 'Silvia']]
+      .map(([label, r, n]) => ({ label, onTap: () => this.login(r, n) }));
+
+    // ingreso VM
+    const ing = s.ing;
+    const unTxt = (v, un) => this.fmt(v) + ' ' + un;
+    const ingLineas = ing.lineas.map((l, i) => ({
+      nombre: l.prod.nombre,
+      det: 'Remito: ' + unTxt(l.remito, l.prod.unidad) + ' · Pesaste: ' + unTxt(l.pesada, l.prod.unidad),
+      onDel: () => this.setIng({ lineas: ing.lineas.filter((_, j) => j !== i) })
+    }));
+    const provCards = [...this.provs.map(p => ({ label: p, onTap: () => this.setIng({ prov: p, showOtro: false, step: 2 }) })), { label: 'OTRO (no está en la lista)', onTap: () => this.setIng({ showOtro: true }) }];
+
+    // producir VM
+    const pr = s.pr;
+    const prInsumos = pr.insumos.map((it, i) => ({
+      titulo: it.prod.nombre + ' — ' + unTxt(it.cant, it.partida.un),
+      det: 'Partida ' + it.partida.id + ' · ' + it.partida.desc,
+      onDel: () => this.setPr({ insumos: pr.insumos.filter((_, j) => j !== i) })
+    }));
+
+    // enviar VM
+    const env = s.env;
+    const envLineas = env.lineas.map((l, i) => ({
+      nombre: l.prod.nombre, det: l.cant + ' unidades',
+      onDel: () => this.setEnv({ lineas: env.lineas.filter((_, j) => j !== i) })
+    }));
+
+    const enviosVM = s.enviosHist.map(e => ({ ...e, estColor: e.estado === 'Pendiente' ? '#7a5d00' : '#1a7f3f', estBg: e.estado === 'Pendiente' ? '#fff7d9' : '#e3f2e7' }));
+
+    // teclado VM
+    const kp = s.kp;
+    const kpKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', ',', '0', '⌫'].map(k => ({ k, onTap: () => this.kpPress(k) }));
+
+    // picker VM
+    const pk = s.picker;
+    let pkItems = [];
+    if (pk) {
+      const q = (pk.search || '').toLowerCase();
+      pkItems = pk.items.filter(it => !q || it.label.toLowerCase().includes(q)).map(it => ({ label: it.label, sub: it.sub || '', hasSub: !!it.sub, onTap: () => this.pkDone(pk.target, it.ref !== undefined ? it : (it.raw || it)) }));
+    }
+
+    // cajero VM
+    const cPend = s.transfPend.map(t => ({
+      remito: t.remito, fecha: t.fecha, origen: t.origen,
+      prods: t.lineas.map(l => ({ nombre: l.prod })),
+      onOpen: () => this.setState({ cTransf: t, cCounts: {}, cScreen: 'conteo' })
+    }));
+    const ct = s.cTransf;
+    const cRows = ct ? ct.lineas.map((l, i) => {
+      const has = s.cCounts[i] !== undefined;
+      return {
+        nombre: l.prod, hasVal: has, noVal: !has, valTxt: has ? s.cCounts[i] + ' u' : '',
+        onTap: () => { this._tmp.cajIdx = i; this.openKp({ target: 'cajN', title: 'Contá y cargá cuántas unidades llegaron', sub: l.prod, unidad: 'u', decimal: false, allowZero: true }); }
+      };
+    }) : [];
+    const cAllCounted = ct ? ct.lineas.every((_, i) => s.cCounts[i] !== undefined) : false;
+
+    // admin VM
+    const badge = s.alertas.filter(a => !a.visto).length;
+    const navDefs = role === 'SOCIO'
+      ? [['stock', 'Stock'], ['produccion', 'Producción'], ['transf', 'Transferencias'], ['fichas', 'Fichas técnicas'], ['catalogo', 'Catálogo'], ['auditoria', 'Auditoría']]
+      : [['alertas', 'Alertas'], ['stock', 'Stock'], ['produccion', 'Producción'], ['transf', 'Transferencias'], ['fichas', 'Fichas técnicas'], ['catalogo', 'Catálogo'], ['usuarios', 'Usuarios'], ['auditoria', 'Auditoría']];
+    const navVM = navDefs.map(([id, label]) => ({
+      label, onTap: () => this.setState({ aTab: id }),
+      bg: s.aTab === id ? '#1a7f3f' : 'transparent', color: s.aTab === id ? '#fff' : '#c9dccf',
+      hasBadge: id === 'alertas' && badge > 0, badge
+    }));
+    const alertasVM = s.alertas.map(a => ({
+      tipo: a.tipo === 'DESVIO' ? 'DESVÍO DE PRODUCCIÓN' : 'DISCREPANCIA EN TRANSFERENCIA',
+      chipBg: a.tipo === 'DESVIO' ? '#fdeeec' : '#fff7d9', chipColor: a.tipo === 'DESVIO' ? '#a02514' : '#7a5d00',
+      fecha: a.fecha, op: a.visto ? 0.55 : 1, vista: a.visto, showVista: !a.visto,
+      lines: a.lines.map(f => ({ k: f.k, v: f.v, color: f.red ? '#c2321e' : '#17251c' })),
+      onVista: () => this.setState(st => ({ alertas: st.alertas.map(x => x.id === a.id ? { ...x, visto: true } : x) }))
+    }));
+
+    const stockData = {
+      prod: [['Nalga', '11,7', 'kg'], ['Pechuga de pollo', '12,0', 'kg'], ['Pollo entero', '22,5', 'kg'], ['Pan rallado', '14,8', 'kg'], ['Huevo líquido', '9,4', 'kg'], ['Tapa de empanada', '480', 'u'], ['Milanesa de nalga', '64', 'u'], ['Milanesa de pollo', '120', 'u'], ['Empanada de pollo', '85', 'u']],
+      l1: [['Milanesa de nalga', '38', 'u'], ['Milanesa de pollo', '52', 'u'], ['Empanada de pollo', '46', 'u'], ['Gaseosa cola 1,5 L', '24', 'u']],
+      l2: [['Milanesa de nalga', '30', 'u'], ['Empanada de pollo', '48', 'u'], ['Gaseosa cola 1,5 L', '18', 'u']]
+    };
+    const stockTabs = [['prod', 'Producción'], ['l1', 'Local 1'], ['l2', 'Local 2']].map(([id, label]) => ({
+      label, onTap: () => this.setState({ stockSuc: id }),
+      bg: s.stockSuc === id ? '#fff' : 'transparent', color: s.stockSuc === id ? '#17251c' : '#5f6d60'
+    }));
+    const stockRows = stockData[s.stockSuc].map(([prod, cant, unidad]) => ({ prod, cant, unidad }));
+    const movRows = [
+      { fecha: 'Hoy 09:40', tipo: 'Transferencia', prod: 'Milanesa de nalga', suc: 'Producción', cant: '−40 u', usuario: 'Juan P.' },
+      { fecha: 'Hoy 08:50', tipo: 'Producción', prod: 'Milanesa de nalga', suc: 'Producción', cant: '+40 u', usuario: 'Juan P.' },
+      { fecha: 'Hoy 08:50', tipo: 'Consumo insumo', prod: 'Nalga', suc: 'Producción', cant: '−9,0 kg', usuario: 'Juan P.' },
+      { fecha: 'Ayer 18:35', tipo: 'Recepción', prod: 'Empanada de pollo', suc: 'Local 1', cant: '+55 u', usuario: 'Marcos G.' },
+      { fecha: 'Ayer 09:15', tipo: 'Ingreso', prod: 'Nalga', suc: 'Producción', cant: '+10 kg', usuario: 'Juan P.' }
+    ];
+
+    const lotesData = [
+      { id: 'L-0141', fecha: 'Hoy 12:10', prod: 'Empanada de pollo', operario: 'Juan Pérez', esp: 118, real: 115, desv: '−3 %', red: false, desp: '0,4 kg', ficha: 'v2', insumos: ['Pechuga de pollo — 6,0 kg · partida ING-0233 (Avícola Río II, 4/7)', 'Tapa de empanada — 120 u · partida ING-0235 (Distribuidora El Centro, 5/7)'] },
+      { id: 'L-0139', fecha: 'Hoy 08:55', prod: 'Milanesa de nalga', operario: 'Juan Pérez', esp: 46, real: 40, desv: '−13 %', red: true, desp: '1,2 kg', ficha: 'v3', insumos: ['Nalga — 10,0 kg · partida ING-0231 (Granja San José, 3/7)', 'Pan rallado — 1,8 kg · partida ING-0210 (Insumos Córdoba, 26/6)', 'Huevo líquido — 1,4 kg · partida ING-0228 (Huevos La Falda, 2/7)'] },
+      { id: 'L-0138', fecha: 'Ayer 15:20', prod: 'Milanesa de pollo', operario: 'Juan Pérez', esp: 60, real: 58, desv: '−3 %', red: false, desp: '0,6 kg', ficha: 'v1', insumos: ['Pechuga de pollo — 8,0 kg · partida ING-0233 (Avícola Río II, 4/7)'] },
+      { id: 'L-0135', fecha: '7/7 14:10', prod: 'Empanada de pollo', operario: 'Juan Pérez', esp: 120, real: 104, desv: '−13 %', red: true, desp: '0,8 kg', ficha: 'v2', insumos: ['Pechuga de pollo — 6,2 kg · partida ING-0219', 'Tapa de empanada — 110 u · partida ING-0225'] }
+    ];
+    const lotesVM = lotesData.map(l => ({
+      ...l, desvColor: l.red ? '#c2321e' : '#17251c',
+      open: s.loteOpen === l.id, btnTxt: s.loteOpen === l.id ? 'Cerrar' : 'Ver insumos',
+      insumos: l.insumos.map(txt => ({ txt })),
+      onToggle: () => this.setState(st => ({ loteOpen: st.loteOpen === l.id ? null : l.id }))
+    }));
+
+    const transfVM = [
+      { remito: 'T-00230', fecha: 'Hoy 11:15', ruta: 'Producción → Local 1', prod: 'Milanesa de pollo', env: '30', rec: '—', dif: '—', difColor: '#5f6d60', firmas: 'Juan P. / —', estado: 'PENDIENTE', estColor: '#7a5d00' },
+      { remito: 'T-00229', fecha: 'Hoy 09:40', ruta: 'Producción → Local 1', prod: 'Milanesa de nalga · Empanada', env: '40 · 60', rec: '—', dif: '—', difColor: '#5f6d60', firmas: 'Juan P. / —', estado: 'PENDIENTE', estColor: '#7a5d00' },
+      { remito: 'T-00228', fecha: 'Ayer 17:20', ruta: 'Producción → Local 2', prod: 'Milanesa de nalga', env: '30', rec: '30', dif: '0', difColor: '#17251c', firmas: 'Juan P. / Lucía M.', estado: 'CONFIRMADA', estColor: '#1a7f3f' },
+      { remito: 'T-00226', fecha: 'Ayer 12:30', ruta: 'Producción → Local 1', prod: 'Empanada de pollo', env: '60', rec: '55', dif: '−5', difColor: '#c2321e', firmas: 'Juan P. / Marcos G.', estado: 'CON DIFERENCIA', estColor: '#c2321e' }
+    ];
+
+    const fichasVM = [
+      { prod: 'Milanesa de nalga', version: 'v3', rend: '4,6 u por kg de nalga', desp: '8 %', umbral: '10 %', anteriores: 'v2 · v1', ings: [{ txt: '★ Nalga — 0,190 kg/u (principal)' }, { txt: 'Pan rallado — 0,040 kg/u' }, { txt: 'Huevo líquido — 0,030 kg/u' }] },
+      { prod: 'Milanesa de pollo', version: 'v1', rend: '7,4 u por kg de pechuga', desp: '6 %', umbral: '10 %', anteriores: '—', ings: [{ txt: '★ Pechuga de pollo — 0,135 kg/u (principal)' }, { txt: 'Pan rallado — 0,035 kg/u' }, { txt: 'Huevo líquido — 0,025 kg/u' }] },
+      { prod: 'Empanada de pollo', version: 'v2', rend: '19,5 u por kg de pechuga', desp: '5 %', umbral: '12 %', anteriores: 'v1', ings: [{ txt: '★ Pechuga de pollo — 0,050 kg/u (principal)' }, { txt: 'Tapa de empanada — 1 u/u' }, { txt: 'Condimento provenzal — 0,003 kg/u' }] }
+    ];
+    const fichaFormIngs = [{ nombre: 'Nalga', cant: '0,190 kg' }, { nombre: 'Pan rallado', cant: '0,040 kg' }, { nombre: 'Huevo líquido', cant: '0,030 kg' }];
+
+    const catTabs = [['productos', 'Productos'], ['precios', 'Precios'], ['provs', 'Proveedores'], ['sucs', 'Sucursales']].map(([id, label]) => ({
+      label, onTap: () => this.setState({ catTab: id }),
+      bg: s.catTab === id ? '#fff' : 'transparent', color: s.catTab === id ? '#17251c' : '#5f6d60'
+    }));
+    const catProds = [
+      { nombre: 'Nalga', cat: 'Carnes', tipo: 'MATERIA_PRIMA', unidad: 'KG' },
+      { nombre: 'Pechuga de pollo', cat: 'Carnes', tipo: 'MATERIA_PRIMA', unidad: 'KG' },
+      { nombre: 'Pan rallado', cat: 'Secos', tipo: 'MATERIA_PRIMA', unidad: 'KG' },
+      { nombre: 'Milanesa de nalga', cat: 'Elaborados', tipo: 'ELABORADO', unidad: 'UNIDAD' },
+      { nombre: 'Milanesa de pollo', cat: 'Elaborados', tipo: 'ELABORADO', unidad: 'UNIDAD' },
+      { nombre: 'Empanada de pollo', cat: 'Elaborados', tipo: 'ELABORADO', unidad: 'UNIDAD' },
+      { nombre: 'Gaseosa cola 1,5 L', cat: 'Bebidas', tipo: 'REVENTA', unidad: 'UNIDAD' }
+    ];
+    const catPrecios = [
+      { prod: 'Milanesa de nalga', precio: '$ 2.400 / u', desde: '1/7/2026', hist: '$ 2.200 (1/5) → $ 2.000 (1/3)' },
+      { prod: 'Empanada de pollo', precio: '$ 950 / u', desde: '15/6/2026', hist: '$ 850 (1/4)' },
+      { prod: 'Gaseosa cola 1,5 L', precio: '$ 2.900 / u', desde: '1/7/2026', hist: '$ 2.600 (1/5)' }
+    ];
+    const catProvs = this.provs.slice(0, 6).map((nombre, i) => ({ nombre, tel: '351 5' + (100200 + i * 731) }));
+    const catSucs = [
+      { nombre: 'Planta Producción', dir: 'Av. Vélez Sarsfield 2100, Córdoba', tipo: 'PRODUCCION' },
+      { nombre: 'Local 1', dir: 'Bv. San Juan 450, Córdoba', tipo: 'VENTA' },
+      { nombre: 'Local 2', dir: 'Av. Rafael Núñez 3800, Córdoba', tipo: 'VENTA' }
+    ];
+    const usersVM = [
+      { nombre: 'Juan Pérez', username: 'juan', rol: 'Producción', activo: 'Sí', actColor: '#1a7f3f' },
+      { nombre: 'Marcos Gil', username: 'marcos', rol: 'Cajero', activo: 'Sí', actColor: '#1a7f3f' },
+      { nombre: 'Carla Ruiz', username: 'carla', rol: 'Encargado', activo: 'Sí', actColor: '#1a7f3f' },
+      { nombre: 'Diego Funes', username: 'diego', rol: 'Administrador', activo: 'Sí', actColor: '#1a7f3f' },
+      { nombre: 'Silvia Ordoñez', username: 'silvia', rol: 'Socio', activo: 'Sí', actColor: '#1a7f3f' },
+      { nombre: 'Lucía Molina', username: 'lucia', rol: 'Cajero', activo: 'No', actColor: '#c2321e' }
+    ];
+    const audRows = [
+      { fecha: 'Hoy 12:10', usuario: 'Juan Pérez', accion: 'CERRAR', entidad: 'Lote', det: 'L-0141 · Empanada de pollo · 115 u' },
+      { fecha: 'Hoy 11:15', usuario: 'Juan Pérez', accion: 'CREAR', entidad: 'Transferencia', det: 'T-00230 → Local 1' },
+      { fecha: 'Hoy 09:40', usuario: 'Juan Pérez', accion: 'CREAR', entidad: 'Transferencia', det: 'T-00229 → Local 1' },
+      { fecha: 'Hoy 08:55', usuario: 'Juan Pérez', accion: 'CERRAR', entidad: 'Lote', det: 'L-0139 · Milanesa de nalga · 40 u' },
+      { fecha: 'Ayer 18:35', usuario: 'Marcos Gil', accion: 'CONFIRMAR', entidad: 'Transferencia', det: 'T-00226 · con discrepancia' },
+      { fecha: 'Ayer 09:15', usuario: 'Juan Pérez', accion: 'CREAR', entidad: 'Ingreso', det: 'Nalga 10 kg · Granja San José' }
+    ];
+
+    return {
+      // global
+      offline, showApi, sending: s.sending,
+      isLogin: !role, isProd: role === 'PRODUCCION', isCaj: role === 'CAJERO' || role === 'ENCARGADO',
+      isEnc: role === 'ENCARGADO', isAdminShell: role === 'ADMINISTRADOR' || role === 'SOCIO',
+      userName: s.userName, roleLabel: roleLabels[role] || '', canWrite,
+      logout: () => this.logout(),
+      // login
+      onLoginU: e => this.setState({ loginU: e.target.value }),
+      onLoginP: e => this.setState({ loginP: e.target.value }),
+      doLogin: () => this.doLogin(), hasLoginErr: s.loginErr, demoUsers,
+      // prod nav
+      pIsMenu: s.pScreen === 'menu', pIsIngreso: s.pScreen === 'ingreso', pIsProducir: s.pScreen === 'producir',
+      pIsEnviar: s.pScreen === 'enviar', pIsEnvios: s.pScreen === 'envios', pIsLote: s.pScreen === 'lote',
+      goIngreso: () => this.setState({ pScreen: 'ingreso' }), goProducir: () => this.setState({ pScreen: 'producir' }),
+      goEnviar: () => this.setState({ pScreen: 'enviar' }), goEnvios: () => this.setState({ pScreen: 'envios' }),
+      goLote: () => this.setState({ pScreen: 'lote' }), pBackMenu: () => this.setState({ pScreen: 'menu' }),
+      hasLote: !!s.lote, loteProd: s.lote ? s.lote.prod : '', loteId: s.lote ? s.lote.id : '', loteHora: s.lote ? s.lote.hora : '',
+      loteInsumos: s.lote ? s.lote.insumos.map(i => ({ txt: i.prod.nombre + ' — ' + this.fmt(i.cant) + ' ' + i.partida.un + ' (partida ' + i.partida.id + ')' })) : [],
+      loteCerrar: () => this.openKp({ target: 'cerrarU', title: '¿Cuántas unidades salieron?', sub: s.lote ? s.lote.prod : '', unidad: 'u', decimal: false }),
+      // ingreso
+      ingStep: ing.step, ingProg: (ing.step / 4 * 100) + '%',
+      ingS1: ing.step === 1, ingS2: ing.step === 2, ingS3: ing.step === 3, ingS4: ing.step === 4,
+      ingBack: () => { if (ing.step === 1) this.setState({ pScreen: 'menu' }); else this.setIng({ step: ing.step - 1 }); },
+      provCards, ingShowOtro: ing.showOtro,
+      onOtroTxt: e => this.setIng({ otro: e.target.value }),
+      ingOtroDis: !(ing.otro || '').trim(),
+      ingOtroGo: () => { if ((ing.otro || '').trim()) this.setIng({ prov: ing.otro.trim() + ' (otro)', step: 2 }); },
+      ingLineas,
+      ingAddProd: () => this.openPk({ target: 'ingProd', title: '¿Qué producto llegó?', searchable: true, items: this.prodsMP.map(p => ({ label: p.nombre, sub: 'Se carga en ' + (p.unidad === 'kg' ? 'kilos' : 'unidades'), ...p })) }),
+      ingNext2: () => this.setIng({ step: 3 }), ingNext2Dis: ing.lineas.length === 0, ingNext2Op: ing.lineas.length === 0 ? 0.5 : 1,
+      ingFoto: ing.foto, ingSacarFoto: () => this.setIng({ foto: true }),
+      ingNext3: () => this.setIng({ step: 4 }), ingNext3Label: ing.foto ? 'CONTINUAR' : 'SALTEAR ESTE PASO',
+      ingProvTxt: ing.prov || '', ingFotoTxt: ing.foto ? 'Sí ✓' : 'Sin foto',
+      ingConfirm: () => this.confirmIngreso(), ingConfirmLabel: s.sending ? 'Guardando…' : 'CONFIRMAR INGRESO',
+      // producir
+      prStep: pr.step, prProg: (pr.step / 3 * 100) + '%', prS1: pr.step === 1, prS2: pr.step === 2, prS3: pr.step === 3,
+      prBack: () => { if (pr.step === 1) this.setState({ pScreen: 'menu' }); else this.setPr({ step: pr.step - 1 }); },
+      prProdCards: this.prodsEl.map(p => ({ label: p.nombre, onTap: () => this.setPr({ prod: p, step: 2 }) })),
+      prInsumos, prHasInsumos: pr.insumos.length > 0,
+      prAddInsumo: () => this.openPk({ target: 'prInsumo', title: '¿Qué insumo usaste?', searchable: true, items: this.prodsMP.map(p => ({ label: p.nombre, sub: (this.partidas[p.id] || []).length + ' partida(s) disponible(s)', ...p })) }),
+      prNext2: () => this.setPr({ step: 3 }), prNext2Dis: pr.insumos.length === 0, prNext2Op: pr.insumos.length === 0 ? 0.5 : 1,
+      prProdNombre: pr.prod ? pr.prod.nombre : '',
+      prConfirm: () => this.empezarProduccion(), prConfirmLabel: s.sending ? 'Creando lote…' : 'EMPEZAR PRODUCCIÓN',
+      // enviar
+      envStep: env.step, envProg: (env.step / 3 * 100) + '%', envS1: env.step === 1, envS2: env.step === 2, envS3: env.step === 3,
+      envBack: () => { if (env.step === 1) this.setState({ pScreen: 'menu' }); else this.setEnv({ step: env.step - 1 }); },
+      envDestCards: ['LOCAL 1', 'LOCAL 2'].map(d => ({ label: d, onTap: () => this.setEnv({ dest: d.charAt(0) + d.slice(1).toLowerCase(), step: 2 }) })),
+      envDestTxt: env.dest || '', envLineas,
+      envAddProd: () => this.openPk({ target: 'envProd', title: '¿Qué producto mandás?', items: this.prodsEl.map(p => ({ label: p.nombre, sub: 'Stock en producción: ' + (this.stockProdEl[p.id] || 0) + ' u', ...p })) }),
+      envNext2: () => this.setEnv({ step: 3 }), envNext2Dis: env.lineas.length === 0, envNext2Op: env.lineas.length === 0 ? 0.5 : 1,
+      envConfirm: () => this.confirmEnvio(), envConfirmLabel: s.sending ? 'Enviando…' : 'CONFIRMAR ENVÍO',
+      enviosVM,
+      // overlays
+      kpOpen: !!kp, kpTitle: kp ? kp.title : '', kpSub: kp ? (kp.sub || '') : '',
+      kpDisplay: kp ? (kp.val || '0') : '0', kpUnit: kp ? kp.unidad : '', kpErr: kp ? kp.err : '', kpHasErr: !!(kp && kp.err),
+      kpKeys, kpOk: () => this.kpOk(), kpCancel: () => this.setState({ kp: null }),
+      pkOpen: !!pk, pkTitle: pk ? pk.title : '', pkSearchable: !!(pk && pk.searchable), pkItems,
+      onPkSearch: e => this.setState(st => ({ picker: { ...st.picker, search: e.target.value } })),
+      pkCancel: () => this.setState({ picker: null }),
+      doneOpen: !!s.done, doneTitle: s.done ? s.done.title : '', doneSub: s.done ? s.done.sub : '',
+      doneOk: () => this.setState({ done: null, pScreen: 'menu' }),
+      // cajero
+      cIsLista: (s.cScreen === 'lista') && (role !== 'ENCARGADO' || s.encTab === 'recibir'),
+      cIsConteo: s.cScreen === 'conteo', cIsOk: s.cScreen === 'ok', cIsDiff: s.cScreen === 'diff',
+      cIsReg: s.cScreen === 'reg', cIsHist: s.cScreen === 'hist',
+      encIsStock: role === 'ENCARGADO' && s.encTab === 'stock' && s.cScreen === 'lista',
+      encTabRecibir: () => this.setState({ encTab: 'recibir' }), encTabStock: () => this.setState({ encTab: 'stock', cScreen: 'lista' }),
+      encRecBg: s.encTab === 'recibir' ? '#fff' : 'transparent', encRecColor: s.encTab === 'recibir' ? '#17251c' : '#5f6d60',
+      encStkBg: s.encTab === 'stock' ? '#fff' : 'transparent', encStkColor: s.encTab === 'stock' ? '#17251c' : '#5f6d60',
+      cPend, cPendEmpty: s.transfPend.length === 0,
+      cGoHist: () => this.setState({ cScreen: 'hist' }), cBackLista: () => this.setState({ cScreen: 'lista', cTransf: null, cCounts: {} }),
+      cTransfTxt: ct ? ct.remito + ' · desde ' + ct.origen + ' · ' + ct.fecha : '',
+      cRows, cConfirm: () => this.cConfirmar(),
+      cConfirmDis: !cAllCounted || s.sending, cConfirmOp: (!cAllCounted || s.sending) ? 0.5 : 1,
+      cConfirmLabel: s.sending ? 'Enviando…' : 'CONFIRMAR CONTEO',
+      cRecontar: () => this.setState({ cCounts: {}, cScreen: 'conteo' }),
+      cConfirmIgual: () => this.cConfirmIgual(),
+      cVolverLista: () => this.setState({ cScreen: 'lista' }),
+      cHistVM: s.cHist,
+      encStockRows: stockData.l1.filter(r => r[0] !== 'Gaseosa cola 1,5 L' ? true : true).map(([prod, cant, unidad]) => ({ prod, cant, unidad })),
+      // admin
+      navVM,
+      aIsAlertas: s.aTab === 'alertas' && role === 'ADMINISTRADOR', aIsStock: s.aTab === 'stock', aIsProduccion: s.aTab === 'produccion',
+      aIsTransf: s.aTab === 'transf', aIsFichas: s.aTab === 'fichas', aIsCatalogo: s.aTab === 'catalogo',
+      aIsUsuarios: s.aTab === 'usuarios' && role === 'ADMINISTRADOR', aIsAuditoria: s.aTab === 'auditoria',
+      alertasVM,
+      stockTabs, stockRows, movRows,
+      stockIsTabla: s.stockView === 'tabla', stockIsMov: s.stockView === 'mov',
+      toggleMov: () => this.setState(st => ({ stockView: st.stockView === 'tabla' ? 'mov' : 'tabla' })),
+      movBtnLabel: s.stockView === 'tabla' ? 'Ver movimientos ›' : '‹ Volver al stock',
+      lotesVM, transfVM, fichasVM, fichaFormIngs,
+      fichaFormOpen: s.fichaFormOpen, toggleFichaForm: () => this.setState(st => ({ fichaFormOpen: !st.fichaFormOpen })),
+      catTabs, catIsProductos: s.catTab === 'productos', catIsPrecios: s.catTab === 'precios',
+      catIsProvs: s.catTab === 'provs', catIsSucs: s.catTab === 'sucs',
+      catProds, catPrecios, catProvs, catSucs, usersVM, audRows
+    };
+  }
+}
+</script>
+</body>
+</html>

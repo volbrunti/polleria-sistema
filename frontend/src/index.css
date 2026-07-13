@@ -1,0 +1,58 @@
+@import 'tailwindcss';
+
+@theme {
+  /* Paleta extraída del diseño aprobado (Limón & Chimi) */
+  --color-primario: #1a7f3f;
+  --color-primario-hover: #146130;
+  --color-primario-suave: #e3f2e7;
+  --color-acento: #f4c531;
+  --color-texto: #17251c;
+  --color-texto-suave: #5f6d60;
+  --color-fondo: #e7eae1;
+  --color-panel: #f4f6f0;
+  --color-borde: #dfe4d9;
+  --color-borde-fuerte: #c7d1c2;
+  --color-chip: #e9eee4;
+  --color-error: #c2321e;
+  --color-error-suave: #faeae7;
+  --color-error-texto: #a02514;
+  --color-advertencia-suave: #fff7d9;
+  --color-advertencia-texto: #7a5d00;
+  --color-sidebar: #14281c;
+  --color-sidebar-borde: #274a34;
+  --color-sidebar-texto: #8fae97;
+
+  --font-sans: 'Archivo', system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  color: var(--color-texto);
+  background: var(--color-fondo);
+  font-family: var(--font-sans);
+}
+
+input,
+button,
+select,
+textarea {
+  font-family: inherit;
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-pop {
+  animation: pop 0.4s ease-out;
+}
