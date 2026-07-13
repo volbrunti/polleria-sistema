@@ -32,3 +32,21 @@ export function cambiarPrecio(productoId: number, monto: number) {
 export function historialPrecios(productoId: number) {
   return apiFetch<Precio[]>(`/api/productos/${productoId}/precios`);
 }
+
+export function crearCombo(datos: {
+  nombre: string;
+  categoria: string;
+  componentes: { productoComponenteId: number; cantidad: number }[];
+}) {
+  return apiFetch<Producto>('/api/productos/combos', { method: 'POST', body: datos });
+}
+
+export function actualizarComponentesCombo(
+  comboId: number,
+  componentes: { productoComponenteId: number; cantidad: number }[],
+) {
+  return apiFetch<Producto>(`/api/productos/combos/${comboId}/componentes`, {
+    method: 'PATCH',
+    body: { componentes },
+  });
+}

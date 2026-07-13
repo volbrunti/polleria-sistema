@@ -16,12 +16,27 @@ const actualizarSchema = z.object({
 });
 
 const listarQuery = z.object({
-  tipo: z.enum(['MATERIA_PRIMA', 'ELABORADO', 'REVENTA']).optional(),
+  tipo: z.enum(['MATERIA_PRIMA', 'ELABORADO', 'REVENTA', 'COMBO']).optional(),
   activo: z.coerce.boolean().optional(),
 });
 
 const precioSchema = z.object({ monto: z.number().positive() });
 const paramsId = z.object({ id: z.coerce.number().int().positive() });
+
+const componenteSchema = z.object({
+  productoComponenteId: z.number().int().positive(),
+  cantidad: z.number().positive(),
+});
+
+const crearComboSchema = z.object({
+  nombre: z.string().min(1),
+  categoria: z.string().min(1),
+  componentes: z.array(componenteSchema).min(1, 'El combo debe tener al menos un componente'),
+});
+
+const componentesSchema = z.object({
+  componentes: z.array(componenteSchema).min(1, 'El combo debe tener al menos un componente'),
+});
 
 export async function productosRoutes(app: FastifyInstance) {
   // Catálogo: lo leen todos los roles autenticados (lo necesitan para operar)
@@ -69,6 +84,28 @@ export async function productosRoutes(app: FastifyInstance) {
     async (req) => {
       const { id } = paramsId.parse(req.params);
       return productosService.historialPrecios(id);
+    },
+  );
+
+  // Combos: bundle de otros productos a un precio propio (CLAUDE.md §9).
+  // Escritura solo ADMINISTRADOR, igual que el resto del catálogo.
+  app.post(
+    '/combos',
+    { preHandler: [app.autenticar, app.requerirRoles('ADMINISTRADOR')] },
+    async (req, reply) => {
+      const datos = crearComboSchema.parse(req.body);
+      const combo = await productosService.crearCombo(datos, req.usuario.id);
+      return reply.code(201).send(combo);
+    },
+  );
+
+  app.patch(
+    '/combos/:id/componentes',
+    { preHandler: [app.autenticar, app.requerirRoles('ADMINISTRADOR')] },
+    async (req) => {
+      const { id } = paramsId.parse(req.params);
+      const { componentes } = componentesSchema.parse(req.body);
+      return productosService.actualizarComponentesCombo(id, componentes, req.usuario.id);
     },
   );
 }

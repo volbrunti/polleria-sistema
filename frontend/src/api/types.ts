@@ -3,7 +3,7 @@
 
 export type Rol = 'ADMINISTRADOR' | 'SOCIO' | 'ENCARGADO' | 'CAJERO' | 'PRODUCCION';
 
-export type TipoProducto = 'MATERIA_PRIMA' | 'ELABORADO' | 'REVENTA';
+export type TipoProducto = 'MATERIA_PRIMA' | 'ELABORADO' | 'REVENTA' | 'COMBO';
 export type UnidadDeMedida = 'KG' | 'UNIDAD';
 export type TipoSucursal = 'PRODUCCION' | 'VENTA';
 
@@ -23,6 +23,13 @@ export interface ErrorApi {
   detalles?: { campo: string; error: string }[];
 }
 
+export interface ComponenteCombo {
+  id: number;
+  productoComponenteId: number;
+  productoComponente?: { nombre: string; unidadDeMedida: UnidadDeMedida };
+  cantidad: string;
+}
+
 export interface Producto {
   id: number;
   nombre: string;
@@ -30,6 +37,8 @@ export interface Producto {
   tipo: TipoProducto;
   unidadDeMedida: UnidadDeMedida;
   activo: boolean;
+  // Presente (posiblemente vacío) solo si tipo === 'COMBO'
+  componentesDelCombo?: ComponenteCombo[];
 }
 
 export interface Precio {

@@ -109,7 +109,7 @@ async function main() {
     { nombre: 'Milanesa de nalga', categoria: 'Milanesas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 2500 },
     { nombre: 'Milanesa de ternera', categoria: 'Milanesas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 3200 },
     { nombre: 'Empanada de pollo', categoria: 'Empanadas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 900 },
-    { nombre: 'Pollo a la parrilla (porción)', categoria: 'Pollos', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 6000 },
+    { nombre: 'Pollo a la leña (entero)', categoria: 'Pollos', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 21000 },
     // Reventa
     { nombre: 'Gaseosa 500ml', categoria: 'Bebidas', tipo: 'REVENTA', unidad: 'UNIDAD', precio: 1500 },
   ];
@@ -208,16 +208,18 @@ async function main() {
     ],
   });
 
-  // Pollo a la parrilla (porción): 1 pollo entero rinde ~4 porciones (hallazgo
-  // de auditoría §0.2 — era el único ELABORADO sin ficha técnica, bloqueaba
-  // producirlo con FICHA_SIN_VERSION_ACTIVA)
-  await crearFichaSiNoExiste('Pollo a la parrilla (porción)', {
-    rendimientoEsperado: 4, // ~4 porciones por pollo entero
-    desperdicioEsperadoPct: 5,
+  // Pollo a la leña (entero): 1 pollo entero fresco → 1 pollo a la leña
+  // entero (corregido 2026-07-13 al ver la carta real — se vende ENTERO o
+  // MEDIO, no "por porción". Producción solo cocina enteros; partir a la
+  // mitad es un evento de VENTA, no de producción, y pertenece al circuito
+  // especial del pollo del módulo 2 — CLAUDE.md §8 Flujo 4 — no modelado acá)
+  await crearFichaSiNoExiste('Pollo a la leña (entero)', {
+    rendimientoEsperado: 1, // 1 pollo a la leña entero por pollo entero fresco
+    desperdicioEsperadoPct: 8, // pérdida de peso en la cocción
     umbralDesvioAlertaPct: 10,
     ingredientes: [
-      { insumo: 'Pollo entero fresco', cantidad: 0.25, esPrincipal: true },
-      { insumo: 'Aceite (lt)', cantidad: 0.01, esPrincipal: false },
+      { insumo: 'Pollo entero fresco', cantidad: 1, esPrincipal: true },
+      { insumo: 'Aceite (lt)', cantidad: 0.02, esPrincipal: false },
     ],
   });
 

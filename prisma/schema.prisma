@@ -31,6 +31,11 @@ enum TipoProducto {
   MATERIA_PRIMA
   ELABORADO
   REVENTA
+  // Bundle de otros productos vendido a un precio propio (no calculado por
+  // descuento — el precio del combo es un dato, igual que cualquier Precio).
+  // No tiene stock propio: vender un combo (módulo 2/POS, futuro) descuenta
+  // el stock de cada ComboComponente por su cantidad, nunca del combo en sí.
+  COMBO
 }
 
 enum UnidadDeMedida {
@@ -145,8 +150,27 @@ model Producto {
   insumosUsados      InsumoUsado[]
   lotesProduccion    LoteDeProduccion[]
   lineasTransferencia LineaDeTransferencia[]
+  // Solo relevante si tipo = COMBO: de qué productos se compone
+  componentesDelCombo ComboComponente[] @relation("ComboDeProducto")
+  // Solo relevante si este producto integra algún combo como componente
+  usadoEnCombos        ComboComponente[] @relation("ComponenteDeCombo")
 
   @@map("productos")
+}
+
+// Composición de un Producto tipo COMBO. El precio del combo vive en Precio
+// (misma entidad/historial que cualquier producto) — acá solo se define DE
+// QUÉ se arma y en qué cantidad (CLAUDE.md §9, propuesta validada 2026-07-13).
+model ComboComponente {
+  id                   Int      @id @default(autoincrement())
+  combo                Producto @relation("ComboDeProducto", fields: [comboId], references: [id])
+  comboId              Int
+  productoComponente   Producto @relation("ComponenteDeCombo", fields: [productoComponenteId], references: [id])
+  productoComponenteId Int
+  cantidad             Decimal  @db.Decimal(12, 3)
+
+  @@unique([comboId, productoComponenteId])
+  @@map("combo_componentes")
 }
 
 model Precio {
