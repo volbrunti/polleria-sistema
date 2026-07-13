@@ -9,6 +9,11 @@ export interface UsuarioAutenticado {
   id: number;
   username: string;
   rol: Rol;
+  // Sucursal fija del usuario (CAJERO/ENCARGADO). Va en el JWT solo para que
+  // el frontend la muestre sin pedirla aparte; la autorización real sobre
+  // transferencias SIEMPRE revalida contra la DB (ver transferencias.service.ts),
+  // nunca confía en este valor potencialmente desactualizado hasta 15 min.
+  sucursalId: number | null;
 }
 
 declare module 'fastify' {
@@ -23,7 +28,7 @@ declare module 'fastify' {
 
 export function firmarAccessToken(usuario: UsuarioAutenticado): string {
   return jwt.sign(
-    { sub: String(usuario.id), username: usuario.username, rol: usuario.rol },
+    { sub: String(usuario.id), username: usuario.username, rol: usuario.rol, sucursalId: usuario.sucursalId },
     config.jwtSecret,
     { expiresIn: config.jwtAccessExpires as jwt.SignOptions['expiresIn'] },
   );
@@ -35,6 +40,7 @@ export function verificarAccessToken(token: string): UsuarioAutenticado {
     id: Number(payload.sub),
     username: payload.username as string,
     rol: payload.rol as Rol,
+    sucursalId: (payload.sucursalId as number | null | undefined) ?? null,
   };
 }
 

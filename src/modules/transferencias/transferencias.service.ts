@@ -94,6 +94,19 @@ export async function generarTransferencia(params: {
   }, OPCIONES_TX);
 }
 
+// Un CAJERO/ENCARGADO solo puede recepcionar transferencias dirigidas a SU
+// propia sucursal — sin esto, cualquier receptor válido podía confirmar la
+// entrega de cualquier local, ajeno al suyo (hallazgo de auditoría §5.2/§9.1).
+// ADMINISTRADOR queda exento (acceso total, CLAUDE.md §2). Se revalida
+// siempre contra la DB, nunca contra el JWT (que puede tener hasta 15 min
+// de desfasaje si un admin reasigna la sucursal de alguien a mitad de turno).
+async function validarUsuarioDeLaSucursal(usuarioId: number, sucursalDestinoId: number): Promise<void> {
+  const usuario = await prisma.usuario.findUnique({ where: { id: usuarioId } });
+  if (!usuario) throw Errores.noAutorizado();
+  if (usuario.rol === 'ADMINISTRADOR') return;
+  if (usuario.sucursalId !== sucursalDestinoId) throw Errores.sucursalNoAutorizada();
+}
+
 function validarLineasRecepcion(
   transferencia: { lineas: { productoId: number }[] },
   lineasRecibidas: LineaRecepcionInput[],
@@ -124,6 +137,7 @@ export async function intentarRecepcion(params: {
   if (!transferencia) throw Errores.noEncontrado('Transferencia');
   if (transferencia.estado !== 'PENDIENTE_RECEPCION') throw Errores.transferenciaYaConfirmada();
 
+  await validarUsuarioDeLaSucursal(params.usuarioId, transferencia.sucursalDestinoId);
   validarLineasRecepcion(transferencia, params.lineasRecibidas);
 
   const recibidasPorProducto = new Map(
@@ -163,6 +177,7 @@ export async function confirmarConDiscrepancia(params: {
   if (!transferencia) throw Errores.noEncontrado('Transferencia');
   if (transferencia.estado !== 'PENDIENTE_RECEPCION') throw Errores.transferenciaYaConfirmada();
 
+  await validarUsuarioDeLaSucursal(params.usuarioId, transferencia.sucursalDestinoId);
   validarLineasRecepcion(transferencia, params.lineasRecibidas);
 
   return confirmarEnTransaccion({

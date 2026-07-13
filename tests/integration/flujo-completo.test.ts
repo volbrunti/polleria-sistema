@@ -392,7 +392,57 @@ describe('Flujo 3 — Transferencias', () => {
     expect(res.statusCode).toBe(409);
     expect(res.json().codigo).toBe('TRANSFERENCIA_YA_CONFIRMADA');
   });
+
+  // Hallazgo de auditoría §5.2/§9.1: sin esta validación, cualquier CAJERO/
+  // ENCARGADO podía ver Y confirmar transferencias dirigidas a OTRO local.
+  it('CAJERO de Local 1 no ve ni puede recepcionar una transferencia dirigida a Local 2', async () => {
+    const gen = await app.inject({
+      method: 'POST',
+      url: '/api/transferencias',
+      headers: auth(f.usuarios.produccion.token),
+      payload: {
+        sucursalDestinoId: f.sucursales.local2,
+        lineas: [{ productoId: f.productos.panRallado, cantidadEnviada: 1 }],
+      },
+    });
+    expect(gen.statusCode).toBe(201);
+    const paraLocal2 = gen.json().id;
+
+    // ni pidiéndolo explícitamente por query param la ve en su listado
+    const lista = await app.inject({
+      method: 'GET',
+      url: `/api/transferencias?estado=PENDIENTE_RECEPCION&sucursalDestinoId=${f.sucursales.local2}`,
+      headers: auth(f.usuarios.cajero.token),
+    });
+    expect(idsDe(lista.json())).not.toContain(paraLocal2);
+
+    // ni accediendo directo por ID puede confirmarla
+    const intento = await app.inject({
+      method: 'POST',
+      url: `/api/transferencias/${paraLocal2}/recepcion`,
+      headers: auth(f.usuarios.cajero.token),
+      payload: { lineas: [{ productoId: f.productos.panRallado, cantidadRecibida: 1 }] },
+    });
+    expect(intento.statusCode).toBe(403);
+    expect(intento.json().codigo).toBe('SUCURSAL_NO_AUTORIZADA');
+    expect(await stockDe(f.productos.panRallado, f.sucursales.local2)).toBe(0);
+
+    // ADMINISTRADOR sí puede (acceso total, CLAUDE.md §2)
+    const comoAdmin = await app.inject({
+      method: 'POST',
+      url: `/api/transferencias/${paraLocal2}/recepcion`,
+      headers: auth(f.usuarios.admin.token),
+      payload: { lineas: [{ productoId: f.productos.panRallado, cantidadRecibida: 1 }] },
+    });
+    expect(comoAdmin.statusCode).toBe(200);
+    expect(comoAdmin.json().coincide).toBe(true);
+    expect(await stockDe(f.productos.panRallado, f.sucursales.local2)).toBe(1);
+  });
 });
+
+function idsDe(transferencias: { id: number }[]): number[] {
+  return transferencias.map((t) => t.id);
+}
 
 describe('Trazabilidad y auditoría de punta a punta', () => {
   it('la cadena LineaIngreso → InsumoUsado → Lote → Transferencia es navegable', async () => {

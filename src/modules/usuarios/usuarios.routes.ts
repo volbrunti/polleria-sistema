@@ -9,6 +9,8 @@ const crearSchema = z.object({
   username: z.string().min(3),
   password: z.string().min(6),
   rol: z.enum(ROLES),
+  // Sucursal fija del usuario — relevante para CAJERO/ENCARGADO (ver §5.2 auditoría)
+  sucursalId: z.number().int().positive().nullable().optional(),
 });
 
 const actualizarSchema = z.object({
@@ -16,6 +18,7 @@ const actualizarSchema = z.object({
   rol: z.enum(ROLES).optional(),
   activo: z.boolean().optional(),
   password: z.string().min(6).optional(),
+  sucursalId: z.number().int().positive().nullable().optional(),
 });
 
 const paramsId = z.object({ id: z.coerce.number().int().positive() });

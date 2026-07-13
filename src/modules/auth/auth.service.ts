@@ -20,6 +20,7 @@ export async function login(username: string, password: string) {
     id: usuario.id,
     username: usuario.username,
     rol: usuario.rol,
+    sucursalId: usuario.sucursalId,
   };
 
   const accessToken = firmarAccessToken(usuarioAuth);
@@ -33,7 +34,13 @@ export async function login(username: string, password: string) {
   return {
     accessToken,
     refreshToken,
-    usuario: { id: usuario.id, nombre: usuario.nombre, username: usuario.username, rol: usuario.rol },
+    usuario: {
+      id: usuario.id,
+      nombre: usuario.nombre,
+      username: usuario.username,
+      rol: usuario.rol,
+      sucursalId: usuario.sucursalId,
+    },
   };
 }
 
@@ -61,6 +68,7 @@ export async function renovar(refreshToken: string) {
     id: registro.usuario.id,
     username: registro.usuario.username,
     rol: registro.usuario.rol,
+    sucursalId: registro.usuario.sucursalId,
   });
 
   return { accessToken, refreshToken: nuevoRefresh };

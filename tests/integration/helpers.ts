@@ -62,20 +62,23 @@ export async function sembrarFixtures(): Promise<Fixtures> {
   const local2 = await prisma.sucursal.create({ data: { nombre: 'Local 2', tipo: 'VENTA' } });
 
   const passwordHash = await bcrypt.hash('clave123', 4); // costo bajo: solo tests
+  // encargado/cajero quedan asignados a Local 1 — sin esto, la validación de
+  // sucursal en transferencias.service.ts los bloquearía para recepcionar
+  // incluso las de su propio local en los fixtures de test.
   const roles = [
-    ['admin', 'ADMINISTRADOR'],
-    ['socio', 'SOCIO'],
-    ['encargado', 'ENCARGADO'],
-    ['cajero', 'CAJERO'],
-    ['produccion', 'PRODUCCION'],
+    ['admin', 'ADMINISTRADOR', null],
+    ['socio', 'SOCIO', null],
+    ['encargado', 'ENCARGADO', local1.id],
+    ['cajero', 'CAJERO', local1.id],
+    ['produccion', 'PRODUCCION', null],
   ] as const;
 
   const usuarios = {} as Fixtures['usuarios'];
-  for (const [username, rol] of roles) {
+  for (const [username, rol, sucursalId] of roles) {
     const u = await prisma.usuario.create({
-      data: { nombre: username, username, passwordHash, rol },
+      data: { nombre: username, username, passwordHash, rol, sucursalId },
     });
-    usuarios[username] = { id: u.id, token: firmarAccessToken({ id: u.id, username, rol }) };
+    usuarios[username] = { id: u.id, token: firmarAccessToken({ id: u.id, username, rol, sucursalId }) };
   }
 
   const nalga = await prisma.producto.create({

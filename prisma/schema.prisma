@@ -88,17 +88,22 @@ model Sucursal {
   ingresosMercaderia       IngresoMercaderia[]
   transferenciasOrigen     Transferencia[]     @relation("TransferenciaOrigen")
   transferenciasDestino    Transferencia[]     @relation("TransferenciaDestino")
+  usuarios                 Usuario[]
 
   @@map("sucursales")
 }
 
 model Usuario {
-  id           Int     @id @default(autoincrement())
+  id           Int      @id @default(autoincrement())
   nombre       String
-  username     String  @unique
+  username     String   @unique
   passwordHash String
   rol          Rol
-  activo       Boolean @default(true)
+  activo       Boolean  @default(true)
+  // Sucursal fija del usuario (relevante para CAJERO/ENCARGADO: define de qué
+  // local es y sobre qué transferencias puede operar — ver transferencias.service.ts)
+  sucursal     Sucursal? @relation(fields: [sucursalId], references: [id])
+  sucursalId   Int?
 
   refreshTokens        RefreshToken[]
   movimientosStock     MovimientoStock[]

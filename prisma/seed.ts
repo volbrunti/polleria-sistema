@@ -28,21 +28,37 @@ async function main() {
   });
 
   // ── Usuarios: uno por rol ──
+  // sucursalId: fija de qué local es un CAJERO/ENCARGADO — sin esto no pueden
+  // recepcionar ninguna transferencia (validación agregada tras hallazgo de
+  // auditoría §5.2: sin sucursal asignada, cualquiera podía recibir mercadería
+  // de cualquier local).
   const hash = (pw: string) => bcrypt.hash(pw, 10);
-  const usuarios: { nombre: string; username: string; password: string; rol: Prisma.UsuarioCreateInput['rol'] }[] = [
+  const usuarios: {
+    nombre: string;
+    username: string;
+    password: string;
+    rol: Prisma.UsuarioCreateInput['rol'];
+    sucursalId?: number;
+  }[] = [
     { nombre: 'Pablo (Admin)', username: 'admin', password: 'admin123', rol: 'ADMINISTRADOR' },
     { nombre: 'Ariel (Socio)', username: 'ariel', password: 'socio123', rol: 'SOCIO' },
     { nombre: 'Eliana (Socia)', username: 'eliana', password: 'socio123', rol: 'SOCIO' },
     { nombre: 'Ema (Socia)', username: 'ema', password: 'socio123', rol: 'SOCIO' },
-    { nombre: 'Encargado Local 1', username: 'encargado', password: 'encargado123', rol: 'ENCARGADO' },
-    { nombre: 'Cajero Local 1', username: 'cajero', password: 'cajero123', rol: 'CAJERO' },
+    { nombre: 'Encargado Local 1', username: 'encargado', password: 'encargado123', rol: 'ENCARGADO', sucursalId: local1.id },
+    { nombre: 'Cajero Local 1', username: 'cajero', password: 'cajero123', rol: 'CAJERO', sucursalId: local1.id },
     { nombre: 'Operario Producción', username: 'produccion', password: 'produccion123', rol: 'PRODUCCION' },
   ];
   for (const u of usuarios) {
     await prisma.usuario.upsert({
       where: { username: u.username },
-      update: {},
-      create: { nombre: u.nombre, username: u.username, passwordHash: await hash(u.password), rol: u.rol },
+      update: { sucursalId: u.sucursalId ?? null },
+      create: {
+        nombre: u.nombre,
+        username: u.username,
+        passwordHash: await hash(u.password),
+        rol: u.rol,
+        sucursalId: u.sucursalId ?? null,
+      },
     });
   }
 
@@ -189,6 +205,19 @@ async function main() {
       { insumo: 'Pechuga de pollo (kg)', cantidad: 0.06, esPrincipal: true },
       { insumo: 'Harina (kg)', cantidad: 0.04, esPrincipal: false },
       { insumo: 'Huevo', cantidad: 0.1, esPrincipal: false },
+    ],
+  });
+
+  // Pollo a la parrilla (porción): 1 pollo entero rinde ~4 porciones (hallazgo
+  // de auditoría §0.2 — era el único ELABORADO sin ficha técnica, bloqueaba
+  // producirlo con FICHA_SIN_VERSION_ACTIVA)
+  await crearFichaSiNoExiste('Pollo a la parrilla (porción)', {
+    rendimientoEsperado: 4, // ~4 porciones por pollo entero
+    desperdicioEsperadoPct: 5,
+    umbralDesvioAlertaPct: 10,
+    ingredientes: [
+      { insumo: 'Pollo entero fresco', cantidad: 0.25, esPrincipal: true },
+      { insumo: 'Aceite (lt)', cantidad: 0.01, esPrincipal: false },
     ],
   });
 

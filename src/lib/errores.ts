@@ -20,6 +20,8 @@ export const Errores = {
     new AppError('FICHA_SIN_VERSION_ACTIVA', `El producto "${producto}" no tiene ficha técnica con versión activa`, 400),
   transferenciaYaConfirmada: () =>
     new AppError('TRANSFERENCIA_YA_CONFIRMADA', 'La transferencia ya fue confirmada', 409),
+  sucursalNoAutorizada: () =>
+    new AppError('SUCURSAL_NO_AUTORIZADA', 'No podés operar sobre una transferencia de otra sucursal', 403),
   loteYaCerrado: () => new AppError('LOTE_YA_CERRADO', 'El lote de producción ya está cerrado', 409),
   noEncontrado: (entidad: string) => new AppError('NO_ENCONTRADO', `${entidad} no encontrado/a`, 404),
   credencialesInvalidas: () =>

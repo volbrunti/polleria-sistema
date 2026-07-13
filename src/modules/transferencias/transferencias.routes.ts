@@ -90,9 +90,15 @@ export async function transferenciasRoutes(app: FastifyInstance) {
     },
   );
 
-  // Listado: cualquier rol autenticado — la serialización por rol decide qué ve cada uno
+  // Listado: cualquier rol autenticado — la serialización por rol decide qué ve cada uno.
+  // CAJERO/ENCARGADO con sucursal asignada: se fuerza su propia sucursal como
+  // destino, ignorando lo que pida la query — no pueden ni siquiera LISTAR
+  // las pendientes de otro local (§5.2 de la auditoría).
   app.get('/', { preHandler: [app.autenticar] }, async (req) => {
     const filtros = listarQuery.parse(req.query);
+    if ((req.usuario.rol === 'CAJERO' || req.usuario.rol === 'ENCARGADO') && req.usuario.sucursalId != null) {
+      filtros.sucursalDestinoId = req.usuario.sucursalId;
+    }
     const transferencias = await transferenciasService.listar(filtros);
     return transferencias.map((t) => serializarTransferencia(t, req.usuario.rol, req.usuario.id));
   });

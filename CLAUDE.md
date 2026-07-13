@@ -66,11 +66,12 @@ BACKEND
 ├── JWT custom + refresh tokens en cookies httpOnly (NO usar servicios de auth de terceros)
 └── Zod para validación de inputs
 
-FRONTEND (fase posterior, NO arrancar todavía)
+FRONTEND (YA CONSTRUIDO — carpeta frontend/, ver §4.1)
 ├── React 18 + TypeScript + Vite
-├── Tailwind CSS
-├── Socket.io-client
-└── PWA (React SPA, NO Next.js)
+├── Tailwind CSS v4 (tokens del diseño en src/index.css vía @theme)
+├── react-router-dom v7 + @tanstack/react-query v5
+├── Socket.io-client (alertas en tiempo real, solo rol ADMINISTRADOR)
+└── PWA (React SPA con vite-plugin-pwa, NO Next.js)
 
 INFRA
 ├── Neon (PostgreSQL) — desarrollo en free tier
@@ -98,8 +99,30 @@ El cliente pidió explícitamente **entregas por módulo, no big-bang** ("prefie
 ### FASE ACTUAL → Módulo 1: Producción + Stock + Transferencias (Flujos 1, 2 y 3)
 
 **Orden de trabajo dentro de la fase:**
-1. **Backend completo del módulo 1** con tests (unitarios de lógica de negocio + integración de endpoints). Backend primero, SIEMPRE.
-2. Recién cuando el back esté probado → **frontend del módulo 1**.
+1. ✅ **Backend completo del módulo 1** con tests — TERMINADO (65/65 tests, ver README.md y HANDOFF-AUDITORIA.md).
+2. ✅ **Frontend del módulo 1** — CONSTRUIDO (ver §4.1). Falta la verificación end-to-end contra el backend real.
+
+### 4.1 Estado del FRONTEND del módulo 1 (construido 2026-07-12)
+
+El frontend vive en `frontend/` (proyecto Vite independiente, sin monorepo tooling — se despliega separado del backend). Implementa el diseño aprobado por el cliente, entregado como prototipo interactivo de Claude Design en `Diseño frontend Módulo 1 Pollería/Limon y Chimi - Modulo 1.dc.html`. **Ese .dc.html es SOLO referencia visual** (usa un pseudo-framework de la herramienta de diseño); la implementación real es `frontend/`. Marca visual: "Limón & Chimi" (verde #1a7f3f, amarillo #f4c531, tipografía Archivo).
+
+**Qué está implementado** (fiel al brief de `PROMPT-DISENO-FRONTEND.md`):
+- **Login** único con detección de rol y accesos rápidos a los usuarios del seed.
+- **Rol PRODUCCION** (mobile-first, marco de celular): menú de 3 botones + banner de lote abierto; wizard "Llegó mercadería" (proveedor con "Otro", líneas remito/pesado con teclado numérico, foto opcional, confirmación); wizard "Producir" (producto elaborado → insumos por partida con validación de restante → lote abierto → cerrar con unidades y desperdicio); wizard "Enviar a local" (destino, líneas en unidades con tope de stock); "Mis envíos".
+- **Rol CAJERO/ENCARGADO** (tablet): entregas pendientes SIN cantidades, conteo ciego con teclado, resultado coincide (verde) / no coincide (pantalla NEUTRAL con "VOLVER A CONTAR" y "CONFIRMAR IGUAL", sin revelar diferencia), "Mis recepciones"; ENCARGADO además tab "Stock" de su local.
+- **Rol ADMINISTRADOR/SOCIO** (dashboard con sidebar): Alertas (con badge en vivo vía Socket.io + marcar vista), Stock por sucursal + movimientos con filtros, Producción (esperado vs. real, desvío en rojo, trazabilidad de insumos por partida), Transferencias (enviado/recibido/diferencia/firmas), Fichas técnicas (crear ficha y nueva versión — la anterior se desactiva), Catálogo (productos, precios con historial, proveedores, sucursales), Usuarios (solo admin), Auditoría con filtros. **SOCIO no ve ningún botón de escritura** (`puedeEscribir = rol === 'ADMINISTRADOR'`); Alertas y Usuarios ni aparecen en su menú.
+- **Auth**: accessToken en memoria (NUNCA localStorage), refresh silencioso al montar vía cookie httpOnly, retry automático en 401. En dev el proxy de Vite hace todo same-origin (`/api`, `/uploads`, `/socket.io` → localhost:3000).
+- **Control ciego respetado en UI**: las pantallas de PRODUCCION no tienen ningún espacio/campo para esperado-desvío-alerta; el receptor jamás ve `cantidadEnviada` (la API ya no la manda, y la UI tampoco deja hueco visual que la insinúe).
+- **PWA**: manifest + service worker con cache de catálogo (productos/proveedores/sucursales) + banner "Sin conexión". NO hay offline real (decisión de §3).
+
+**Estado de verificación**: ✅ **verificación end-to-end COMPLETADA (2026-07-12)** contra el backend real (Neon nuevo, ver abajo). Se recorrió en el navegador: ingreso con proveedor real y cantidades remito≠pesado (stock sube por lo pesado: 9.8, no 10) → lote de producción con partida trazable, validación bloqueante probada ("No alcanza. En esa partida quedan 8,2 kg"), cierre con desvío -36,84% → alerta DESVIO_PRODUCCION solo al admin → transferencia T-1 → recepción ciega como cajero con conteo errado (pantalla neutral "Los números no coinciden") → recontar correcto → CONFIRMADA, stock del local +6. **Campos ciegos verificados en el JSON crudo de Network**: el rol PRODUCCION nunca recibió `unidadesEsperadas`/`desvioPct`/`alertaDisparada`; el CAJERO nunca recibió `cantidadEnviada`/`diferencia`; el ADMIN sí ve todo. Auditoría registró las 6 acciones de la cadena. También verificado: errores de negocio del backend se muestran legibles en la UI (ej: desperdicio > insumo principal).
+
+**Decisiones de frontend tomadas sin validar con el cliente** (revisar en próxima reunión):
+- El modelo `Usuario` del backend NO tiene `sucursalId`, así que no hay forma de saber de qué local es un cajero. El frontend deja elegir el local con un selector en el header (persistido en sessionStorage). Alternativa correcta a futuro: agregar `sucursalId` opcional a Usuario en el backend.
+- "Mis envíos"/"Mis recepciones" filtran client-side por username (el endpoint de transferencias no filtra por emisor/receptor). Aceptable al volumen actual.
+- Ícono PWA es un SVG placeholder con "L&C" — falta arte de marca real (PNG 192/512).
+
+**Comandos**: `cd frontend && npm run dev` (:5173, requiere backend en :3000) · `npm run build` · `npx tsc -b --noEmit`.
 
 ### FASES FUTURAS (para conocimiento, NO desarrollar todavía)
 - **Módulo 2**: POS + Caja y Turnos (Flujos 4 y 5) — van juntos, la venta requiere turno abierto.
@@ -234,7 +257,7 @@ El movimiento de unidades desde Producción hacia los locales de venta. El clien
 ### Entidades transversales (crear completas AHORA)
 
 - **Sucursal**: nombre, tipo (`PRODUCCION` | `VENTA`), dirección, activa. Seed: 3 sucursales.
-- **Usuario**: nombre, username, passwordHash, rol (`ADMINISTRADOR` | `SOCIO` | `ENCARGADO` | `CAJERO` | `PRODUCCION`), activo.
+- **Usuario**: nombre, username, passwordHash, rol (`ADMINISTRADOR` | `SOCIO` | `ENCARGADO` | `CAJERO` | `PRODUCCION`), activo, **sucursalId** (opcional, FK a Sucursal — fija de qué local es un CAJERO/ENCARGADO; `transferencias.service.ts` la usa para que solo puedan recepcionar transferencias de su propia sucursal).
 - **Producto**: nombre ÚNICO, categoría, tipo (`MATERIA_PRIMA` | `ELABORADO` | `REVENTA`), unidadDeMedida (`KG` | `UNIDAD`), activo. Nota: materia prima y producto vendible son la MISMA entidad con tipos distintos (el pollo cocido que retorna a producción es insumo de la empanada).
 - **Precio**: producto, monto, fechaDesde, usuario. Historial: nunca se pisa, cambio = registro nuevo.
 - **MovimientoStock** (LA ENTIDAD CENTRAL): producto, sucursal, tipo, cantidad (+/-), fecha/hora, usuario, referencia polimórfica al documento origen (tipoOrigen + origenId). Tipos: `INGRESO_COMPRA`, `CONSUMO_PRODUCCION`, `PRODUCCION_ALTA`, `DESPERDICIO_PRODUCCION`, `TRANSFERENCIA_SALIDA`, `TRANSFERENCIA_ENTRADA`, `VENTA`, `ANULACION_REPOSICION`, `ATENCION`, `MERMA_QUEMADO`, `RETORNO_A_PRODUCCION`, `MARCADO_POLLO`, `AJUSTE`. El stock actual de un producto en una sucursal = SUM(movimientos). Puede materializarse en tabla StockActual por performance, pero la fuente de verdad son los movimientos.
@@ -296,10 +319,19 @@ Debe poder responderse: "esta milanesa vendida el viernes salió de la entrega d
 - Conciliación MP/banco, ARCA/AFIP, WhatsApp, OCR: futuro, NO diseñar ahora (solo no cerrarles la puerta en el modelo de ventas cuando llegue el módulo 2).
 - **Fotos de remito — infraestructura pendiente**: hoy `POST /api/ingresos/foto` guarda en disco local (`uploads/remitos/`). Railway tiene filesystem efímero: cada redeploy borra los archivos. **Antes de producción migrar a S3/Cloudinary/R2** (cambio chico, ~15 min una vez decidido el proveedor). En desarrollo local funciona bien.
 - **Roles habilitados para recepcionar transferencias**: CAJERO, ENCARGADO y ADMINISTRADOR (decisión técnica razonable, no confirmada con el cliente — preguntar en próxima reunión).
+- **Cookie de refresh `sameSite: 'strict'`**: rompe el refresh silencioso si frontend (Vercel) y backend (Railway) quedan en dominios distintos en producción. Antes de desplegar en dominios separados: cambiar a `'lax'` o `'none' + secure` en `src/modules/auth/auth.routes.ts`, o servir ambos bajo el mismo dominio.
+- ~~Verificación end-to-end del frontend~~: ✅ hecha el 2026-07-12 (ver §4.1).
+- **Base Neon NUEVA (2026-07-12)**: el proyecto Neon original del README ya no existe. La DB actual es el proyecto con host `ep-bold-flower-acc36pom-pooler.sa-east-1.aws.neon.tech`, base `neondb` (dev, migrada y seedeada) y `polleria_test` (tests). Credenciales en `.env` local (no versionado). El README menciona el proyecto viejo — referencia histórica.
+- ~~Sucursal del CAJERO/ENCARGADO~~: ✅ resuelto el 2026-07-13. `Usuario.sucursalId` (opcional, FK a Sucursal) agregado al modelo. El admin la asigna desde la pantalla de Usuarios (solo aparece para CAJERO/ENCARGADO). El frontend usa esa sucursal fija sin selector cuando está asignada; el selector manual queda solo como red de contención para cuentas sin sucursal configurada.
+- **Aislamiento de sucursal en transferencias — hallazgo de auditoría, ya arreglado (2026-07-13)**: sin `sucursalId` en `Usuario`, cualquier CAJERO/ENCARGADO podía ver y confirmar la recepción de transferencias dirigidas a OTRO local (reproducido en vivo durante la auditoría del módulo 1 — ver artifact de auditoría). `transferencias.service.ts` ahora valida `usuario.sucursalId === transferencia.sucursalDestinoId` en `intentarRecepcion`/`confirmarConDiscrepancia` (siempre releído de la DB, nunca confiado del JWT), y `GET /transferencias` fuerza el filtro a la sucursal propia para esos roles. ADMINISTRADOR sigue exento (acceso total). Test de integración dedicado en `flujo-completo.test.ts`.
+- ~~Servidor arrancaba con `JWT_SECRET`/`JWT_REFRESH_SECRET` por defecto si faltaban~~: ✅ arreglado el 2026-07-13 (hallazgo de auditoría §0.1). `src/config.ts` ahora aborta el arranque (`process.exit(1)`) con mensaje claro si `NODE_ENV=production` y falta cualquiera de los dos secretos. En desarrollo/test el fallback sigue funcionando igual que antes. Verificado en vivo simulando ambos escenarios.
+- ~~"Pollo a la parrilla (porción)" sin ficha técnica~~: ✅ arreglado el 2026-07-13 (hallazgo de auditoría §0.2). Agregada en `prisma/seed.ts` (1 pollo entero fresco ≈ 4 porciones + aceite para basting). Verificado en vivo: ya se puede abrir un lote de producción para ese producto.
 
 ---
 
 ## 12. CRITERIO DE "MÓDULO 1 TERMINADO"
+
+**Estado: backend ✅ terminado y testeado · frontend ✅ construido y verificado end-to-end contra el backend real (§4.1). MÓDULO 1 COMPLETO.**
 
 El backend del módulo 1 está terminado cuando:
 1. Un usuario PRODUCCION puede registrar un ingreso con múltiples líneas, foto y proveedor "Otro".

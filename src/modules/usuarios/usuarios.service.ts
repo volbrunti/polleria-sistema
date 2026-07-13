@@ -4,20 +4,26 @@ import { prisma } from '../../lib/prisma';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { Errores } from '../../lib/errores';
 
-const SIN_PASSWORD = { id: true, nombre: true, username: true, rol: true, activo: true } as const;
+const SIN_PASSWORD = { id: true, nombre: true, username: true, rol: true, activo: true, sucursalId: true } as const;
 
 export async function listar() {
   return prisma.usuario.findMany({ select: SIN_PASSWORD, orderBy: { nombre: 'asc' } });
 }
 
 export async function crear(
-  datos: { nombre: string; username: string; password: string; rol: Rol },
+  datos: { nombre: string; username: string; password: string; rol: Rol; sucursalId?: number | null },
   usuarioIdEjecutor: number,
 ) {
   const passwordHash = await bcrypt.hash(datos.password, 10);
   return prisma.$transaction(async (tx) => {
     const usuario = await tx.usuario.create({
-      data: { nombre: datos.nombre, username: datos.username, passwordHash, rol: datos.rol },
+      data: {
+        nombre: datos.nombre,
+        username: datos.username,
+        passwordHash,
+        rol: datos.rol,
+        sucursalId: datos.sucursalId ?? null,
+      },
       select: SIN_PASSWORD,
     });
     await registrarAuditoria(tx, {
@@ -33,7 +39,7 @@ export async function crear(
 
 export async function actualizar(
   id: number,
-  datos: { nombre?: string; rol?: Rol; activo?: boolean; password?: string },
+  datos: { nombre?: string; rol?: Rol; activo?: boolean; password?: string; sucursalId?: number | null },
   usuarioIdEjecutor: number,
 ) {
   const anterior = await prisma.usuario.findUnique({ where: { id }, select: SIN_PASSWORD });
@@ -43,6 +49,7 @@ export async function actualizar(
   if (datos.nombre !== undefined) data.nombre = datos.nombre;
   if (datos.rol !== undefined) data.rol = datos.rol;
   if (datos.activo !== undefined) data.activo = datos.activo;
+  if (datos.sucursalId !== undefined) data.sucursalId = datos.sucursalId;
   if (datos.password !== undefined) data.passwordHash = await bcrypt.hash(datos.password, 10);
 
   return prisma.$transaction(async (tx) => {
