@@ -99,8 +99,9 @@ El cliente pidió explícitamente **entregas por módulo, no big-bang** ("prefie
 ### FASE ACTUAL → Módulo 1: Producción + Stock + Transferencias (Flujos 1, 2 y 3)
 
 **Orden de trabajo dentro de la fase:**
-1. ✅ **Backend completo del módulo 1** con tests — TERMINADO (65/65 tests, ver README.md y HANDOFF-AUDITORIA.md).
-2. ✅ **Frontend del módulo 1** — CONSTRUIDO (ver §4.1). Falta la verificación end-to-end contra el backend real.
+1. ✅ **Backend completo del módulo 1** con tests — TERMINADO (66/66 tests, ver README.md y HANDOFF-AUDITORIA.md).
+2. ✅ **Frontend del módulo 1** — CONSTRUIDO y verificado end-to-end contra el backend real (ver §4.1).
+3. ✅ **Auditoría completa de negocio/seguridad/UX** (2026-07-13, 234 ítems revisados) — 3 hallazgos (1 crítico, 2 medios), los 3 corregidos y verificados en vivo (ver §4.1 y §11).
 
 ### 4.1 Estado del FRONTEND del módulo 1 (construido 2026-07-12)
 
@@ -117,10 +118,12 @@ El frontend vive en `frontend/` (proyecto Vite independiente, sin monorepo tooli
 
 **Estado de verificación**: ✅ **verificación end-to-end COMPLETADA (2026-07-12)** contra el backend real (Neon nuevo, ver abajo). Se recorrió en el navegador: ingreso con proveedor real y cantidades remito≠pesado (stock sube por lo pesado: 9.8, no 10) → lote de producción con partida trazable, validación bloqueante probada ("No alcanza. En esa partida quedan 8,2 kg"), cierre con desvío -36,84% → alerta DESVIO_PRODUCCION solo al admin → transferencia T-1 → recepción ciega como cajero con conteo errado (pantalla neutral "Los números no coinciden") → recontar correcto → CONFIRMADA, stock del local +6. **Campos ciegos verificados en el JSON crudo de Network**: el rol PRODUCCION nunca recibió `unidadesEsperadas`/`desvioPct`/`alertaDisparada`; el CAJERO nunca recibió `cantidadEnviada`/`diferencia`; el ADMIN sí ve todo. Auditoría registró las 6 acciones de la cadena. También verificado: errores de negocio del backend se muestran legibles en la UI (ej: desperdicio > insumo principal).
 
+**Auditoría completa (2026-07-13)**: se revisaron 234 ítems de reglas de negocio, RBAC, control ciego y UX contra el backend real corriendo (matriz de RBAC en vivo con los 5 roles, boundary tests de stock, ataques directos al constraint de DB, rotación de tokens, etc.), más los 66 tests. Resultado: **1 hallazgo crítico** (aislamiento de sucursal en transferencias — ver §11) y **2 medios** (JWT secrets sin validar al arrancar, ficha técnica faltante de "Pollo a la parrilla"). Los 3 ya están corregidos y reverificados en vivo.
+
 **Decisiones de frontend tomadas sin validar con el cliente** (revisar en próxima reunión):
-- El modelo `Usuario` del backend NO tiene `sucursalId`, así que no hay forma de saber de qué local es un cajero. El frontend deja elegir el local con un selector en el header (persistido en sessionStorage). Alternativa correcta a futuro: agregar `sucursalId` opcional a Usuario en el backend.
 - "Mis envíos"/"Mis recepciones" filtran client-side por username (el endpoint de transferencias no filtra por emisor/receptor). Aceptable al volumen actual.
 - Ícono PWA es un SVG placeholder con "L&C" — falta arte de marca real (PNG 192/512).
+- La pantalla de Usuarios del admin ahora tiene selector de sucursal para CAJERO/ENCARGADO (ver §11, `Usuario.sucursalId`) — falta validar con el cliente si ENCARGADO/CAJERO alguna vez rotan de local (hoy es 1 sucursal fija por usuario, sin historial de cambios).
 
 **Comandos**: `cd frontend && npm run dev` (:5173, requiere backend en :3000) · `npm run build` · `npx tsc -b --noEmit`.
 
@@ -299,7 +302,7 @@ Debe poder responderse: "esta milanesa vendida el viernes salió de la entrega d
 
 ### Testing (OBLIGATORIO antes de pasar al front)
 - **Unitarios** (lógica pura de servicios): cálculo de rendimiento esperado y desvío, disparo de alerta por umbral, validación bloqueante de stock insuficiente, consumo de líneas de ingreso (descuento de cantidadRestanteDisponible), comparación ciega de transferencias, versionado de fichas (crear versión nueva desactiva la anterior; lote apunta a versión congelada).
-- **Integración** (endpoints con DB de test): flujo completo ingreso → lote → transferencia → recepción con y sin discrepancia; verificación de que el stock cuadra vía MovimientoStock en cada paso; verificación de RBAC (403 para roles indebidos); verificación de que las respuestas para PRODUCCION no filtran campos ciegos (esto es un test de seguridad, no opcional); inmutabilidad de auditoría.
+- **Integración** (endpoints con DB de test): flujo completo ingreso → lote → transferencia → recepción con y sin discrepancia; verificación de que el stock cuadra vía MovimientoStock en cada paso; verificación de RBAC (403 para roles indebidos); verificación de que las respuestas para PRODUCCION no filtran campos ciegos (esto es un test de seguridad, no opcional); inmutabilidad de auditoría; **aislamiento por sucursal** (un CAJERO/ENCARGADO no puede ver ni recepcionar transferencias de OTRO local — agregado tras hallazgo de auditoría, ver §11).
 - Framework sugerido: Vitest + Supertest (o fastify.inject). DB de test con Prisma + PostgreSQL (docker-compose o Neon branch).
 
 ### Convenciones
@@ -331,12 +334,12 @@ Debe poder responderse: "esta milanesa vendida el viernes salió de la entrega d
 
 ## 12. CRITERIO DE "MÓDULO 1 TERMINADO"
 
-**Estado: backend ✅ terminado y testeado · frontend ✅ construido y verificado end-to-end contra el backend real (§4.1). MÓDULO 1 COMPLETO.**
+**Estado: backend ✅ terminado y testeado · frontend ✅ construido y verificado end-to-end contra el backend real (§4.1) · auditoría completa ✅ hecha y los 3 hallazgos corregidos (§11). MÓDULO 1 COMPLETO.**
 
 El backend del módulo 1 está terminado cuando:
 1. Un usuario PRODUCCION puede registrar un ingreso con múltiples líneas, foto y proveedor "Otro".
 2. Puede abrir un lote eligiendo líneas de ingreso específicas, cargar todos los insumos (con bloqueo real por stock insuficiente), cerrar el lote con unidades y desperdicio reales, y el sistema calcula desvío y dispara alerta al admin si supera el umbral — sin exponer jamás el esperado al operario.
-3. Puede generar una transferencia que descuenta stock de producción, y un usuario del local puede recibirla a ciegas, recontar o confirmar con discrepancia, generando la alerta correspondiente.
+3. Puede generar una transferencia que descuenta stock de producción, y un usuario del local puede recibirla a ciegas, recontar o confirmar con discrepancia, generando la alerta correspondiente — SOLO si ese usuario pertenece a la sucursal destino (§11).
 4. El stock de cualquier producto en cualquier sucursal es consultable y cuadra exactamente con la suma de sus MovimientoStock.
 5. Toda la cadena es trazable de punta a punta y auditada.
-6. Todos los tests pasan, incluidos los de no-filtración de campos ciegos y RBAC.
+6. Todos los tests pasan (66/66), incluidos los de no-filtración de campos ciegos, RBAC y aislamiento de sucursal.

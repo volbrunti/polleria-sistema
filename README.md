@@ -5,11 +5,12 @@ Producción + Stock + Transferencias. Ver [CLAUDE.md](CLAUDE.md) para contexto c
 ## Estado actual
 
 - ✅ Backend módulo 1 completo (Flujos 1, 2 y 3)
+- ✅ Frontend módulo 1 completo (carpeta `frontend/`), verificado end-to-end contra el backend real
 - ✅ Typecheck limpio (`npx tsc --noEmit`)
-- ✅ **65/65 tests pasando** (14 unitarios + 51 integración: flujo completo, RBAC, campos ciegos, auditoría, versionado)
-- ✅ DB en Neon (proyecto "polleria"), migrada y seedeada
+- ✅ **66/66 tests pasando** (incluye el test de aislamiento de sucursal agregado tras la auditoría del 2026-07-13)
+- ✅ DB en Neon, migrada y seedeada — proyecto nuevo, ver CLAUDE.md §11 ("Base Neon NUEVA")
 
-**Módulo 1 terminado según criterio de CLAUDE.md §12.** Próximo paso natural: frontend (recién cuando se pida).
+**Módulo 1 completo, auditado y con los 3 hallazgos de la auditoría corregidos.** Ver CLAUDE.md §4.1, §11 y §12 para el detalle.
 
 ## Base de datos
 
