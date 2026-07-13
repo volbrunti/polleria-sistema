@@ -108,13 +108,71 @@ async function main() {
     // Elaborados
     { nombre: 'Milanesa de nalga', categoria: 'Milanesas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 2500 },
     { nombre: 'Milanesa de ternera', categoria: 'Milanesas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 3200 },
-    { nombre: 'Empanada de pollo', categoria: 'Empanadas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 900 },
+    { nombre: 'Empanada de pollo', categoria: 'Empanadas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 1600 },
+    { nombre: 'Empanada de carne', categoria: 'Empanadas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 1600 },
     { nombre: 'Pollo a la leña (entero)', categoria: 'Pollos', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 21000 },
+    // Pollo a la leña (medio): SIN ficha técnica — partir un pollo entero
+    // cocido es un evento de VENTA (circuito especial del pollo, módulo 2),
+    // no de producción. Existe como producto solo para poder facturarlo.
+    { nombre: 'Pollo a la leña (medio)', categoria: 'Pollos', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 12000 },
+    // Papas, ensaladas, milas de plato, lomitos, hamburguesas, adicionales:
+    // cargados desde la planilla real del cliente (2026-07-13) — sin ficha
+    // técnica, son platos armados en el local, no producidos centralmente.
+    { nombre: 'Papas fritas grande', categoria: 'Papas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 9000 },
+    { nombre: 'Papas fritas mediana', categoria: 'Papas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 7000 },
+    { nombre: 'Papas fritas conito', categoria: 'Papas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 3000 },
+    { nombre: 'Ensalada Especial', categoria: 'Ensaladas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 5000 },
+    { nombre: 'Ensalada Común', categoria: 'Ensaladas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 5000 },
+    { nombre: 'Ensalada Rusa', categoria: 'Ensaladas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 5000 },
+    { nombre: 'Sandwich mila simple', categoria: 'Milanesas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 14000 },
+    { nombre: 'Sandwich mila completo', categoria: 'Milanesas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 16000 },
+    { nombre: 'Milanesa con papas fritas', categoria: 'Milanesas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 13500 },
+    { nombre: 'Milanesa napolitana', categoria: 'Milanesas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 14000 },
+    { nombre: 'Bife de Lomo', categoria: 'Lomitos', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 17000 },
+    { nombre: 'Bife de Pollo', categoria: 'Lomitos', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 14500 },
+    { nombre: 'Hamburlomo', categoria: 'Lomitos', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 14500 },
+    // Burgers: la planilla no distingue Classic/Intense/Luxury en su tabla de
+    // precios (una sola columna Simple/Doble/Triple) — se aplicó el mismo
+    // precio a las 3 líneas por igual. Supuesto a confirmar con el cliente
+    // (ver CLAUDE.md §11): puede que en la práctica sí cobren distinto.
+    { nombre: 'Classic Burger simple', categoria: 'Hamburguesas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 10500 },
+    { nombre: 'Classic Burger doble', categoria: 'Hamburguesas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 12000 },
+    { nombre: 'Classic Burger triple', categoria: 'Hamburguesas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 14000 },
+    { nombre: 'Intense Burger simple', categoria: 'Hamburguesas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 10500 },
+    { nombre: 'Intense Burger doble', categoria: 'Hamburguesas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 12000 },
+    { nombre: 'Intense Burger triple', categoria: 'Hamburguesas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 14000 },
+    { nombre: 'Luxury Burger simple', categoria: 'Hamburguesas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 10500 },
+    { nombre: 'Luxury Burger doble', categoria: 'Hamburguesas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 12000 },
+    { nombre: 'Luxury Burger triple', categoria: 'Hamburguesas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 14000 },
+    { nombre: 'Topping extra (hamburguesa)', categoria: 'Adicionales', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 1000 },
+    { nombre: 'Mayo casera (vasito)', categoria: 'Adicionales', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 500 },
+    { nombre: 'Aderezo extra (vasito)', categoria: 'Adicionales', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 500 },
+    { nombre: 'Pan casero', categoria: 'Panificados', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 1500 },
+    { nombre: 'Escabeche de pollo', categoria: 'Escabeches', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 6000 },
+    { nombre: 'Postre', categoria: 'Postres', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 1500 },
+    // Sorrentinos y tartas: no están en la planilla de referencias (probable
+    // incorporación posterior a la carta) — precio tomado del cartel.
+    { nombre: 'Sorrentino Bondiola braseada', categoria: 'Sorrentinos', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 8000 },
+    { nombre: 'Sorrentino Espinaca, mozzarella y parmesano', categoria: 'Sorrentinos', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 6000 },
+    { nombre: 'Sorrentino Jamón y mozzarella', categoria: 'Sorrentinos', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 6000 },
+    { nombre: 'Sorrentino Capresse', categoria: 'Sorrentinos', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 6000 },
+    { nombre: 'Tarta Espinaca y mozzarella', categoria: 'Tartas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 7500 },
+    { nombre: 'Tarta Jamón y mozzarella', categoria: 'Tartas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 7500 },
+    { nombre: 'Tarta Pollo y calabaza', categoria: 'Tartas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 7500 },
+    { nombre: 'Tarta Queso azul y cebolla caramelizada', categoria: 'Tartas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 7500 },
     // Reventa
     { nombre: 'Gaseosa 500ml', categoria: 'Bebidas', tipo: 'REVENTA', unidad: 'UNIDAD', precio: 1500 },
   ];
 
   const adminUser = await prisma.usuario.findUniqueOrThrow({ where: { username: 'admin' } });
+
+  // Corrección puntual: "Empanada de carne" había quedado creada con
+  // categoría " Empanadas" (espacio inicial) en una sesión anterior.
+  await prisma.producto.updateMany({
+    where: { nombre: 'Empanada de carne' },
+    data: { categoria: 'Empanadas' },
+  });
+
   const productosPorNombre = new Map<string, number>();
   for (const p of productos) {
     const creado = await prisma.producto.upsert({
@@ -132,6 +190,150 @@ async function main() {
       }
     }
   }
+
+  // ── Precio por cantidad (tabla de volumen real de la planilla del cliente,
+  // "REFERENCIAS", 2026-07-13) — ver CLAUDE.md §9. No es lineal: pedir 2 casi
+  // siempre sale menos que 2× el precio de 1. Nunca se pisa: si el monto
+  // vigente para esa cantidad ya coincide, no crea un registro duplicado.
+  async function asegurarPrecio(nombreProducto: string, cantidad: number, monto: number) {
+    const productoId = productosPorNombre.get(nombreProducto);
+    if (!productoId) throw new Error(`Producto "${nombreProducto}" no existe — ¿falta en el catálogo?`);
+    const vigente = await prisma.precio.findFirst({
+      where: { productoId, cantidad },
+      orderBy: { fechaDesde: 'desc' },
+    });
+    if (vigente && vigente.monto.equals(new Prisma.Decimal(monto))) return;
+    await prisma.precio.create({
+      data: { productoId, cantidad, monto: new Prisma.Decimal(monto), usuarioId: adminUser.id },
+    });
+  }
+
+  async function asegurarTablaPrecio(nombreProducto: string, tiers: [cantidad: number, monto: number][]) {
+    for (const [cantidad, monto] of tiers) {
+      await asegurarPrecio(nombreProducto, cantidad, monto);
+    }
+  }
+
+  await asegurarTablaPrecio('Pollo a la leña (entero)', [
+    [1, 21000], [2, 42000], [3, 63000], [4, 84000], [5, 105000],
+  ]);
+  await asegurarTablaPrecio('Pollo a la leña (medio)', [
+    [1, 12000], [2, 24000], [3, 36000], [4, 48000], [5, 60000],
+  ]);
+  await asegurarTablaPrecio('Papas fritas grande', [
+    [1, 9000], [2, 18000], [3, 27000], [4, 36000], [5, 45000],
+  ]);
+  await asegurarTablaPrecio('Papas fritas mediana', [
+    [1, 7000], [2, 14000], [3, 21000], [4, 28000], [5, 35000],
+  ]);
+  await asegurarTablaPrecio('Papas fritas conito', [
+    [1, 3000], [2, 6000], [3, 9000], [4, 12000], [5, 15000],
+  ]);
+  // La planilla trackea una sola categoría "ENSAL." — se aplica el mismo
+  // precio a las 3 variedades del cartel (Especial/Común/Rusa).
+  for (const ensalada of ['Ensalada Especial', 'Ensalada Común', 'Ensalada Rusa']) {
+    await asegurarTablaPrecio(ensalada, [[1, 5000], [2, 10000], [3, 15000], [4, 20000], [5, 25000]]);
+  }
+  await asegurarTablaPrecio('Sandwich mila simple', [
+    [1, 14000], [2, 28000], [3, 42000], [4, 56000], [5, 70000],
+  ]);
+  await asegurarTablaPrecio('Sandwich mila completo', [
+    [1, 16000], [2, 31000], [3, 47000], [4, 62000], [5, 78000],
+  ]);
+  await asegurarTablaPrecio('Milanesa con papas fritas', [
+    [1, 13500], [2, 27000], [3, 40500], [4, 54000], [5, 67500],
+  ]);
+  await asegurarTablaPrecio('Milanesa napolitana', [
+    [1, 14000], [2, 28000], [3, 42000], [4, 56000], [5, 70000],
+  ]);
+  await asegurarTablaPrecio('Bife de Lomo', [
+    [1, 17000], [2, 33000], [3, 50000], [4, 66000], [5, 83000],
+  ]);
+  await asegurarTablaPrecio('Bife de Pollo', [
+    [1, 14500], [2, 28000], [3, 42500], [4, 56000], [5, 70500],
+  ]);
+  await asegurarTablaPrecio('Hamburlomo', [
+    [1, 14500], [2, 28000], [3, 42500], [4, 56000], [5, 70500],
+  ]);
+  // Ver nota de arriba: la planilla no distingue Classic/Intense/Luxury, se
+  // aplica la misma tabla a las 3 líneas de hamburguesas.
+  for (const marca of ['Classic', 'Intense', 'Luxury']) {
+    await asegurarTablaPrecio(`${marca} Burger simple`, [[1, 10500], [2, 20000], [3, 30500], [4, 40000], [5, 50500]]);
+    await asegurarTablaPrecio(`${marca} Burger doble`, [[1, 12000], [2, 23000], [3, 35000], [4, 46000], [5, 58000]]);
+    await asegurarTablaPrecio(`${marca} Burger triple`, [[1, 14000], [2, 27000], [3, 41000], [4, 54000], [5, 68000]]);
+  }
+  await asegurarTablaPrecio('Topping extra (hamburguesa)', [
+    [1, 1000], [2, 2000], [3, 3000], [4, 4000], [5, 5000],
+  ]);
+  await asegurarTablaPrecio('Mayo casera (vasito)', [[1, 500], [2, 1000], [3, 1500], [4, 2000], [5, 2500]]);
+  await asegurarTablaPrecio('Aderezo extra (vasito)', [[1, 500], [2, 1000], [3, 1500], [4, 2000], [5, 2500]]);
+  await asegurarTablaPrecio('Pan casero', [[1, 1500], [2, 3000], [3, 4500], [4, 6000], [5, 7500]]);
+  await asegurarTablaPrecio('Escabeche de pollo', [[1, 6000], [2, 12000], [3, 18000], [4, 24000], [5, 30000]]);
+  await asegurarTablaPrecio('Postre', [[1, 1500], [2, 3000], [3, 4500], [4, 6000], [5, 7500]]);
+  // Empanadas: 1-5 unidades es exactamente lineal (×1.600), de 6 en adelante
+  // ya hay descuento por volumen — igual para ambos sabores (la planilla
+  // no distingue de pollo/de carne en su tabla de precios).
+  const tablaEmpanadas: [number, number][] = [
+    [1, 1600], [2, 3200], [3, 4800], [4, 6400], [5, 8000], [6, 8500], [7, 10100],
+    [8, 11700], [9, 13300], [10, 14900], [12, 16000], [18, 24500], [24, 32000], [30, 40500], [36, 48000],
+  ];
+  await asegurarTablaPrecio('Empanada de pollo', tablaEmpanadas);
+  await asegurarTablaPrecio('Empanada de carne', tablaEmpanadas);
+
+  // ── Combos de pollo (bundle real, con tabla de precio por volumen) ──
+  async function asegurarCombo(
+    nombre: string,
+    categoria: string,
+    componentes: { producto: string; cantidad: number }[],
+    tiers: [cantidad: number, monto: number][],
+  ) {
+    let combo = await prisma.producto.findUnique({ where: { nombre } });
+    if (!combo) {
+      combo = await prisma.producto.create({
+        data: {
+          nombre,
+          categoria,
+          tipo: 'COMBO',
+          unidadDeMedida: 'UNIDAD',
+          componentesDelCombo: {
+            create: componentes.map((c) => ({
+              productoComponenteId: productosPorNombre.get(c.producto)!,
+              cantidad: new Prisma.Decimal(c.cantidad),
+            })),
+          },
+        },
+      });
+    }
+    productosPorNombre.set(nombre, combo.id);
+    for (const [cantidad, monto] of tiers) {
+      await asegurarPrecio(nombre, cantidad, monto);
+    }
+  }
+
+  await asegurarCombo(
+    'Pollo c/Fritas Grandes',
+    'Combos Pollo',
+    [{ producto: 'Pollo a la leña (entero)', cantidad: 1 }, { producto: 'Papas fritas grande', cantidad: 1 }],
+    [[1, 29000], [2, 56000], [3, 85000], [4, 112000], [5, 141000]],
+  );
+  await asegurarCombo(
+    'Pollo c/Fritas Medianas',
+    'Combos Pollo',
+    [{ producto: 'Pollo a la leña (entero)', cantidad: 1 }, { producto: 'Papas fritas mediana', cantidad: 1 }],
+    [[1, 27000], [2, 54000], [3, 81000], [4, 108000], [5, 135000]],
+  );
+  await asegurarCombo(
+    '1/2 Pollo c/Fritas Medianas',
+    'Combos Pollo',
+    [{ producto: 'Pollo a la leña (medio)', cantidad: 1 }, { producto: 'Papas fritas mediana', cantidad: 1 }],
+    [[1, 17000], [2, 34000], [3, 51000], [4, 68000], [5, 85000]],
+  );
+  await asegurarCombo(
+    '1/2 Pollo c/Fritas Grandes',
+    'Combos Pollo',
+    [{ producto: 'Pollo a la leña (medio)', cantidad: 1 }, { producto: 'Papas fritas grande', cantidad: 1 }],
+    [[1, 19000], [2, 38000], [3, 57000], [4, 76000], [5, 95000]],
+  );
 
   // ── Fichas técnicas de ejemplo (versión 1 activa) ──
   const id = (n: string) => productosPorNombre.get(n)!;

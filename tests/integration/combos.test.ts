@@ -182,3 +182,79 @@ describe('Combos — lectura y edición', () => {
     expect(historial.json()).toHaveLength(2);
   });
 });
+
+// Precio por cantidad (CLAUDE.md §9, agregado 2026-07-13 al ver la planilla
+// real del cliente): un combo pedido en cantidad N no siempre cuesta N ×
+// precio de 1 — la planilla trae su propia tabla no lineal por volumen.
+describe('Precio por cantidad', () => {
+  let comboId: number;
+
+  it('crea el combo para probar la tabla de precios', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/productos/combos',
+      headers: auth(f.usuarios.admin.token),
+      payload: {
+        nombre: 'Combo con precio por volumen',
+        categoria: 'Combos',
+        componentes: [{ productoComponenteId: f.productos.milanesa, cantidad: 1 }],
+      },
+    });
+    comboId = res.json().id;
+  });
+
+  it('un producto normal sigue usando cantidad=1 por default (retrocompatible)', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/productos/${f.productos.milanesa}/precios`,
+      headers: auth(f.usuarios.admin.token),
+      payload: { monto: 2700 },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().cantidad).toBe(1);
+  });
+
+  it('cargar el precio de cantidad=2 no toca el de cantidad=1', async () => {
+    await app.inject({
+      method: 'POST',
+      url: `/api/productos/${comboId}/precios`,
+      headers: auth(f.usuarios.admin.token),
+      payload: { monto: 29000, cantidad: 1 },
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/api/productos/${comboId}/precios`,
+      headers: auth(f.usuarios.admin.token),
+      payload: { monto: 56000, cantidad: 2 }, // no es 58000: descuento real por volumen
+    });
+
+    const vigente = await app.inject({
+      method: 'GET',
+      url: `/api/productos/${comboId}/precios/vigente`,
+      headers: auth(f.usuarios.admin.token),
+    });
+    expect(vigente.statusCode).toBe(200);
+    const tabla = vigente.json() as { cantidad: number; monto: string }[];
+    expect(tabla).toHaveLength(2);
+    expect(tabla.find((t) => t.cantidad === 1)?.monto).toBe('29000');
+    expect(tabla.find((t) => t.cantidad === 2)?.monto).toBe('56000');
+  });
+
+  it('cambiar el precio de cantidad=1 de nuevo no altera la tabla de cantidad=2', async () => {
+    await app.inject({
+      method: 'POST',
+      url: `/api/productos/${comboId}/precios`,
+      headers: auth(f.usuarios.admin.token),
+      payload: { monto: 30000, cantidad: 1 },
+    });
+
+    const vigente = await app.inject({
+      method: 'GET',
+      url: `/api/productos/${comboId}/precios/vigente`,
+      headers: auth(f.usuarios.admin.token),
+    });
+    const tabla = vigente.json() as { cantidad: number; monto: string }[];
+    expect(tabla.find((t) => t.cantidad === 1)?.monto).toBe('30000'); // el nuevo
+    expect(tabla.find((t) => t.cantidad === 2)?.monto).toBe('56000'); // sigue igual
+  });
+});

@@ -58,18 +58,20 @@ export async function actualizar(
 
 // Cambio de precio = registro NUEVO, nunca se pisa (CLAUDE.md §9).
 // Auditoría reforzada: anterior + nuevo + quién + cuándo (§8 Flujo 7).
-export async function cambiarPrecio(productoId: number, monto: number, usuarioId: number) {
+// `cantidad` (default 1): para COMBO permite una tabla de precio por volumen
+// no lineal (dato real de la planilla del cliente — ver CLAUDE.md §9 Precio).
+export async function cambiarPrecio(productoId: number, monto: number, usuarioId: number, cantidad = 1) {
   const producto = await prisma.producto.findUnique({ where: { id: productoId } });
   if (!producto) throw Errores.noEncontrado('Producto');
 
   const precioAnterior = await prisma.precio.findFirst({
-    where: { productoId },
+    where: { productoId, cantidad },
     orderBy: { fechaDesde: 'desc' },
   });
 
   return prisma.$transaction(async (tx) => {
     const precio = await tx.precio.create({
-      data: { productoId, monto: new Prisma.Decimal(monto), usuarioId },
+      data: { productoId, monto: new Prisma.Decimal(monto), cantidad, usuarioId },
     });
     await registrarAuditoria(tx, {
       accion: 'CAMBIO_PRECIO',
@@ -77,12 +79,27 @@ export async function cambiarPrecio(productoId: number, monto: number, usuarioId
       entidadId: precio.id,
       usuarioId,
       datosAnteriores: precioAnterior
-        ? { monto: precioAnterior.monto.toString(), fechaDesde: precioAnterior.fechaDesde }
+        ? { monto: precioAnterior.monto.toString(), cantidad, fechaDesde: precioAnterior.fechaDesde }
         : null,
-      datosNuevos: { productoId, monto: precio.monto.toString(), fechaDesde: precio.fechaDesde },
+      datosNuevos: { productoId, monto: precio.monto.toString(), cantidad, fechaDesde: precio.fechaDesde },
     });
     return precio;
   });
+}
+
+// Último precio vigente para CADA cantidad que alguna vez tuvo un precio
+// cargado (para un producto normal, siempre 1 sola fila con cantidad=1; para
+// un COMBO, la tabla completa de precio por volumen: 1, 2, 3...).
+export async function tablaPrecioVigente(productoId: number) {
+  const historial = await prisma.precio.findMany({
+    where: { productoId },
+    orderBy: { fechaDesde: 'desc' },
+  });
+  const vigentePorCantidad = new Map<number, (typeof historial)[number]>();
+  for (const p of historial) {
+    if (!vigentePorCantidad.has(p.cantidad)) vigentePorCantidad.set(p.cantidad, p);
+  }
+  return [...vigentePorCantidad.values()].sort((a, b) => a.cantidad - b.cantidad);
 }
 
 export async function historialPrecios(productoId: number) {

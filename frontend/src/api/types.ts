@@ -45,6 +45,9 @@ export interface Precio {
   id: number;
   productoId: number;
   monto: string;
+  // A qué cantidad pedida corresponde (default 1). Para COMBO, tabla de
+  // precio por volumen no lineal (ver CLAUDE.md §9).
+  cantidad: number;
   fechaDesde: string;
   usuarioId: number;
 }

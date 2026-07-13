@@ -7,7 +7,8 @@ Producción + Stock + Transferencias. Ver [CLAUDE.md](CLAUDE.md) para contexto c
 - ✅ Backend módulo 1 completo (Flujos 1, 2 y 3)
 - ✅ Frontend módulo 1 completo (carpeta `frontend/`), verificado end-to-end contra el backend real
 - ✅ Typecheck limpio (`npx tsc --noEmit`)
-- ✅ **74/74 tests pasando** (incluye aislamiento de sucursal y el modelo de combos, agregados el 2026-07-13)
+- ✅ **78/78 tests pasando** (incluye aislamiento de sucursal, combos y precio por cantidad, agregados el 2026-07-13)
+- ✅ Catálogo real cargado (58 productos + 4 combos) desde la carta y la planilla operativa del cliente
 - ✅ DB en Neon, migrada y seedeada — proyecto nuevo, ver CLAUDE.md §11 ("Base Neon NUEVA")
 
 **Módulo 1 completo, auditado y con los 3 hallazgos de la auditoría corregidos.** Ver CLAUDE.md §4.1, §11 y §12 para el detalle.

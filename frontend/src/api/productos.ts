@@ -25,12 +25,16 @@ export function actualizarProducto(
   return apiFetch<Producto>(`/api/productos/${id}`, { method: 'PATCH', body: datos });
 }
 
-export function cambiarPrecio(productoId: number, monto: number) {
-  return apiFetch<Precio>(`/api/productos/${productoId}/precios`, { method: 'POST', body: { monto } });
+export function cambiarPrecio(productoId: number, monto: number, cantidad?: number) {
+  return apiFetch<Precio>(`/api/productos/${productoId}/precios`, { method: 'POST', body: { monto, cantidad } });
 }
 
 export function historialPrecios(productoId: number) {
   return apiFetch<Precio[]>(`/api/productos/${productoId}/precios`);
+}
+
+export function tablaPrecioVigente(productoId: number) {
+  return apiFetch<Precio[]>(`/api/productos/${productoId}/precios/vigente`);
 }
 
 export function crearCombo(datos: {

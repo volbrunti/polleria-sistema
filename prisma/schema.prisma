@@ -178,11 +178,19 @@ model Precio {
   producto   Producto @relation(fields: [productoId], references: [id])
   productoId Int
   monto      Decimal  @db.Decimal(12, 2)
+  // A qué cantidad pedida corresponde este monto. Default 1 = precio normal
+  // por unidad (todo lo que no sea COMBO usa siempre 1). Para COMBO permite
+  // una tabla de precio por volumen no lineal (ej: 1 pollo c/fritas $29.000,
+  // pero 2 son $56.000, no $58.000) — dato real relevado de la planilla del
+  // cliente, agregado 2026-07-13. Nunca se pisa: cambiar el precio de una
+  // cantidad es un registro Precio nuevo con esa misma cantidad.
+  cantidad   Int      @default(1)
   fechaDesde DateTime @default(now())
   usuario    Usuario  @relation(fields: [usuarioId], references: [id])
   usuarioId  Int
 
   @@index([productoId, fechaDesde])
+  @@index([productoId, cantidad, fechaDesde])
   @@map("precios")
 }
 

@@ -7,6 +7,7 @@ import {
   historialPrecios,
   cambiarPrecio,
   crearCombo,
+  tablaPrecioVigente,
 } from '../../api/productos';
 import { listarProveedores, crearProveedor, actualizarProveedor } from '../../api/proveedores';
 import { listarSucursales } from '../../api/sucursales';
@@ -370,6 +371,18 @@ function TabPrecios({ puedeEscribir }: { puedeEscribir: boolean }) {
     select: (data) => data.filter((p) => p.tipo !== 'MATERIA_PRIMA'),
   });
 
+  // Precio vigente por cantidad: para un producto normal siempre 1 fila
+  // (cantidad=1); para un COMBO, la tabla completa de precio por volumen.
+  const tablas = useQueries({
+    queries: (productos.data ?? []).map((p) => ({
+      queryKey: ['precios-vigente', p.id],
+      queryFn: () => tablaPrecioVigente(p.id),
+      enabled: !!productos.data,
+    })),
+  });
+
+  // Historial completo (todas las cantidades mezcladas) — solo se usa para
+  // productos NO combo, donde nunca hay más de una cantidad en juego.
   const historiales = useQueries({
     queries: (productos.data ?? []).map((p) => ({
       queryKey: ['precios', p.id],
@@ -378,14 +391,18 @@ function TabPrecios({ puedeEscribir }: { puedeEscribir: boolean }) {
     })),
   });
 
-  const [productoEditando, setProductoEditando] = useState<Producto | null>(null);
+  const [productoEditando, setProductoEditando] = useState<{ producto: Producto; cantidad: number } | null>(null);
   const [expandido, setExpandido] = useState<number | null>(null);
+  const [nuevaCantidad, setNuevaCantidad] = useState<Record<number, string>>({});
 
   const mutCambiarPrecio = useMutation({
-    mutationFn: (vars: { productoId: number; monto: number }) => cambiarPrecio(vars.productoId, vars.monto),
+    mutationFn: (vars: { productoId: number; monto: number; cantidad: number }) =>
+      cambiarPrecio(vars.productoId, vars.monto, vars.cantidad),
     onSuccess: (_, vars) => {
+      void queryClient.invalidateQueries({ queryKey: ['precios-vigente', vars.productoId] });
       void queryClient.invalidateQueries({ queryKey: ['precios', vars.productoId] });
       setProductoEditando(null);
+      setNuevaCantidad((m) => ({ ...m, [vars.productoId]: '' }));
     },
   });
 
@@ -402,34 +419,96 @@ function TabPrecios({ puedeEscribir }: { puedeEscribir: boolean }) {
           <span />
         </div>
         {(productos.data ?? []).map((p, idx) => {
+          const tabla = tablas[idx]?.data ?? [];
           const historial = historiales[idx]?.data ?? [];
-          const actual = historial[0];
+          const esCombo = p.tipo === 'COMBO';
+          const base = tabla.find((t) => t.cantidad === 1) ?? tabla[0];
           return (
             <div key={p.id} className="border-t border-[#eef1ea]">
               <div className="grid grid-cols-[1fr_150px_170px_150px] items-center px-5 py-3.5 text-sm">
                 <span className="font-semibold">{p.nombre}</span>
-                <span className="text-right font-extrabold">{actual ? fmtMoneda(actual.monto) : '—'}</span>
-                <span className="text-texto-suave">{actual ? fmtFecha(actual.fechaDesde) : '—'}</span>
+                <span className="text-right font-extrabold">
+                  {base ? fmtMoneda(base.monto) : '—'}
+                  {esCombo && tabla.length > 1 && (
+                    <span className="ml-1.5 font-normal text-texto-suave">(×1)</span>
+                  )}
+                </span>
+                <span className="text-texto-suave">{base ? fmtFecha(base.fechaDesde) : '—'}</span>
                 <div className="flex justify-end gap-2">
-                  {historial.length > 0 && (
-                    <button type="button" onClick={() => setExpandido(expandido === p.id ? null : p.id)} className="min-h-9 cursor-pointer rounded-lg border border-borde-fuerte bg-white px-3 text-[13px] font-bold text-texto-suave">
-                      {expandido === p.id ? 'Ocultar' : 'Historial'}
+                  {(historial.length > 0 || esCombo) && (
+                    <button
+                      type="button"
+                      onClick={() => setExpandido(expandido === p.id ? null : p.id)}
+                      className="min-h-9 cursor-pointer rounded-lg border border-borde-fuerte bg-white px-3 text-[13px] font-bold text-texto-suave"
+                    >
+                      {expandido === p.id ? 'Ocultar' : esCombo ? 'Precios por cantidad' : 'Historial'}
                     </button>
                   )}
-                  {puedeEscribir && (
-                    <button type="button" onClick={() => setProductoEditando(p)} className="min-h-9 cursor-pointer rounded-lg border border-borde-fuerte bg-white px-3 text-[13px] font-bold text-primario">
+                  {puedeEscribir && !esCombo && (
+                    <button
+                      type="button"
+                      onClick={() => setProductoEditando({ producto: p, cantidad: 1 })}
+                      className="min-h-9 cursor-pointer rounded-lg border border-borde-fuerte bg-white px-3 text-[13px] font-bold text-primario"
+                    >
                       Cambiar precio
                     </button>
                   )}
                 </div>
               </div>
-              {expandido === p.id && (
+
+              {expandido === p.id && !esCombo && (
                 <div className="flex flex-col gap-1 bg-[#f8faf5] px-5 py-3 text-sm text-texto-suave">
                   {historial.map((h) => (
                     <div key={h.id}>
                       {fmtMoneda(h.monto)} — vigente desde {fmtFecha(h.fechaDesde)}
                     </div>
                   ))}
+                </div>
+              )}
+
+              {expandido === p.id && esCombo && (
+                <div className="flex flex-col gap-2 bg-[#f8faf5] px-5 py-3.5 text-sm">
+                  <div className="text-xs font-bold tracking-wide text-texto-suave">
+                    CANTIDAD → PRECIO (no es cantidad × precio unitario, cada cantidad tiene su propio monto)
+                  </div>
+                  {tabla.length === 0 && <div className="text-texto-suave">Todavía no hay precios cargados.</div>}
+                  {tabla.map((t) => (
+                    <div key={t.cantidad} className="flex items-center gap-3 rounded-lg bg-white px-3.5 py-2.5">
+                      <span className="font-mono font-bold text-texto-suave">× {t.cantidad}</span>
+                      <span className="flex-1 text-right font-extrabold">{fmtMoneda(t.monto)}</span>
+                      {puedeEscribir && (
+                        <button
+                          type="button"
+                          onClick={() => setProductoEditando({ producto: p, cantidad: t.cantidad })}
+                          className="min-h-8 cursor-pointer rounded-lg border border-borde-fuerte bg-white px-3 text-[12px] font-bold text-primario"
+                        >
+                          Cambiar
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  {puedeEscribir && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="Cantidad nueva"
+                        value={nuevaCantidad[p.id] ?? ''}
+                        onChange={(e) => setNuevaCantidad((m) => ({ ...m, [p.id]: e.target.value }))}
+                        className="h-10 w-36 rounded-lg border border-borde-fuerte px-2.5 text-sm"
+                      />
+                      <button
+                        type="button"
+                        disabled={!Number(nuevaCantidad[p.id])}
+                        onClick={() =>
+                          setProductoEditando({ producto: p, cantidad: Number(nuevaCantidad[p.id]) })
+                        }
+                        className="min-h-10 cursor-pointer rounded-lg border-2 border-dashed border-borde-fuerte bg-transparent px-3 text-[13px] font-bold text-primario disabled:opacity-50"
+                      >
+                        ＋ Agregar precio para esa cantidad
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -439,11 +518,17 @@ function TabPrecios({ puedeEscribir }: { puedeEscribir: boolean }) {
 
       {productoEditando && (
         <TecladoNumerico
-          titulo="Nuevo precio"
-          subtitulo={productoEditando.nombre}
+          titulo={productoEditando.cantidad === 1 ? 'Nuevo precio' : `Precio para ${productoEditando.cantidad} unidades`}
+          subtitulo={productoEditando.producto.nombre}
           unidad="$"
           onCancelar={() => setProductoEditando(null)}
-          onConfirmar={(monto) => mutCambiarPrecio.mutate({ productoId: productoEditando.id, monto })}
+          onConfirmar={(monto) =>
+            mutCambiarPrecio.mutate({
+              productoId: productoEditando.producto.id,
+              monto,
+              cantidad: productoEditando.cantidad,
+            })
+          }
         />
       )}
     </div>

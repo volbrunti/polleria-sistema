@@ -20,7 +20,7 @@ const listarQuery = z.object({
   activo: z.coerce.boolean().optional(),
 });
 
-const precioSchema = z.object({ monto: z.number().positive() });
+const precioSchema = z.object({ monto: z.number().positive(), cantidad: z.number().int().positive().optional() });
 const paramsId = z.object({ id: z.coerce.number().int().positive() });
 
 const componenteSchema = z.object({
@@ -66,14 +66,15 @@ export async function productosRoutes(app: FastifyInstance) {
     },
   );
 
-  // Precios: dato financiero — escritura ADMIN, lectura ADMIN/SOCIO
+  // Precios: dato financiero — escritura ADMIN, lectura ADMIN/SOCIO.
+  // `cantidad` (default 1): tabla de precio por volumen para COMBO.
   app.post(
     '/:id/precios',
     { preHandler: [app.autenticar, app.requerirRoles('ADMINISTRADOR')] },
     async (req, reply) => {
       const { id } = paramsId.parse(req.params);
-      const { monto } = precioSchema.parse(req.body);
-      const precio = await productosService.cambiarPrecio(id, monto, req.usuario.id);
+      const { monto, cantidad } = precioSchema.parse(req.body);
+      const precio = await productosService.cambiarPrecio(id, monto, req.usuario.id, cantidad);
       return reply.code(201).send(precio);
     },
   );
@@ -84,6 +85,17 @@ export async function productosRoutes(app: FastifyInstance) {
     async (req) => {
       const { id } = paramsId.parse(req.params);
       return productosService.historialPrecios(id);
+    },
+  );
+
+  // Precio vigente por cada cantidad cargada (para productos normales, una
+  // sola fila con cantidad=1; para un COMBO, la tabla completa de volumen).
+  app.get(
+    '/:id/precios/vigente',
+    { preHandler: [app.autenticar, app.requerirRoles('ADMINISTRADOR', 'SOCIO')] },
+    async (req) => {
+      const { id } = paramsId.parse(req.params);
+      return productosService.tablaPrecioVigente(id);
     },
   );
 
