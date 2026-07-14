@@ -105,6 +105,33 @@ async function main() {
     { nombre: 'Condimento milanesa (kg)', categoria: 'Condimentos', tipo: 'MATERIA_PRIMA', unidad: 'KG' },
     { nombre: 'Aceite (lt)', categoria: 'Aceites', tipo: 'MATERIA_PRIMA', unidad: 'KG' },
     { nombre: 'Pan de lomito', categoria: 'Panificados', tipo: 'MATERIA_PRIMA', unidad: 'UNIDAD' },
+    // Insumos del Excel de costos del cliente ("ANALISIS COSTOS", 2026-07-13).
+    // Sus precios de COMPRA quedan anotados acá para la Fase B (el sistema
+    // todavía no guarda costos — ver CLAUDE.md §11 "plan de costeo"):
+    //   molida $11.000/kg · lomo $23.000/kg · nalga $20.000/kg · pechuga $12.000/kg
+    //   pan hamburguesa/lomo $10.497,50 ×12 · panceta $13.616/kg · mozzarella $8.840/kg
+    //   jamón cocido $7.709/kg · tybo $11.361/kg · cheddar $23.604 ×140 fetas
+    //   huevos $5.000 maple 30 · lechuga $3.000/kg · tomate $3.000/kg · cebolla $1.000/kg
+    //   zanahoria $3.090/kg · pimiento $2.670/kg · limón $1.200/kg · pepinillos $2.142×200g
+    //   discos de empanada $2.400 ×24
+    { nombre: 'Carne molida (kg)', categoria: 'Carnes', tipo: 'MATERIA_PRIMA', unidad: 'KG' },
+    { nombre: 'Lomo (kg)', categoria: 'Carnes', tipo: 'MATERIA_PRIMA', unidad: 'KG' },
+    { nombre: 'Pan de hamburguesa', categoria: 'Panificados', tipo: 'MATERIA_PRIMA', unidad: 'UNIDAD' },
+    { nombre: 'Pan de mila', categoria: 'Panificados', tipo: 'MATERIA_PRIMA', unidad: 'UNIDAD' },
+    { nombre: 'Disco de empanada', categoria: 'Panificados', tipo: 'MATERIA_PRIMA', unidad: 'UNIDAD' },
+    { nombre: 'Panceta (kg)', categoria: 'Fiambres', tipo: 'MATERIA_PRIMA', unidad: 'KG' },
+    { nombre: 'Jamón cocido (kg)', categoria: 'Fiambres', tipo: 'MATERIA_PRIMA', unidad: 'KG' },
+    { nombre: 'Mozzarella (kg)', categoria: 'Quesos', tipo: 'MATERIA_PRIMA', unidad: 'KG' },
+    { nombre: 'Queso tybo (kg)', categoria: 'Quesos', tipo: 'MATERIA_PRIMA', unidad: 'KG' },
+    { nombre: 'Queso cheddar (feta)', categoria: 'Quesos', tipo: 'MATERIA_PRIMA', unidad: 'UNIDAD' },
+    { nombre: 'Lechuga (kg)', categoria: 'Verduras', tipo: 'MATERIA_PRIMA', unidad: 'KG' },
+    { nombre: 'Tomate (kg)', categoria: 'Verduras', tipo: 'MATERIA_PRIMA', unidad: 'KG' },
+    { nombre: 'Cebolla (kg)', categoria: 'Verduras', tipo: 'MATERIA_PRIMA', unidad: 'KG' },
+    { nombre: 'Zanahoria (kg)', categoria: 'Verduras', tipo: 'MATERIA_PRIMA', unidad: 'KG' },
+    { nombre: 'Pimiento (kg)', categoria: 'Verduras', tipo: 'MATERIA_PRIMA', unidad: 'KG' },
+    { nombre: 'Limón (kg)', categoria: 'Verduras', tipo: 'MATERIA_PRIMA', unidad: 'KG' },
+    { nombre: 'Pepinillos (kg)', categoria: 'Conservas', tipo: 'MATERIA_PRIMA', unidad: 'KG' },
+    { nombre: 'Aceitunas (kg)', categoria: 'Conservas', tipo: 'MATERIA_PRIMA', unidad: 'KG' },
     // Elaborados
     { nombre: 'Milanesa de nalga', categoria: 'Milanesas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 2500 },
     { nombre: 'Milanesa de ternera', categoria: 'Milanesas', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 3200 },
@@ -115,6 +142,15 @@ async function main() {
     // cocido es un evento de VENTA (circuito especial del pollo, módulo 2),
     // no de producción. Existe como producto solo para poder facturarlo.
     { nombre: 'Pollo a la leña (medio)', categoria: 'Pollos', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 12000 },
+    // Porciones elaboradas en Producción central (Excel de costos, 2026-07-13):
+    // unidades listas para cocinar que después el local arma como plato/sandwich
+    // (el armado de venta es módulo 2). Sin precio propio: no se venden sueltas.
+    // PREGUNTA PARA PABLO pendiente: confirmar que los medallones se hacen en
+    // producción y no en el local (ver CLAUDE.md §11).
+    { nombre: 'Medallón de hamburguesa', categoria: 'Porciones de carne', tipo: 'ELABORADO', unidad: 'UNIDAD' },
+    { nombre: 'Medallón de hamburlomo', categoria: 'Porciones de carne', tipo: 'ELABORADO', unidad: 'UNIDAD' },
+    { nombre: 'Bife de lomo (porción)', categoria: 'Porciones de carne', tipo: 'ELABORADO', unidad: 'UNIDAD' },
+    { nombre: 'Bife de pollo (porción)', categoria: 'Porciones de carne', tipo: 'ELABORADO', unidad: 'UNIDAD' },
     // Papas, ensaladas, milas de plato, lomitos, hamburguesas, adicionales:
     // cargados desde la planilla real del cliente (2026-07-13) — sin ficha
     // técnica, son platos armados en el local, no producidos centralmente.
@@ -338,48 +374,86 @@ async function main() {
   // ── Fichas técnicas de ejemplo (versión 1 activa) ──
   const id = (n: string) => productosPorNombre.get(n)!;
 
-  async function crearFichaSiNoExiste(
-    productoElaborado: string,
-    version: {
-      rendimientoEsperado: number;
-      desperdicioEsperadoPct: number;
-      umbralDesvioAlertaPct: number;
-      ingredientes: { insumo: string; cantidad: number; esPrincipal: boolean }[];
-    },
-  ) {
+  type DatosVersion = {
+    rendimientoEsperado: number;
+    desperdicioEsperadoPct: number;
+    umbralDesvioAlertaPct: number;
+    ingredientes: { insumo: string; cantidad: number; esPrincipal: boolean }[];
+  };
+
+  // Idempotente y respetuoso del versionado: si la ficha no existe la crea con
+  // v1; si existe pero su versión activa difiere de los datos pedidos, crea una
+  // versión nueva y desactiva la anterior (nunca edita una versión — los lotes
+  // históricos siguen apuntando a la suya). Si coincide, no hace nada.
+  async function asegurarFicha(productoElaborado: string, version: DatosVersion) {
     const productoId = id(productoElaborado);
-    const existe = await prisma.fichaTecnica.findUnique({ where: { productoElaboradoId: productoId } });
-    if (existe) return;
-    await prisma.fichaTecnica.create({
-      data: {
-        productoElaboradoId: productoId,
-        versiones: {
-          create: {
-            numeroVersion: 1,
-            activa: true,
-            rendimientoEsperado: new Prisma.Decimal(version.rendimientoEsperado),
-            desperdicioEsperadoPct: new Prisma.Decimal(version.desperdicioEsperadoPct),
-            umbralDesvioAlertaPct: new Prisma.Decimal(version.umbralDesvioAlertaPct),
-            ingredientes: {
-              create: version.ingredientes.map((ing) => ({
-                productoInsumoId: id(ing.insumo),
-                cantidadPorUnidadProducida: new Prisma.Decimal(ing.cantidad),
-                esPrincipal: ing.esPrincipal,
-              })),
-            },
-          },
-        },
+    const datosVersion = (numeroVersion: number) => ({
+      numeroVersion,
+      activa: true,
+      rendimientoEsperado: new Prisma.Decimal(version.rendimientoEsperado),
+      desperdicioEsperadoPct: new Prisma.Decimal(version.desperdicioEsperadoPct),
+      umbralDesvioAlertaPct: new Prisma.Decimal(version.umbralDesvioAlertaPct),
+      ingredientes: {
+        create: version.ingredientes.map((ing) => ({
+          productoInsumoId: id(ing.insumo),
+          cantidadPorUnidadProducida: new Prisma.Decimal(ing.cantidad),
+          esPrincipal: ing.esPrincipal,
+        })),
       },
     });
+
+    const ficha = await prisma.fichaTecnica.findUnique({
+      where: { productoElaboradoId: productoId },
+      include: { versiones: { include: { ingredientes: true } } },
+    });
+    if (!ficha) {
+      await prisma.fichaTecnica.create({
+        data: { productoElaboradoId: productoId, versiones: { create: datosVersion(1) } },
+      });
+      return;
+    }
+
+    const activa = ficha.versiones.find((v) => v.activa);
+    const coincide =
+      activa &&
+      activa.rendimientoEsperado.equals(version.rendimientoEsperado) &&
+      activa.desperdicioEsperadoPct.equals(version.desperdicioEsperadoPct) &&
+      activa.umbralDesvioAlertaPct.equals(version.umbralDesvioAlertaPct) &&
+      activa.ingredientes.length === version.ingredientes.length &&
+      version.ingredientes.every((ing) =>
+        activa.ingredientes.some(
+          (i) =>
+            i.productoInsumoId === id(ing.insumo) &&
+            i.cantidadPorUnidadProducida.equals(ing.cantidad) &&
+            i.esPrincipal === ing.esPrincipal,
+        ),
+      );
+    if (coincide) return;
+
+    const proximaVersion = Math.max(...ficha.versiones.map((v) => v.numeroVersion)) + 1;
+    await prisma.$transaction([
+      prisma.fichaTecnicaVersion.updateMany({
+        where: { fichaTecnicaId: ficha.id, activa: true },
+        data: { activa: false },
+      }),
+      prisma.fichaTecnicaVersion.create({
+        data: { fichaTecnicaId: ficha.id, ...datosVersion(proximaVersion) },
+      }),
+    ]);
+    console.log(`Ficha "${productoElaborado}": nueva versión ${proximaVersion} activa.`);
   }
 
-  // Milanesa de nalga: ~180g nalga + 50g pan rallado + 0.5 huevo por unidad
-  await crearFichaSiNoExiste('Milanesa de nalga', {
-    rendimientoEsperado: 5.55, // ~5.55 milanesas por kg de nalga
+  // Milanesa de nalga — porción REAL del Excel de costos del cliente
+  // (2026-07-13): 250 g de nalga por unidad (antes 180 g inventados).
+  // Pan rallado/huevo/condimento siguen siendo estimación nuestra (el Excel
+  // no los detalla para producción). Al cambiar estos datos sobre una DB
+  // existente, asegurarFicha crea una versión nueva (no edita la anterior).
+  await asegurarFicha('Milanesa de nalga', {
+    rendimientoEsperado: 4, // 4 milanesas por kg de nalga (250 g c/u)
     desperdicioEsperadoPct: 5,
     umbralDesvioAlertaPct: 10,
     ingredientes: [
-      { insumo: 'Nalga de pollo (kg)', cantidad: 0.18, esPrincipal: true },
+      { insumo: 'Nalga de pollo (kg)', cantidad: 0.25, esPrincipal: true },
       { insumo: 'Pan rallado (kg)', cantidad: 0.05, esPrincipal: false },
       { insumo: 'Huevo', cantidad: 0.5, esPrincipal: false },
       { insumo: 'Condimento milanesa (kg)', cantidad: 0.005, esPrincipal: false },
@@ -387,7 +461,8 @@ async function main() {
   });
 
   // Milanesa de ternera: ~200g ternera + 60g pan rallado + 0.5 huevo
-  await crearFichaSiNoExiste('Milanesa de ternera', {
+  // (no está en el Excel de costos — sigue siendo estimación)
+  await asegurarFicha('Milanesa de ternera', {
     rendimientoEsperado: 5.0,
     desperdicioEsperadoPct: 6,
     umbralDesvioAlertaPct: 10,
@@ -398,8 +473,10 @@ async function main() {
     ],
   });
 
-  // Empanada de pollo: ~60g pechuga por empanada
-  await crearFichaSiNoExiste('Empanada de pollo', {
+  // Empanada de pollo: ~60g pechuga por empanada — SIGUE SIENDO ESTIMACIÓN:
+  // el Excel de costos solo trae la receta de la de carne. Pregunta pendiente
+  // para Pablo (ver CLAUDE.md §11).
+  await asegurarFicha('Empanada de pollo', {
     rendimientoEsperado: 16.6, // ~16-17 empanadas por kg de pechuga
     desperdicioEsperadoPct: 8,
     umbralDesvioAlertaPct: 12,
@@ -415,7 +492,7 @@ async function main() {
   // MEDIO, no "por porción". Producción solo cocina enteros; partir a la
   // mitad es un evento de VENTA, no de producción, y pertenece al circuito
   // especial del pollo del módulo 2 — CLAUDE.md §8 Flujo 4 — no modelado acá)
-  await crearFichaSiNoExiste('Pollo a la leña (entero)', {
+  await asegurarFicha('Pollo a la leña (entero)', {
     rendimientoEsperado: 1, // 1 pollo a la leña entero por pollo entero fresco
     desperdicioEsperadoPct: 8, // pérdida de peso en la cocción
     umbralDesvioAlertaPct: 10,
@@ -423,6 +500,59 @@ async function main() {
       { insumo: 'Pollo entero fresco', cantidad: 1, esPrincipal: true },
       { insumo: 'Aceite (lt)', cantidad: 0.02, esPrincipal: false },
     ],
+  });
+
+  // ── Fichas REALES del Excel de costos del cliente (2026-07-13) ──
+  // El Excel costea con porciones fijas y no trae desperdicio esperado ni
+  // umbral de alerta: se arranca con desperdicio 0% y umbral 15% (decisión
+  // temporal — se calibra con los primeros lotes reales, ver CLAUDE.md §11).
+
+  // Empanada de carne — receta real completa del Excel:
+  // 1 kg de molida + 24 discos + 1 kg tomate + 1 kg cebolla → 2 docenas.
+  await asegurarFicha('Empanada de carne', {
+    rendimientoEsperado: 24, // 24 empanadas por kg de molida
+    desperdicioEsperadoPct: 0,
+    umbralDesvioAlertaPct: 15,
+    ingredientes: [
+      { insumo: 'Carne molida (kg)', cantidad: 0.0417, esPrincipal: true }, // 1/24 kg
+      { insumo: 'Disco de empanada', cantidad: 1, esPrincipal: false },
+      { insumo: 'Tomate (kg)', cantidad: 0.0417, esPrincipal: false },
+      { insumo: 'Cebolla (kg)', cantidad: 0.0417, esPrincipal: false },
+    ],
+  });
+
+  // Medallón de hamburguesa: 100 g de molida (el doble/triple usa 2 y 3
+  // medallones — eso es armado de venta, módulo 2, no producción).
+  await asegurarFicha('Medallón de hamburguesa', {
+    rendimientoEsperado: 10,
+    desperdicioEsperadoPct: 0,
+    umbralDesvioAlertaPct: 15,
+    ingredientes: [{ insumo: 'Carne molida (kg)', cantidad: 0.1, esPrincipal: true }],
+  });
+
+  // Medallón de hamburlomo: 180 g de molida (Excel: "hamburlomo 180grs" a
+  // precio de molida).
+  await asegurarFicha('Medallón de hamburlomo', {
+    rendimientoEsperado: 5.55,
+    desperdicioEsperadoPct: 0,
+    umbralDesvioAlertaPct: 15,
+    ingredientes: [{ insumo: 'Carne molida (kg)', cantidad: 0.18, esPrincipal: true }],
+  });
+
+  // Bife de lomo (porción): 200 g de lomo.
+  await asegurarFicha('Bife de lomo (porción)', {
+    rendimientoEsperado: 5,
+    desperdicioEsperadoPct: 0,
+    umbralDesvioAlertaPct: 15,
+    ingredientes: [{ insumo: 'Lomo (kg)', cantidad: 0.2, esPrincipal: true }],
+  });
+
+  // Bife de pollo (porción): 180 g de pechuga.
+  await asegurarFicha('Bife de pollo (porción)', {
+    rendimientoEsperado: 5.55,
+    desperdicioEsperadoPct: 0,
+    umbralDesvioAlertaPct: 15,
+    ingredientes: [{ insumo: 'Pechuga de pollo (kg)', cantidad: 0.18, esPrincipal: true }],
   });
 
   console.log('Seed completado.');

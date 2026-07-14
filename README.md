@@ -71,5 +71,4 @@ src/
 
 ## Pendientes conocidos
 
-- Excel de fichas técnicas reales del cliente → hoy seeds con datos de ejemplo. Al llegar: cargar fichas reales vía `POST /api/fichas-tecnicas` o ajustar seed.
-- Frontend (React + Vite): fase posterior, recién cuando el backend esté probado.
+- Excel de fichas técnicas: llegó como planilla de costos ("ANALISIS COSTOS", 2026-07-13) — porciones reales ya cargadas en las fichas del seed; desperdicio esperado sigue siendo estimación a calibrar con lotes reales. Ver CLAUDE.md §11 (preguntas para Pablo + plan de costeo Fases B/C).
