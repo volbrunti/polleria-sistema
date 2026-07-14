@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { listarUsuarios, crearUsuario, actualizarUsuario } from '../../api/usuarios';
+import { listarUsuarios, crearUsuario, actualizarUsuario, eliminarUsuario } from '../../api/usuarios';
+import { useAuth } from '../../auth/AuthContext';
 import { listarSucursales } from '../../api/sucursales';
 import { ApiError } from '../../api/client';
 import type { Rol, Usuario } from '../../api/types';
@@ -10,6 +11,7 @@ const ROLES_CON_SUCURSAL: Rol[] = ['CAJERO', 'ENCARGADO'];
 
 export function Usuarios() {
   const queryClient = useQueryClient();
+  const { usuario: usuarioActual } = useAuth();
   const usuarios = useQuery({ queryKey: ['usuarios'], queryFn: listarUsuarios });
   const sucursales = useQuery({ queryKey: ['sucursales'], queryFn: listarSucursales });
   const locales = sucursales.data?.filter((s) => s.tipo === 'VENTA') ?? [];
@@ -57,6 +59,17 @@ export function Usuarios() {
       setAbierto(false);
     },
     onError: (err) => setError(err instanceof ApiError ? err.message : 'No se pudo crear el usuario.'),
+  });
+
+  const [errorLista, setErrorLista] = useState<string | null>(null);
+  const mutEliminar = useMutation({
+    mutationFn: eliminarUsuario,
+    onSuccess: () => {
+      setErrorLista(null);
+      void queryClient.invalidateQueries({ queryKey: ['usuarios'] });
+    },
+    // El 409 USUARIO_CON_HISTORIAL llega con mensaje legible del backend
+    onError: (err) => setErrorLista(err instanceof ApiError ? err.message : 'No se pudo eliminar el usuario.'),
   });
 
   const mutActualizar = useMutation({
@@ -181,8 +194,12 @@ export function Usuarios() {
         </div>
       )}
 
+      {errorLista && (
+        <div className="rounded-xl bg-error-suave px-3.5 py-2.5 text-sm font-semibold text-error-texto">{errorLista}</div>
+      )}
+
       <div className="overflow-x-auto rounded-2xl border border-borde bg-white">
-        <div className="grid grid-cols-[1fr_160px_180px_140px_100px_110px] bg-chip px-5 py-3 text-xs font-extrabold tracking-wide text-texto-suave">
+        <div className="grid grid-cols-[1fr_160px_180px_140px_90px_170px] bg-chip px-5 py-3 text-xs font-extrabold tracking-wide text-texto-suave">
           <span>NOMBRE</span>
           <span>USUARIO</span>
           <span>ROL</span>
@@ -191,7 +208,7 @@ export function Usuarios() {
           <span />
         </div>
         {usuarios.data?.map((u) => (
-          <div key={u.id} className="grid grid-cols-[1fr_160px_180px_140px_100px_110px] items-center border-t border-[#eef1ea] px-5 py-3.5 text-sm">
+          <div key={u.id} className="grid grid-cols-[1fr_160px_180px_140px_90px_170px] items-center border-t border-[#eef1ea] px-5 py-3.5 text-sm">
             <span className="font-semibold">{u.nombre}</span>
             <span className="font-mono text-[13px] text-texto-suave">{u.username}</span>
             <span>{u.rol}</span>
@@ -203,9 +220,29 @@ export function Usuarios() {
             <span className="font-bold" style={{ color: u.activo ? '#1a7f3f' : '#a02514' }}>
               {u.activo ? 'Sí' : 'No'}
             </span>
-            <button type="button" onClick={() => abrirEditar(u)} className="min-h-9 w-fit cursor-pointer rounded-lg border border-borde-fuerte bg-white px-3.5 text-[13px] font-bold text-primario">
-              Editar
-            </button>
+            <span className="flex gap-2">
+              <button type="button" onClick={() => abrirEditar(u)} className="min-h-9 cursor-pointer rounded-lg border border-borde-fuerte bg-white px-3.5 text-[13px] font-bold text-primario">
+                Editar
+              </button>
+              {u.id !== usuarioActual?.id && (
+                <button
+                  type="button"
+                  disabled={mutEliminar.isPending}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `¿Eliminar el usuario "${u.username}"? Solo se puede si nunca registró actividad; si operó alguna vez, desactivalo con Editar.`,
+                      )
+                    ) {
+                      mutEliminar.mutate(u.id);
+                    }
+                  }}
+                  className="min-h-9 cursor-pointer rounded-lg border border-error-texto/40 bg-white px-3.5 text-[13px] font-bold text-error-texto disabled:opacity-50"
+                >
+                  Eliminar
+                </button>
+              )}
+            </span>
           </div>
         ))}
       </div>

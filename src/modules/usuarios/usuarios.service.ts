@@ -65,3 +65,47 @@ export async function actualizar(
     return usuario;
   });
 }
+
+// Eliminación REAL solo para usuarios sin actividad (limpiar cuentas de
+// prueba). Un usuario que ya operó es "firma digital" de sus registros
+// (CLAUDE.md §2): no se borra nunca, se desactiva con PATCH { activo: false }.
+export async function eliminar(id: number, usuarioIdEjecutor: number) {
+  if (id === usuarioIdEjecutor)
+    throw Errores.validacion('No podés eliminar tu propio usuario');
+
+  const usuario = await prisma.usuario.findUnique({
+    where: { id },
+    select: {
+      ...SIN_PASSWORD,
+      _count: {
+        select: {
+          movimientosStock: true,
+          registrosAuditoria: true,
+          preciosCreados: true,
+          ingresosMercaderia: true,
+          lotesProduccion: true,
+          transferenciasEmitidas: true,
+          transferenciasRecibidas: true,
+        },
+      },
+    },
+  });
+  if (!usuario) throw Errores.noEncontrado('Usuario');
+
+  const { _count, ...datosUsuario } = usuario;
+  if (Object.values(_count).some((n) => n > 0)) throw Errores.usuarioConHistorial();
+
+  await prisma.$transaction(async (tx) => {
+    // Los refresh tokens son sesiones, no historial: se borran con el usuario.
+    await tx.refreshToken.deleteMany({ where: { usuarioId: id } });
+    await tx.usuario.delete({ where: { id } });
+    await registrarAuditoria(tx, {
+      accion: 'ELIMINAR_USUARIO',
+      entidad: 'Usuario',
+      entidadId: id,
+      usuarioId: usuarioIdEjecutor,
+      datosAnteriores: datosUsuario,
+    });
+  });
+  return datosUsuario;
+}

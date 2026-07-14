@@ -40,4 +40,11 @@ export async function usuariosRoutes(app: FastifyInstance) {
     const datos = actualizarSchema.parse(req.body);
     return usuariosService.actualizar(id, datos, req.usuario.id);
   });
+
+  // Solo usuarios SIN actividad registrada (limpieza de cuentas de prueba);
+  // con historial responde 409 USUARIO_CON_HISTORIAL → desactivar en su lugar.
+  app.delete('/:id', { preHandler: [...soloAdmin] }, async (req) => {
+    const { id } = paramsId.parse(req.params);
+    return usuariosService.eliminar(id, req.usuario.id);
+  });
 }

@@ -24,6 +24,12 @@ export const Errores = {
     new AppError('SUCURSAL_NO_AUTORIZADA', 'No podés operar sobre una transferencia de otra sucursal', 403),
   loteYaCerrado: () => new AppError('LOTE_YA_CERRADO', 'El lote de producción ya está cerrado', 409),
   noEncontrado: (entidad: string) => new AppError('NO_ENCONTRADO', `${entidad} no encontrado/a`, 404),
+  usuarioConHistorial: () =>
+    new AppError(
+      'USUARIO_CON_HISTORIAL',
+      'El usuario tiene actividad registrada (movimientos, lotes, transferencias o auditoría) y no puede eliminarse — desactivalo en su lugar',
+      409,
+    ),
   credencialesInvalidas: () =>
     new AppError('CREDENCIALES_INVALIDAS', 'Usuario o contraseña incorrectos', 401),
   noAutorizado: () => new AppError('NO_AUTORIZADO', 'No autorizado', 401),

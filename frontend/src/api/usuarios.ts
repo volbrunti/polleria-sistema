@@ -21,3 +21,9 @@ export function actualizarUsuario(
 ) {
   return apiFetch<Usuario>(`/api/usuarios/${id}`, { method: 'PATCH', body: datos });
 }
+
+// Solo usuarios sin actividad registrada (el backend responde 409 si tienen
+// historial — en ese caso corresponde desactivarlos).
+export function eliminarUsuario(id: number) {
+  return apiFetch<Usuario>(`/api/usuarios/${id}`, { method: 'DELETE' });
+}

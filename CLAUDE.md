@@ -99,7 +99,7 @@ El cliente pidió explícitamente **entregas por módulo, no big-bang** ("prefie
 ### FASE ACTUAL → Módulo 1: Producción + Stock + Transferencias (Flujos 1, 2 y 3)
 
 **Orden de trabajo dentro de la fase:**
-1. ✅ **Backend completo del módulo 1** con tests — TERMINADO (78/78 tests, ver README.md y HANDOFF-AUDITORIA.md).
+1. ✅ **Backend completo del módulo 1** con tests — TERMINADO (83/83 tests, ver README.md y HANDOFF-AUDITORIA.md).
 2. ✅ **Frontend del módulo 1** — CONSTRUIDO y verificado end-to-end contra el backend real (ver §4.1).
 3. ✅ **Auditoría completa de negocio/seguridad/UX** (2026-07-13, 234 ítems revisados) — 3 hallazgos (1 crítico, 2 medios), los 3 corregidos y verificados en vivo (ver §4.1 y §11).
 
@@ -261,7 +261,7 @@ El movimiento de unidades desde Producción hacia los locales de venta. El clien
 ### Entidades transversales (crear completas AHORA)
 
 - **Sucursal**: nombre, tipo (`PRODUCCION` | `VENTA`), dirección, activa. Seed: 3 sucursales.
-- **Usuario**: nombre, username, passwordHash, rol (`ADMINISTRADOR` | `SOCIO` | `ENCARGADO` | `CAJERO` | `PRODUCCION`), activo, **sucursalId** (opcional, FK a Sucursal — fija de qué local es un CAJERO/ENCARGADO; `transferencias.service.ts` la usa para que solo puedan recepcionar transferencias de su propia sucursal).
+- **Usuario**: nombre, username, passwordHash, rol (`ADMINISTRADOR` | `SOCIO` | `ENCARGADO` | `CAJERO` | `PRODUCCION`), activo, **sucursalId** (opcional, FK a Sucursal — fija de qué local es un CAJERO/ENCARGADO; `transferencias.service.ts` la usa para que solo puedan recepcionar transferencias de su propia sucursal). **Eliminación (agregado 2026-07-13, pedido del cliente para limpiar cuentas de prueba)**: `DELETE /usuarios/:id` (solo admin, no a sí mismo) hace borrado REAL únicamente si el usuario no tiene NINGÚN registro asociado (movimientos, lotes, transferencias, ingresos, precios, auditoría); si tiene, responde 409 `USUARIO_CON_HISTORIAL` — un usuario que operó es la "firma digital" de sus registros y solo puede desactivarse (`activo: false`). La eliminación misma queda auditada.
 - **Producto**: nombre ÚNICO, categoría, tipo (`MATERIA_PRIMA` | `ELABORADO` | `REVENTA` | `COMBO`), unidadDeMedida (`KG` | `UNIDAD`), activo. Nota: materia prima y producto vendible son la MISMA entidad con tipos distintos (el pollo cocido que retorna a producción es insumo de la empanada).
 - **Precio**: producto, monto, **cantidad** (agregado 2026-07-13, default 1), fechaDesde, usuario. Historial: nunca se pisa, cambio = registro nuevo (el nuevo registro es para la MISMA `cantidad`, no reemplaza otras cantidades). Para un producto normal siempre hay una sola cantidad (1). Para un `COMBO`, `cantidad` permite una **tabla de precio por volumen no lineal** — dato real relevado de la planilla operativa del cliente ("REFERENCIAS"): pedir 2 casi nunca cuesta 2× el precio de 1 (ej: "Pollo c/Fritas Grandes" ×1 = $29.000, ×2 = $56.000, no $58.000). `productos.service.ts::tablaPrecioVigente()` devuelve, para cada cantidad que alguna vez tuvo un precio, el vigente más reciente.
 - **ComboComponente** (agregado 2026-07-13, propuesta validada con el cliente): combo (Producto tipo `COMBO`), productoComponente (Producto — nunca otro `COMBO`, no se permiten combos anidados), cantidad. Define de qué se arma un combo. Sin versionado (a diferencia de FichaTecnicaVersion): editar la composición reemplaza la lista completa, no hay lotes históricos que deban "congelar" una composición pasada. El combo no tiene stock ni movimientos propios — cuando exista el POS (módulo 2), vender un combo debe generar `MovimientoStock` de tipo `VENTA` sobre cada componente por su cantidad, nunca sobre el combo. CRUD en `src/modules/productos/{productos.service,productos.routes}.ts` (`POST /productos/combos`, `PATCH /productos/combos/:id/componentes`), UI en la pestaña "Combos" del Catálogo admin.
@@ -353,4 +353,4 @@ El backend del módulo 1 está terminado cuando:
 3. Puede generar una transferencia que descuenta stock de producción, y un usuario del local puede recibirla a ciegas, recontar o confirmar con discrepancia, generando la alerta correspondiente — SOLO si ese usuario pertenece a la sucursal destino (§11).
 4. El stock de cualquier producto en cualquier sucursal es consultable y cuadra exactamente con la suma de sus MovimientoStock.
 5. Toda la cadena es trazable de punta a punta y auditada.
-6. Todos los tests pasan (78/78), incluidos los de no-filtración de campos ciegos, RBAC, aislamiento de sucursal, combos y precio por cantidad.
+6. Todos los tests pasan (83/83), incluidos los de no-filtración de campos ciegos, RBAC, aislamiento de sucursal, combos, precio por cantidad y eliminación de usuarios.
