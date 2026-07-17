@@ -445,12 +445,16 @@ async function main() {
 
   // Milanesa de nalga — porción REAL del Excel de costos del cliente
   // (2026-07-13): 250 g de nalga por unidad (antes 180 g inventados).
+  // Respuestas de Pablo/Ariel (2026-07-17): las cantidades YA incluyen el
+  // desperdicio → desperdicio esperado 0%. OJO: los 250 g son la porción
+  // MÁXIMA (la del sandwich, que lleva 1 a 2 milanesas según tamaño) — el
+  // peso típico de UNA milanesa quedó como pregunta pendiente (CLAUDE.md §11).
   // Pan rallado/huevo/condimento siguen siendo estimación nuestra (el Excel
   // no los detalla para producción). Al cambiar estos datos sobre una DB
   // existente, asegurarFicha crea una versión nueva (no edita la anterior).
   await asegurarFicha('Milanesa de nalga', {
     rendimientoEsperado: 4, // 4 milanesas por kg de nalga (250 g c/u)
-    desperdicioEsperadoPct: 5,
+    desperdicioEsperadoPct: 0,
     umbralDesvioAlertaPct: 10,
     ingredientes: [
       { insumo: 'Nalga de pollo (kg)', cantidad: 0.25, esPrincipal: true },
@@ -461,10 +465,11 @@ async function main() {
   });
 
   // Milanesa de ternera: ~200g ternera + 60g pan rallado + 0.5 huevo
-  // (no está en el Excel de costos — sigue siendo estimación)
+  // (no está en el Excel de costos — sigue siendo estimación; desperdicio 0%
+  // por indicación del cliente 2026-07-17: "ponele 0% después lo vemos")
   await asegurarFicha('Milanesa de ternera', {
     rendimientoEsperado: 5.0,
-    desperdicioEsperadoPct: 6,
+    desperdicioEsperadoPct: 0,
     umbralDesvioAlertaPct: 10,
     ingredientes: [
       { insumo: 'Carne de ternera (kg)', cantidad: 0.2, esPrincipal: true },
@@ -474,11 +479,12 @@ async function main() {
   });
 
   // Empanada de pollo: ~60g pechuga por empanada — SIGUE SIENDO ESTIMACIÓN:
-  // el Excel de costos solo trae la receta de la de carne. Pregunta pendiente
-  // para Pablo (ver CLAUDE.md §11).
+  // el Excel de costos solo trae la receta de la de carne, y la pregunta 2
+  // del 2026-07-16 quedó sin responder (ver CLAUDE.md §11). Desperdicio 0%
+  // por indicación general del cliente (2026-07-17).
   await asegurarFicha('Empanada de pollo', {
     rendimientoEsperado: 16.6, // ~16-17 empanadas por kg de pechuga
-    desperdicioEsperadoPct: 8,
+    desperdicioEsperadoPct: 0,
     umbralDesvioAlertaPct: 12,
     ingredientes: [
       { insumo: 'Pechuga de pollo (kg)', cantidad: 0.06, esPrincipal: true },
@@ -494,7 +500,11 @@ async function main() {
   // especial del pollo del módulo 2 — CLAUDE.md §8 Flujo 4 — no modelado acá)
   await asegurarFicha('Pollo a la leña (entero)', {
     rendimientoEsperado: 1, // 1 pollo a la leña entero por pollo entero fresco
-    desperdicioEsperadoPct: 8, // pérdida de peso en la cocción
+    // Desperdicio 0% (cliente, 2026-07-17): la pérdida de peso en cocción no
+    // reduce UNIDADES (cada pollo fresco termina siendo un pollo cocido) —
+    // con 8% acá el sistema esperaba 0,92 pollos por pollo, lo cual era un
+    // error conceptual además de contradecir la indicación del cliente.
+    desperdicioEsperadoPct: 0,
     umbralDesvioAlertaPct: 10,
     ingredientes: [
       { insumo: 'Pollo entero fresco', cantidad: 1, esPrincipal: true },

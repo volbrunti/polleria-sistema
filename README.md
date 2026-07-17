@@ -71,4 +71,4 @@ src/
 
 ## Pendientes conocidos
 
-- Excel de fichas técnicas: llegó como planilla de costos ("ANALISIS COSTOS", 2026-07-13) — porciones reales ya cargadas en las fichas del seed; desperdicio esperado sigue siendo estimación a calibrar con lotes reales. Ver CLAUDE.md §11 (preguntas para Pablo + plan de costeo Fases B/C).
+- Excel de fichas técnicas: llegó como planilla de costos ("ANALISIS COSTOS", 2026-07-13) — porciones reales ya cargadas en las fichas del seed. El cliente confirmó por WhatsApp (2026-07-17) desperdicio esperado 0% en todas las fichas (las porciones ya lo incluyen) — a calibrar con lotes reales. Ver CLAUDE.md §11 (pregunta pendiente: receta de empanada de pollo y peso real de una milanesa individual; plan de costeo Fases B/C).
