@@ -142,6 +142,13 @@ async function main() {
     // cocido es un evento de VENTA (circuito especial del pollo, módulo 2),
     // no de producción. Existe como producto solo para poder facturarlo.
     { nombre: 'Pollo a la leña (medio)', categoria: 'Pollos', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 12000 },
+    // Bucket de stock interno del circuito del pollo (Módulo 2, CLAUDE.md
+    // módulo 2 §4.10): "Pollo a la leña (entero)" fresco se "marca" (se tira
+    // a la parrilla) vía EventoMarcadoPollo, que genera un MovimientoStock
+    // negativo sobre el fresco y uno positivo acá. La venta (entero o medio)
+    // descuenta de ESTE producto, nunca del fresco. Sin precio propio: nunca
+    // se vende directamente, es un estado intermedio de stock.
+    { nombre: 'Pollo a la leña (entero) — MARCADO', categoria: 'Pollos', tipo: 'ELABORADO', unidad: 'UNIDAD' },
     // Porciones elaboradas en Producción central (Excel de costos, 2026-07-13):
     // unidades listas para cocinar que después el local arma como plato/sandwich
     // (el armado de venta es módulo 2). Sin precio propio: no se venden sueltas.

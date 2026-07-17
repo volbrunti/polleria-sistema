@@ -128,7 +128,7 @@ El frontend vive en `frontend/` (proyecto Vite independiente, sin monorepo tooli
 **Comandos**: `cd frontend && npm run dev` (:5173, requiere backend en :3000) · `npm run build` · `npx tsc -b --noEmit`.
 
 ### FASES FUTURAS (para conocimiento, NO desarrollar todavía)
-- **Módulo 2**: POS + Caja y Turnos (Flujos 4 y 5) — van juntos, la venta requiere turno abierto.
+- **Módulo 2**: POS + Caja y Turnos (Flujos 4 y 5) — van juntos, la venta requiere turno abierto. **En desarrollo desde 2026-07-17 en la rama `feature/modulo-2`** (no en `main`, para poder seguir mostrando el Módulo 1 sin interferencias). Su CLAUDE.md específico vive en `CLAUDE-MODULO-2.md` en esa rama.
 - **Módulo 3**: Alertas de stock mínimo + Reportes y dashboard (Flujos 6 y 7 visibles).
 - **Futuro lejano** (fuera de v1): conciliación Mercado Pago/bancos, facturación ARCA/AFIP, pedidos WhatsApp, OCR de remitos.
 

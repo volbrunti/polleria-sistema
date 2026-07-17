@@ -78,6 +78,81 @@ enum EstadoTransferencia {
   CONFIRMADA_CON_DISCREPANCIA
 }
 
+// ── Módulo 2 — POS + Caja y Turnos (CLAUDE.md del módulo 2, ver §3) ──
+
+enum EstadoTurno {
+  ABIERTO
+  BLOQUEADO
+  CERRADO
+}
+
+enum MomentoArqueo {
+  APERTURA
+  CIERRE
+}
+
+enum TipoArqueo {
+  EFECTIVO
+  POLLOS_MARCADOS
+}
+
+enum ResultadoArqueo {
+  COINCIDE
+  FALTANTE
+  SOBRANTE
+}
+
+enum EstadoBloqueo {
+  BLOQUEADO
+  DESBLOQUEADO
+}
+
+enum TipoDesbloqueo {
+  REMOTO
+  CLAVE_EMERGENCIA
+}
+
+enum TipoPedido {
+  PRESENCIAL
+  A_RETIRAR
+}
+
+enum EstadoPedido {
+  EN_PREPARACION
+  LISTO
+  ENTREGADO
+  LISTO_NO_RETIRADO
+  REASIGNADO
+  PERDIDO
+  ANULADO
+}
+
+enum MedioPago {
+  EFECTIVO
+  DEBITO
+  CREDITO
+  MERCADO_PAGO
+  TRANSFERENCIA
+}
+
+enum TipoCostoCero {
+  DESPERDICIO_QUEMADO
+  RETORNO_A_PRODUCCION
+}
+
+// Selector CERRADO de quién retira — nunca texto libre (CLAUDE.md módulo 1 §8)
+enum SocioRetiro {
+  ARIEL
+  ELIANA
+  EMA
+}
+
+enum TipoTicket {
+  NUEVO
+  ACTUALIZACION
+  ANULACION
+}
+
 // ─────────────────────────────────────────────
 // TRANSVERSALES
 // ─────────────────────────────────────────────
@@ -89,47 +164,63 @@ model Sucursal {
   direccion String?
   activa    Boolean      @default(true)
 
-  movimientosStock         MovimientoStock[]
-  ingresosMercaderia       IngresoMercaderia[]
-  transferenciasOrigen     Transferencia[]     @relation("TransferenciaOrigen")
-  transferenciasDestino    Transferencia[]     @relation("TransferenciaDestino")
-  usuarios                 Usuario[]
+  movimientosStock           MovimientoStock[]
+  ingresosMercaderia         IngresoMercaderia[]
+  transferenciasOrigen       Transferencia[]            @relation("TransferenciaOrigen")
+  transferenciasDestino      Transferencia[]            @relation("TransferenciaDestino")
+  usuarios                   Usuario[]
+  // Módulo 2
+  turnos                     Turno[]
+  pedidos                    Pedido[]
+  atenciones                 Atencion[]
+  eventosMarcadoPollo        EventoMarcadoPollo[]
+  configuracionesStockMinimo ConfiguracionStockMinimo[]
 
   @@map("sucursales")
 }
 
 model Usuario {
-  id           Int      @id @default(autoincrement())
+  id           Int       @id @default(autoincrement())
   nombre       String
-  username     String   @unique
+  username     String    @unique
   passwordHash String
   rol          Rol
-  activo       Boolean  @default(true)
+  activo       Boolean   @default(true)
   // Sucursal fija del usuario (relevante para CAJERO/ENCARGADO: define de qué
   // local es y sobre qué transferencias puede operar — ver transferencias.service.ts)
   sucursal     Sucursal? @relation(fields: [sucursalId], references: [id])
   sucursalId   Int?
 
-  refreshTokens        RefreshToken[]
-  movimientosStock     MovimientoStock[]
-  registrosAuditoria   RegistroAuditoria[]
-  preciosCreados       Precio[]
-  ingresosMercaderia   IngresoMercaderia[]
-  lotesProduccion      LoteDeProduccion[]
-  transferenciasEmitidas  Transferencia[] @relation("TransferenciaEmisor")
-  transferenciasRecibidas Transferencia[] @relation("TransferenciaReceptor")
+  refreshTokens              RefreshToken[]
+  movimientosStock           MovimientoStock[]
+  registrosAuditoria         RegistroAuditoria[]
+  preciosCreados             Precio[]
+  ingresosMercaderia         IngresoMercaderia[]
+  lotesProduccion            LoteDeProduccion[]
+  transferenciasEmitidas     Transferencia[]      @relation("TransferenciaEmisor")
+  transferenciasRecibidas    Transferencia[]      @relation("TransferenciaReceptor")
+  // Módulo 2
+  turnosComoCajero           Turno[]
+  pedidosComoCajero          Pedido[]
+  atenciones                 Atencion[]
+  gastosDeCaja               GastoDeCaja[]
+  retirosDeCajaRegistrados   RetiroDeCaja[]
+  eventosMarcadoPollo        EventoMarcadoPollo[]
+  clavesEmergenciaGeneradas  ClaveDeEmergencia[]
+  bloqueosComoCajeroAnterior BloqueoDeTurno[]     @relation("BloqueoCajeroAnterior")
+  bloqueosAutorizados        BloqueoDeTurno[]     @relation("BloqueoAutorizante")
 
   @@map("usuarios")
 }
 
 model RefreshToken {
-  id         Int      @id @default(autoincrement())
-  tokenHash  String   @unique
-  usuario    Usuario  @relation(fields: [usuarioId], references: [id])
-  usuarioId  Int
-  expiraEn   DateTime
-  revocado   Boolean  @default(false)
-  creadoEn   DateTime @default(now())
+  id        Int      @id @default(autoincrement())
+  tokenHash String   @unique
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id])
+  usuarioId Int
+  expiraEn  DateTime
+  revocado  Boolean  @default(false)
+  creadoEn  DateTime @default(now())
 
   @@map("refresh_tokens")
 }
@@ -142,18 +233,22 @@ model Producto {
   unidadDeMedida UnidadDeMedida
   activo         Boolean        @default(true)
 
-  precios            Precio[]
-  movimientosStock   MovimientoStock[]
-  lineasIngreso      LineaIngreso[]
-  fichaTecnica       FichaTecnica?
-  ingredientesDondeEsInsumo IngredienteDeReceta[]
-  insumosUsados      InsumoUsado[]
-  lotesProduccion    LoteDeProduccion[]
-  lineasTransferencia LineaDeTransferencia[]
+  precios                    Precio[]
+  movimientosStock           MovimientoStock[]
+  lineasIngreso              LineaIngreso[]
+  fichaTecnica               FichaTecnica?
+  ingredientesDondeEsInsumo  IngredienteDeReceta[]
+  insumosUsados              InsumoUsado[]
+  lotesProduccion            LoteDeProduccion[]
+  lineasTransferencia        LineaDeTransferencia[]
   // Solo relevante si tipo = COMBO: de qué productos se compone
-  componentesDelCombo ComboComponente[] @relation("ComboDeProducto")
+  componentesDelCombo        ComboComponente[]          @relation("ComboDeProducto")
   // Solo relevante si este producto integra algún combo como componente
-  usadoEnCombos        ComboComponente[] @relation("ComponenteDeCombo")
+  usadoEnCombos              ComboComponente[]          @relation("ComponenteDeCombo")
+  // Módulo 2
+  itemsDePedido              ItemDePedido[]
+  atenciones                 Atencion[]
+  configuracionesStockMinimo ConfiguracionStockMinimo[]
 
   @@map("productos")
 }
@@ -264,16 +359,16 @@ model Proveedor {
 }
 
 model IngresoMercaderia {
-  id                     Int       @id @default(autoincrement())
-  proveedor              Proveedor @relation(fields: [proveedorId], references: [id])
-  proveedorId            Int
+  id                      Int       @id @default(autoincrement())
+  proveedor               Proveedor @relation(fields: [proveedorId], references: [id])
+  proveedorId             Int
   comentarioProveedorOtro String?
-  sucursal               Sucursal  @relation(fields: [sucursalId], references: [id])
-  sucursalId             Int
-  fechaHora              DateTime  @default(now())
-  usuario                Usuario   @relation(fields: [usuarioId], references: [id])
-  usuarioId              Int
-  fotoRemitoUrl          String?
+  sucursal                Sucursal  @relation(fields: [sucursalId], references: [id])
+  sucursalId              Int
+  fechaHora               DateTime  @default(now())
+  usuario                 Usuario   @relation(fields: [usuarioId], references: [id])
+  usuarioId               Int
+  fotoRemitoUrl           String?
 
   lineas LineaIngreso[]
 
@@ -302,9 +397,9 @@ model LineaIngreso {
 // ─────────────────────────────────────────────
 
 model FichaTecnica {
-  id                 Int      @id @default(autoincrement())
-  productoElaborado  Producto @relation(fields: [productoElaboradoId], references: [id])
-  productoElaboradoId Int     @unique
+  id                  Int      @id @default(autoincrement())
+  productoElaborado   Producto @relation(fields: [productoElaboradoId], references: [id])
+  productoElaboradoId Int      @unique
 
   versiones FichaTecnicaVersion[]
 
@@ -312,16 +407,16 @@ model FichaTecnica {
 }
 
 model FichaTecnicaVersion {
-  id                      Int          @id @default(autoincrement())
-  fichaTecnica            FichaTecnica @relation(fields: [fichaTecnicaId], references: [id])
-  fichaTecnicaId          Int
-  numeroVersion           Int
-  fechaDesde              DateTime     @default(now())
-  activa                  Boolean      @default(true)
+  id                     Int          @id @default(autoincrement())
+  fichaTecnica           FichaTecnica @relation(fields: [fichaTecnicaId], references: [id])
+  fichaTecnicaId         Int
+  numeroVersion          Int
+  fechaDesde             DateTime     @default(now())
+  activa                 Boolean      @default(true)
   // unidades esperadas por unidad (KG) de insumo principal — referencia del cliente
-  rendimientoEsperado     Decimal      @db.Decimal(12, 3)
-  desperdicioEsperadoPct  Decimal      @db.Decimal(5, 2)
-  umbralDesvioAlertaPct   Decimal      @db.Decimal(5, 2)
+  rendimientoEsperado    Decimal      @db.Decimal(12, 3)
+  desperdicioEsperadoPct Decimal      @db.Decimal(5, 2)
+  umbralDesvioAlertaPct  Decimal      @db.Decimal(5, 2)
 
   ingredientes    IngredienteDeReceta[]
   lotesProduccion LoteDeProduccion[]
@@ -331,13 +426,13 @@ model FichaTecnicaVersion {
 }
 
 model IngredienteDeReceta {
-  id                        Int                 @id @default(autoincrement())
-  fichaTecnicaVersion       FichaTecnicaVersion @relation(fields: [fichaTecnicaVersionId], references: [id])
-  fichaTecnicaVersionId     Int
-  productoInsumo            Producto            @relation(fields: [productoInsumoId], references: [id])
-  productoInsumoId          Int
-  cantidadPorUnidadProducida Decimal            @db.Decimal(12, 4)
-  esPrincipal               Boolean             @default(false) // insumo principal: base del cálculo de rendimiento
+  id                         Int                 @id @default(autoincrement())
+  fichaTecnicaVersion        FichaTecnicaVersion @relation(fields: [fichaTecnicaVersionId], references: [id])
+  fichaTecnicaVersionId      Int
+  productoInsumo             Producto            @relation(fields: [productoInsumoId], references: [id])
+  productoInsumoId           Int
+  cantidadPorUnidadProducida Decimal             @db.Decimal(12, 4)
+  esPrincipal                Boolean             @default(false) // insumo principal: base del cálculo de rendimiento
 
   @@unique([fichaTecnicaVersionId, productoInsumoId])
   @@map("ingredientes_receta")
@@ -366,14 +461,14 @@ model LoteDeProduccion {
 }
 
 model InsumoUsado {
-  id                 Int              @id @default(autoincrement())
-  loteDeProduccion   LoteDeProduccion @relation(fields: [loteDeProduccionId], references: [id])
-  loteDeProduccionId Int
-  productoInsumo     Producto         @relation(fields: [productoInsumoId], references: [id])
-  productoInsumoId   Int
-  lineaIngresoOrigen LineaIngreso     @relation(fields: [lineaIngresoOrigenId], references: [id])
+  id                   Int              @id @default(autoincrement())
+  loteDeProduccion     LoteDeProduccion @relation(fields: [loteDeProduccionId], references: [id])
+  loteDeProduccionId   Int
+  productoInsumo       Producto         @relation(fields: [productoInsumoId], references: [id])
+  productoInsumoId     Int
+  lineaIngresoOrigen   LineaIngreso     @relation(fields: [lineaIngresoOrigenId], references: [id])
   lineaIngresoOrigenId Int
-  cantidadUsada      Decimal          @db.Decimal(12, 3)
+  cantidadUsada        Decimal          @db.Decimal(12, 3)
 
   @@map("insumos_usados")
 }
@@ -414,4 +509,264 @@ model LineaDeTransferencia {
 
   @@unique([transferenciaId, productoId])
   @@map("lineas_transferencia")
+}
+
+// ─────────────────────────────────────────────
+// MÓDULO 2 — POS + CAJA Y TURNOS
+// ─────────────────────────────────────────────
+//
+// Convenciones de este módulo (ver CLAUDE.md del módulo 2, sección
+// "Correcciones al borrador del cliente" del plan de implementación):
+//  - IDs Int autoincrement en todo, como el resto del schema (el borrador
+//    original del cliente proponía String/cuid; se descartó por consistencia).
+//  - Los combos NO tienen modelo propio: son Producto con tipo=COMBO. Vender
+//    un combo usa productoId igual que cualquier producto — no hay comboId
+//    en ItemDePedido ni en Atencion.
+//  - TipoMovimientoStock y TipoAlerta ya traían los valores que este módulo
+//    necesita, reservados desde el Módulo 1 (VENTA, ATENCION, MERMA_QUEMADO,
+//    RETORNO_A_PRODUCCION, MARCADO_POLLO, ANULACION_REPOSICION, AJUSTE /
+//    DISCREPANCIA_CAJA, BLOQUEO_TURNO, STOCK_MINIMO) — no se tocan esos enums.
+//  - Montos de dinero: Decimal(12,2) (igual que Precio.monto). Cantidades/
+//    stock: Decimal(12,3) (igual que MovimientoStock.cantidad).
+
+model Turno {
+  id              Int         @id @default(autoincrement())
+  sucursal        Sucursal    @relation(fields: [sucursalId], references: [id])
+  sucursalId      Int
+  usuarioCajero   Usuario     @relation(fields: [usuarioCajeroId], references: [id])
+  usuarioCajeroId Int
+  fechaApertura   DateTime    @default(now())
+  fechaCierre     DateTime?
+  estado          EstadoTurno @default(ABIERTO)
+
+  arqueos          Arqueo[]
+  bloqueo          BloqueoDeTurno?
+  pedidos          Pedido[]
+  atenciones       Atencion[]
+  gastos           GastoDeCaja[]
+  retiros          RetiroDeCaja[]
+  eventosMarcado   EventoMarcadoPollo[]
+  clavesEmergencia ClaveDeEmergencia[]
+
+  @@index([sucursalId, estado])
+  @@map("turnos")
+}
+
+// Conteo ciego. El "esperado" y la "diferencia" son campos ciegos: jamás se
+// serializan para CAJERO/ENCARGADO (mismo patrón que unidadesEsperadas en
+// LoteDeProduccion y cantidadEnviada en LineaDeTransferencia).
+model Arqueo {
+  id            Int             @id @default(autoincrement())
+  turno         Turno           @relation(fields: [turnoId], references: [id])
+  turnoId       Int
+  momento       MomentoArqueo
+  tipo          TipoArqueo
+  valorContado  Decimal         @db.Decimal(12, 3)
+  // CAMPOS CIEGOS — jamás serializar para rol CAJERO/ENCARGADO
+  valorEsperado Decimal         @db.Decimal(12, 3)
+  diferencia    Decimal         @db.Decimal(12, 3)
+  resultado     ResultadoArqueo
+  fechaHora     DateTime        @default(now())
+
+  bloqueosDisparados BloqueoDeTurno[]
+
+  // A lo sumo 4 arqueos por turno: apertura/cierre × efectivo/pollos
+  @@unique([turnoId, momento, tipo])
+  @@map("arqueos")
+}
+
+model BloqueoDeTurno {
+  id                      Int                @id @default(autoincrement())
+  turno                   Turno              @relation(fields: [turnoId], references: [id])
+  turnoId                 Int                @unique
+  arqueoQueLoDisparo      Arqueo             @relation(fields: [arqueoQueLoDisparoId], references: [id])
+  arqueoQueLoDisparoId    Int
+  // Cajero que cerró el turno anterior — a quién preguntarle primero
+  usuarioCajeroAnterior   Usuario?           @relation("BloqueoCajeroAnterior", fields: [usuarioCajeroAnteriorId], references: [id])
+  usuarioCajeroAnteriorId Int?
+  estado                  EstadoBloqueo      @default(BLOQUEADO)
+  tipoDesbloqueo          TipoDesbloqueo?
+  usuarioAutorizante      Usuario?           @relation("BloqueoAutorizante", fields: [usuarioAutorizanteId], references: [id])
+  usuarioAutorizanteId    Int?
+  fechaDesbloqueo         DateTime?
+  claveEmergencia         ClaveDeEmergencia? @relation(fields: [claveEmergenciaId], references: [id])
+  claveEmergenciaId       Int?
+  createdAt               DateTime           @default(now())
+
+  @@map("bloqueos_turno")
+}
+
+// Código de un solo uso para desbloquear una caja sin que el admin esté
+// disponible remotamente. Expira a los 10 minutos (validado por servicio).
+model ClaveDeEmergencia {
+  id            Int       @id @default(autoincrement())
+  codigo        String    @unique
+  generadaPor   Usuario   @relation(fields: [generadaPorId], references: [id])
+  generadaPorId Int
+  turno         Turno?    @relation(fields: [turnoId], references: [id])
+  turnoId       Int?
+  expiraEn      DateTime
+  usada         Boolean   @default(false)
+  usadaEn       DateTime?
+  createdAt     DateTime  @default(now())
+
+  bloqueosDesbloqueados BloqueoDeTurno[]
+
+  @@map("claves_emergencia")
+}
+
+model Pedido {
+  id              Int          @id @default(autoincrement())
+  turno           Turno        @relation(fields: [turnoId], references: [id])
+  turnoId         Int
+  sucursal        Sucursal     @relation(fields: [sucursalId], references: [id])
+  sucursalId      Int
+  tipo            TipoPedido
+  estado          EstadoPedido @default(EN_PREPARACION)
+  usuarioCajero   Usuario      @relation(fields: [usuarioCajeroId], references: [id])
+  usuarioCajeroId Int
+  // Si viene de un pedido LISTO_NO_RETIRADO reasignado a otro cliente
+  pedidoOrigen    Pedido?      @relation("Reasignacion", fields: [pedidoOrigenId], references: [id])
+  pedidoOrigenId  Int?
+  reasignaciones  Pedido[]     @relation("Reasignacion")
+
+  // Campos previstos para AFIP/ARCA (fuera de alcance, CLAUDE.md módulo 1 §3)
+  cuit           String?
+  condicionIva   String?
+  nroComprobante String?
+  // Canal de origen (WhatsApp es futuro lejano — hoy siempre mostrador)
+  canalOrigen    String  @default("MOSTRADOR")
+
+  items   ItemDePedido[]
+  pagos   Pago[]
+  tickets TicketCocina[]
+
+  fechaCreacion DateTime  @default(now())
+  fechaCierre   DateTime?
+
+  @@index([sucursalId, estado])
+  @@index([turnoId])
+  @@map("pedidos")
+}
+
+model ItemDePedido {
+  id               Int            @id @default(autoincrement())
+  pedido           Pedido         @relation(fields: [pedidoId], references: [id])
+  pedidoId         Int
+  // Cubre productos normales Y combos (Producto.tipo=COMBO) — no hay comboId
+  producto         Producto       @relation(fields: [productoId], references: [id])
+  productoId       Int
+  cantidad         Decimal        @db.Decimal(12, 3)
+  // Precio CONGELADO al confirmar el pedido — no se recalcula si el precio cambia después
+  precioUnitario   Decimal        @db.Decimal(12, 2)
+  aclaraciones     String?
+  esVentaCostoCero Boolean        @default(false)
+  tipoCostoCero    TipoCostoCero?
+
+  @@map("items_pedido")
+}
+
+model Pago {
+  id        Int       @id @default(autoincrement())
+  pedido    Pedido    @relation(fields: [pedidoId], references: [id])
+  pedidoId  Int
+  medio     MedioPago
+  monto     Decimal   @db.Decimal(12, 2)
+  fechaHora DateTime  @default(now())
+
+  @@map("pagos")
+}
+
+// Regalías / productos sin cargo. Descuenta stock igual que una venta
+// (MovimientoStock tipo ATENCION) pero no genera Pago.
+model Atencion {
+  id            Int      @id @default(autoincrement())
+  turno         Turno    @relation(fields: [turnoId], references: [id])
+  turnoId       Int
+  sucursal      Sucursal @relation(fields: [sucursalId], references: [id])
+  sucursalId    Int
+  producto      Producto @relation(fields: [productoId], references: [id])
+  productoId    Int
+  cantidad      Decimal  @db.Decimal(12, 3)
+  motivoCodigo  String
+  motivoDetalle String?
+  usuario       Usuario  @relation(fields: [usuarioId], references: [id])
+  usuarioId     Int
+  fechaHora     DateTime @default(now())
+
+  @@map("atenciones")
+}
+
+model GastoDeCaja {
+  id          Int       @id @default(autoincrement())
+  turno       Turno     @relation(fields: [turnoId], references: [id])
+  turnoId     Int
+  monto       Decimal   @db.Decimal(12, 2)
+  medio       MedioPago // Solo EFECTIVO o MERCADO_PAGO en la práctica (validado en servicio)
+  categoria   String
+  descripcion String?
+  usuario     Usuario   @relation(fields: [usuarioId], references: [id])
+  usuarioId   Int
+  fechaHora   DateTime  @default(now())
+
+  @@map("gastos_caja")
+}
+
+model RetiroDeCaja {
+  id              Int         @id @default(autoincrement())
+  turno           Turno       @relation(fields: [turnoId], references: [id])
+  turnoId         Int
+  monto           Decimal     @db.Decimal(12, 2)
+  medio           MedioPago
+  socio           SocioRetiro // Selector cerrado — nunca texto libre
+  usuarioCajero   Usuario     @relation(fields: [usuarioCajeroId], references: [id])
+  usuarioCajeroId Int
+  fechaHora       DateTime    @default(now())
+
+  @@map("retiros_caja")
+}
+
+// Registra "se tiraron X pollos a la parrilla": fresco -> marcado. Dentro de
+// la misma transacción genera 2 MovimientoStock (tipo MARCADO_POLLO): uno
+// negativo sobre "Pollo a la leña (entero)" y uno positivo sobre "Pollo a la
+// leña (entero) — MARCADO" (producto nuevo del seed, ver plan del módulo 2).
+model EventoMarcadoPollo {
+  id         Int      @id @default(autoincrement())
+  turno      Turno    @relation(fields: [turnoId], references: [id])
+  turnoId    Int
+  sucursal   Sucursal @relation(fields: [sucursalId], references: [id])
+  sucursalId Int
+  cantidad   Decimal  @db.Decimal(12, 3)
+  usuario    Usuario  @relation(fields: [usuarioId], references: [id])
+  usuarioId  Int
+  fechaHora  DateTime @default(now())
+
+  @@map("eventos_marcado_pollo")
+}
+
+// Snapshot de lo enviado a la comandera (mock ahora, ESC/POS real después).
+model TicketCocina {
+  id             Int        @id @default(autoincrement())
+  pedido         Pedido     @relation(fields: [pedidoId], references: [id])
+  pedidoId       Int
+  tipo           TipoTicket
+  contenido      Json
+  fechaHora      DateTime   @default(now())
+  impreso        Boolean    @default(false)
+  errorImpresion String?
+
+  @@map("tickets_cocina")
+}
+
+model ConfiguracionStockMinimo {
+  id         Int      @id @default(autoincrement())
+  producto   Producto @relation(fields: [productoId], references: [id])
+  productoId Int
+  sucursal   Sucursal @relation(fields: [sucursalId], references: [id])
+  sucursalId Int
+  minimo     Decimal  @db.Decimal(12, 3)
+  activa     Boolean  @default(true)
+
+  @@unique([productoId, sucursalId])
+  @@map("configuraciones_stock_minimo")
 }
