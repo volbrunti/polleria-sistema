@@ -20,9 +20,8 @@ El cliente entregó la especificación completa del Módulo 2 (secciones 1 a 12 
 8. El resto del borrador (enums de estado, la lógica de negocio completa de las secciones 4–9 de abajo) se preserva tal cual — está bien pensado y es consistente con las reglas ya validadas del Módulo 1.
 
 **Progreso de implementación** (se actualiza en cada fase, ver plan en `C:\Users\brusc\.claude\plans\recursive-sniffing-quail.md` del lado de quien lo desarrolla, o pedir el resumen):
-- ✅ Fase 0: rama `feature/modulo-2` creada.
-- 🔄 Fase 0: branch de Neon `modulo-2-dev` — pendiente de que el cliente/equipo la cree desde el dashboard y pase el connection string.
-- 🔄 Fase 1: schema completo escrito y validado (`npx prisma validate` OK), falta correr la migración contra la branch de Neon del módulo.
+- ✅ Fase 0: rama `feature/modulo-2` creada. Branch de Neon `modulo-2-dev` creada (copia de `production` con datos + schema al 2026-07-17), `.env` local apuntando a ella (la URL de `production` queda comentada arriba en el mismo archivo para volver fácil al Módulo 1).
+- ✅ Fase 1: schema completo escrito, validado y migrado contra `modulo-2-dev` (migración `20260717195901_modulo_2_turnos_pedidos_caja`). Seed corrido: 81 productos (incluye "Pollo a la leña (entero) — MARCADO"), 7 usuarios. Las 13 tablas nuevas verificadas y accesibles.
 - ⬜ Fases 2–9: pendientes.
 
 ---
