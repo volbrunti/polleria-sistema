@@ -17,6 +17,7 @@ import { produccionRoutes } from './modules/produccion/produccion.routes';
 import { transferenciasRoutes } from './modules/transferencias/transferencias.routes';
 import { auditoriaRoutes } from './modules/auditoria/auditoria.routes';
 import { alertasRoutes } from './modules/alertas/alertas.routes';
+import { turnosRoutes, clavesEmergenciaRoutes } from './modules/turnos/turnos.routes';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -57,6 +58,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(transferenciasRoutes, { prefix: '/api/transferencias' });
   await app.register(auditoriaRoutes, { prefix: '/api/auditoria' });
   await app.register(alertasRoutes, { prefix: '/api/alertas' });
+  // Módulo 2
+  await app.register(turnosRoutes, { prefix: '/api/turnos' });
+  await app.register(clavesEmergenciaRoutes, { prefix: '/api/claves-emergencia' });
 
   return app;
 }

@@ -33,6 +33,13 @@ export function emitirAlerta(alerta: { id: number; tipo: TipoAlerta; detalle: un
   io?.to(SALA_ADMIN).emit('alerta:nueva', alerta);
 }
 
+// Eventos del módulo 2 dirigidos a los administradores (turno:bloqueado,
+// turno:desbloqueado, etc.). Las salas por sucursal para el POS del cajero
+// llegan con el frontend del módulo 2 (Fase 6) — pendiente documentado.
+export function emitirAAdmins(evento: string, payload: unknown) {
+  io?.to(SALA_ADMIN).emit(evento, payload);
+}
+
 export async function listar(filtros: { vista?: boolean; tipo?: TipoAlerta }) {
   return prisma.alerta.findMany({
     where: { vista: filtros.vista, tipo: filtros.tipo },
