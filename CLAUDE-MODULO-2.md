@@ -460,7 +460,8 @@ El módulo 1 ya tiene Socket.io configurado para alertas en tiempo real. Extende
 
 ## 11. PENDIENTES CONOCIDOS (no bloquean el módulo 2)
 
-- Heredados del Módulo 1: receta real de la empanada de pollo, peso real de una milanesa individual, cookie de refresh `sameSite: strict`, fotos de remito en disco local, persona concreta para el rol ENCARGADO, plan de costeo Fases B/C.
+- Heredados del Módulo 1: peso real de una milanesa individual, cookie de refresh `sameSite: strict`, fotos de remito en disco local, persona concreta para el rol ENCARGADO, plan de costeo Fases B/C. (~~Receta real de la empanada de pollo~~: ✅ resuelta el 2026-07-18, cargada en el seed — ver CLAUDE.md §11.)
+- **Antes de desplegar a producción**: revisar **`PRODUCCION-CHECKLIST.md`** (raíz del repo) ítem por ítem — fotos de remito a S3/R2, cookie `sameSite`, secrets JWT, usuarios del seed con contraseñas conocidas, ícono PWA, CORS, migraciones.
 - **Nuevo — modelado del pollo marcado (corrección #6 de §0)**: no validado con el cliente, repreguntar sobre el destino de la "otra mitad" cuando se vende un medio.
 - Bebidas: sin precio fijo en el negocio, definir si tienen precio variable o si se cargan manualmente por turno.
 - Hardware de impresoras: el cliente no las compró todavía. La comandera se mockea en consola y la arquitectura permite enchufar el hardware real después.
