@@ -6,6 +6,7 @@ import { NOMBRE_POLLO_ENTERO, NOMBRE_POLLO_MARCADO } from '../../lib/constantes'
 import { obtenerStock } from '../stock/stock.service';
 import { resolverSucursalOperativa, exigirTurnoAbierto } from '../turnos/turnos.service';
 import { resolverRequerimientosStock, validarStockRequerido } from '../pedidos/pedidos.service';
+import * as stockMinimoService from '../stock-minimo/stock-minimo.service';
 
 // Operaciones del turno que no son pedidos (CLAUDE-MODULO-2.md §4.8–§4.10 y
 // §5.2): atenciones/regalías, gastos, retiros, marcado de pollos y ventas a
@@ -69,6 +70,8 @@ export async function registrarAtencion(params: {
       });
     }
 
+    const stockMinimo = await stockMinimoService.evaluarTrasDescuento(tx, { sucursalId, descontado: reqs });
+
     await registrarAuditoria(tx, {
       accion: 'REGISTRAR_ATENCION',
       entidad: 'Atencion',
@@ -82,8 +85,11 @@ export async function registrarAtencion(params: {
       },
     });
 
-    return atencion;
-  }, OPCIONES_TX);
+    return { atencion, stockMinimo };
+  }, OPCIONES_TX).then((r) => {
+    stockMinimoService.emitirAlertasStockMinimo(r.stockMinimo.alertas);
+    return { ...r.atencion, avisosStockMinimo: r.stockMinimo.avisos };
+  });
 }
 
 // ── §5.2 Gastos de caja ──

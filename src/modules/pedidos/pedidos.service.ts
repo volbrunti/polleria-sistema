@@ -14,6 +14,8 @@ import {
   esModificable,
 } from './pedidos.calculos';
 import { emitirTicket } from './comandera';
+import * as stockMinimoService from '../stock-minimo/stock-minimo.service';
+import * as alertasService from '../alertas/alertas.service';
 
 const CERO = new Prisma.Decimal(0);
 const MEDIO_POLLO = new Prisma.Decimal('0.5');
@@ -199,7 +201,7 @@ export async function confirmarPedido(params: {
     });
   }
 
-  return prisma.$transaction(async (tx) => {
+  const resultado = await prisma.$transaction(async (tx) => {
     const turno = await exigirTurnoAbierto(sucursalId, tx);
 
     const reqs = await resolverRequerimientosStock(
@@ -229,6 +231,9 @@ export async function confirmarPedido(params: {
 
     await crearMovimientos(tx, { reqs, sucursalId, usuarioId: params.usuarioId, pedidoId: pedido.id, tipo: 'VENTA' });
 
+    // avisos repetidos en cada venta + alerta al admin solo al cruzar el umbral
+    const stockMinimo = await stockMinimoService.evaluarTrasDescuento(tx, { sucursalId, descontado: reqs });
+
     await emitirTicket(tx, {
       pedidoId: pedido.id,
       tipo: 'NUEVO',
@@ -248,8 +253,13 @@ export async function confirmarPedido(params: {
       datosNuevos: snapshotPedido(pedido),
     });
 
-    return pedido;
+    return { pedido, stockMinimo };
   }, OPCIONES_TX);
+
+  stockMinimoService.emitirAlertasStockMinimo(resultado.stockMinimo.alertas);
+  alertasService.emitirAAdmins('ticket:nuevo', { pedidoId: resultado.pedido.id });
+
+  return { ...resultado.pedido, avisosStockMinimo: resultado.stockMinimo.avisos };
 }
 
 // ── FLUJO 4.6 — Modificar pedido confirmado ──
@@ -290,7 +300,7 @@ export async function modificarPedido(params: { pedidoId: number; items: ItemInp
     lineas.push({ ...item, montoTotal, precioUnitario: precioUnitarioReferencia(montoTotal, item.cantidad) });
   }
 
-  return prisma.$transaction(async (tx) => {
+  const resultado = await prisma.$transaction(async (tx) => {
     const reqsAnteriores = await resolverRequerimientosStock(
       tx,
       existente.items.map((i) => ({ productoId: i.productoId, cantidad: i.cantidad })),
@@ -331,6 +341,11 @@ export async function modificarPedido(params: { pedidoId: number; items: ItemInp
     await crearMovimientos(tx, { reqs: extra, sucursalId: existente.sucursalId, usuarioId: params.usuarioId, pedidoId: existente.id, tipo: 'VENTA' });
     await crearMovimientos(tx, { reqs: reponer, sucursalId: existente.sucursalId, usuarioId: params.usuarioId, pedidoId: existente.id, tipo: 'ANULACION_REPOSICION' });
 
+    const stockMinimo = await stockMinimoService.evaluarTrasDescuento(tx, {
+      sucursalId: existente.sucursalId,
+      descontado: extra,
+    });
+
     await emitirTicket(tx, {
       pedidoId: existente.id,
       tipo: 'ACTUALIZACION',
@@ -351,8 +366,13 @@ export async function modificarPedido(params: { pedidoId: number; items: ItemInp
       datosNuevos: snapshotPedido(actualizado),
     });
 
-    return actualizado;
+    return { pedido: actualizado, stockMinimo };
   }, OPCIONES_TX);
+
+  stockMinimoService.emitirAlertasStockMinimo(resultado.stockMinimo.alertas);
+  alertasService.emitirAAdmins('ticket:actualizacion', { pedidoId: existente.id });
+
+  return { ...resultado.pedido, avisosStockMinimo: resultado.stockMinimo.avisos };
 }
 
 // ── FLUJO 4.7 — Cobro (pagos combinables + vuelto automático) ──
@@ -556,13 +576,13 @@ export async function anularPedido(params: { pedidoId: number; usuarioId: number
     throw Errores.estadoPedidoInvalido(pedido.estado, 'ANULADO');
   }
 
-  return prisma.$transaction(async (tx) => {
+  const anulado = await prisma.$transaction(async (tx) => {
     const reqs = await resolverRequerimientosStock(
       tx,
       pedido.items.map((i) => ({ productoId: i.productoId, cantidad: i.cantidad })),
     );
 
-    const anulado = await tx.pedido.update({
+    const actualizado = await tx.pedido.update({
       where: { id: pedido.id },
       data: { estado: 'ANULADO', fechaCierre: new Date() },
       include: INCLUDE_PEDIDO,
@@ -597,8 +617,11 @@ export async function anularPedido(params: { pedidoId: number; usuarioId: number
       datosNuevos: { estado: 'ANULADO' },
     });
 
-    return anulado;
+    return actualizado;
   }, OPCIONES_TX);
+
+  alertasService.emitirAAdmins('ticket:anulacion', { pedidoId: pedido.id });
+  return anulado;
 }
 
 // ── Consultas ──

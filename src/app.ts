@@ -20,6 +20,7 @@ import { alertasRoutes } from './modules/alertas/alertas.routes';
 import { turnosRoutes, clavesEmergenciaRoutes } from './modules/turnos/turnos.routes';
 import { pedidosRoutes } from './modules/pedidos/pedidos.routes';
 import { cajaRoutes } from './modules/caja/caja.routes';
+import { stockMinimoRoutes } from './modules/stock-minimo/stock-minimo.routes';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -66,6 +67,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(pedidosRoutes, { prefix: '/api/pedidos' });
   // atenciones, gastos-caja, retiros-caja, marcado-pollos, costo-cero
   await app.register(cajaRoutes, { prefix: '/api' });
+  await app.register(stockMinimoRoutes, { prefix: '/api/config-stock-minimo' });
 
   return app;
 }

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git clone *)",
+      "Bash(ls -la /tmp/polleria-clone | head -30)",
+      "Bash(rmdir /tmp/polleria-clone 2>&1; git status && git log --oneline -5)"
+    ]
+  }
+}
