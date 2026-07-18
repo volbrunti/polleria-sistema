@@ -45,4 +45,21 @@ export const Errores = {
   // se usó, expiró o es de otro turno (control ciego / no dar pistas).
   claveInvalida: () =>
     new AppError('CLAVE_INVALIDA', 'La clave no es válida o ya no puede usarse', 400),
+  // ── Módulo 2 — Pedidos/POS ──
+  estadoPedidoInvalido: (desde: string, hacia: string) =>
+    new AppError('ESTADO_PEDIDO_INVALIDO', `Un pedido ${desde} no puede pasar a ${hacia}`, 409),
+  pedidoNoModificable: (estado: string) =>
+    new AppError('PEDIDO_NO_MODIFICABLE', `Un pedido ${estado} ya no puede modificarse`, 409),
+  productoSinPrecio: (nombre: string, cantidad?: number) =>
+    new AppError(
+      'PRODUCTO_SIN_PRECIO',
+      cantidad
+        ? `"${nombre}" no tiene precio cargado que cubra ${cantidad} unidades`
+        : `"${nombre}" no tiene precio de venta cargado`,
+      400,
+    ),
+  pagoInsuficiente: () =>
+    new AppError('PAGO_INSUFICIENTE', 'Los pagos no cubren el total del pedido', 400),
+  vueltoSinEfectivo: () =>
+    new AppError('VUELTO_SIN_EFECTIVO', 'El vuelto no puede superar el efectivo recibido', 400),
 };

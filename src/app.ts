@@ -18,6 +18,7 @@ import { transferenciasRoutes } from './modules/transferencias/transferencias.ro
 import { auditoriaRoutes } from './modules/auditoria/auditoria.routes';
 import { alertasRoutes } from './modules/alertas/alertas.routes';
 import { turnosRoutes, clavesEmergenciaRoutes } from './modules/turnos/turnos.routes';
+import { pedidosRoutes } from './modules/pedidos/pedidos.routes';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -61,6 +62,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   // Módulo 2
   await app.register(turnosRoutes, { prefix: '/api/turnos' });
   await app.register(clavesEmergenciaRoutes, { prefix: '/api/claves-emergencia' });
+  await app.register(pedidosRoutes, { prefix: '/api/pedidos' });
 
   return app;
 }

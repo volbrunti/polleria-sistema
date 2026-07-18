@@ -657,7 +657,12 @@ model ItemDePedido {
   producto         Producto       @relation(fields: [productoId], references: [id])
   productoId       Int
   cantidad         Decimal        @db.Decimal(12, 3)
-  // Precio CONGELADO al confirmar el pedido — no se recalcula si el precio cambia después
+  // Total CONGELADO de la línea al confirmar — fuente de verdad del cobro.
+  // Con la tabla de precio por volumen (Precio.cantidad) el total de N
+  // unidades NO es N × unitario (ej: 6 empanadas $8.500 ≠ 6 × $1.600), por
+  // eso se congela el total y el unitario queda solo como referencia.
+  montoTotal       Decimal        @db.Decimal(12, 2)
+  // Referencia informativa: montoTotal / cantidad redondeado a 2 decimales
   precioUnitario   Decimal        @db.Decimal(12, 2)
   aclaraciones     String?
   esVentaCostoCero Boolean        @default(false)

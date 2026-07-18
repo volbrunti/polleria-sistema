@@ -86,7 +86,11 @@ export async function abrirTurno(params: {
     });
     if (activo) throw Errores.turnoYaActivo();
 
-    // Referencia ciega: el cierre del último turno CERRADO de esta sucursal
+    // Referencia ciega: el cierre del último turno CERRADO de esta sucursal.
+    // Primer turno de la historia: efectivo 0 (no hay registro previo de
+    // plata) y pollos = stock ACTUAL del producto MARCADO (0 en una
+    // instalación fresca; si el sistema arranca con pollos ya en la parrilla
+    // cargados por ajuste/marcado, no genera un bloqueo espurio).
     const turnoAnterior = await tx.turno.findFirst({
       where: { sucursalId, estado: 'CERRADO' },
       orderBy: { fechaCierre: 'desc' },
@@ -96,7 +100,21 @@ export async function abrirTurno(params: {
       turnoAnterior?.arqueos.find((a) => a.tipo === tipo)?.valorContado ?? CERO;
 
     const esperadoEfectivo = cierreAnterior('EFECTIVO');
-    const esperadoPollos = cierreAnterior('POLLOS_MARCADOS');
+    let esperadoPollos: Prisma.Decimal;
+    if (turnoAnterior) {
+      esperadoPollos = cierreAnterior('POLLOS_MARCADOS');
+    } else {
+      const marcado = await productoPolloMarcado(tx);
+      if (marcado) {
+        const agg = await tx.movimientoStock.aggregate({
+          where: { productoId: marcado.id, sucursalId },
+          _sum: { cantidad: true },
+        });
+        esperadoPollos = agg._sum.cantidad ?? CERO;
+      } else {
+        esperadoPollos = CERO;
+      }
+    }
 
     const arqueoEfectivo = calcularArqueo(new Prisma.Decimal(params.conteoEfectivo), esperadoEfectivo);
     const arqueoPollos = calcularArqueo(new Prisma.Decimal(params.conteoPollosMarcados), esperadoPollos);
