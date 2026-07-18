@@ -129,6 +129,7 @@ async function main() {
     { nombre: 'Cebolla (kg)', categoria: 'Verduras', tipo: 'MATERIA_PRIMA', unidad: 'KG' },
     { nombre: 'Zanahoria (kg)', categoria: 'Verduras', tipo: 'MATERIA_PRIMA', unidad: 'KG' },
     { nombre: 'Pimiento (kg)', categoria: 'Verduras', tipo: 'MATERIA_PRIMA', unidad: 'KG' },
+    { nombre: 'Verdeo (kg)', categoria: 'Verduras', tipo: 'MATERIA_PRIMA', unidad: 'KG' },
     { nombre: 'Limón (kg)', categoria: 'Verduras', tipo: 'MATERIA_PRIMA', unidad: 'KG' },
     { nombre: 'Pepinillos (kg)', categoria: 'Conservas', tipo: 'MATERIA_PRIMA', unidad: 'KG' },
     { nombre: 'Aceitunas (kg)', categoria: 'Conservas', tipo: 'MATERIA_PRIMA', unidad: 'KG' },
@@ -478,18 +479,23 @@ async function main() {
     ],
   });
 
-  // Empanada de pollo: ~60g pechuga por empanada — SIGUE SIENDO ESTIMACIÓN:
-  // el Excel de costos solo trae la receta de la de carne, y la pregunta 2
-  // del 2026-07-16 quedó sin responder (ver CLAUDE.md §11). Desperdicio 0%
-  // por indicación general del cliente (2026-07-17).
+  // Empanada de pollo — receta REAL del cliente (2026-07-18, foto de su
+  // planilla de costos): 2,5 pollos enteros + 72 discos + 3 kg cebolla +
+  // 3 pimientos + ¼ kg verdeo + 12 huevos → 72 empanadas (6 docenas).
+  // Pimiento: la receta lo da en unidades; se estimó 200 g c/u (0,6 kg por
+  // tanda) porque el catálogo lo maneja en kg — calibrar con lotes reales.
+  // Desperdicio 0% por indicación general del cliente (2026-07-17).
   await asegurarFicha('Empanada de pollo', {
-    rendimientoEsperado: 16.6, // ~16-17 empanadas por kg de pechuga
+    rendimientoEsperado: 28.8, // 72 empanadas por 2,5 pollos enteros
     desperdicioEsperadoPct: 0,
     umbralDesvioAlertaPct: 12,
     ingredientes: [
-      { insumo: 'Pechuga de pollo (kg)', cantidad: 0.06, esPrincipal: true },
-      { insumo: 'Harina (kg)', cantidad: 0.04, esPrincipal: false },
-      { insumo: 'Huevo', cantidad: 0.1, esPrincipal: false },
+      { insumo: 'Pollo entero fresco', cantidad: 0.0347, esPrincipal: true }, // 2,5 / 72
+      { insumo: 'Disco de empanada', cantidad: 1, esPrincipal: false },
+      { insumo: 'Cebolla (kg)', cantidad: 0.0417, esPrincipal: false }, // 3 kg / 72
+      { insumo: 'Pimiento (kg)', cantidad: 0.0083, esPrincipal: false }, // 0,6 kg / 72 (estimado)
+      { insumo: 'Verdeo (kg)', cantidad: 0.0035, esPrincipal: false }, // 0,25 kg / 72
+      { insumo: 'Huevo', cantidad: 0.1667, esPrincipal: false }, // 12 / 72
     ],
   });
 
