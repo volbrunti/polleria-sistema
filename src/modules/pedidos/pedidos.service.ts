@@ -35,13 +35,14 @@ const INCLUDE_PEDIDO = {
 // Un combo descuenta cada componente, nunca el combo. El pollo (entero o
 // medio) descuenta del producto MARCADO, nunca del fresco — también cuando
 // viene adentro de un combo.
-type Requerimiento = Map<number, Prisma.Decimal>; // productoId → cantidad a descontar
+export type Requerimiento = Map<number, Prisma.Decimal>; // productoId → cantidad a descontar
 
 function agregar(reqs: Requerimiento, productoId: number, cantidad: Prisma.Decimal) {
   reqs.set(productoId, (reqs.get(productoId) ?? CERO).plus(cantidad));
 }
 
-async function resolverRequerimientosStock(
+// Exportado: lo reutilizan atenciones y ventas a costo cero (módulo caja)
+export async function resolverRequerimientosStock(
   tx: TxClient,
   items: { productoId: number; cantidad: Prisma.Decimal }[],
 ): Promise<Requerimiento> {
@@ -75,7 +76,7 @@ async function resolverRequerimientosStock(
   return reqs;
 }
 
-async function validarStockRequerido(tx: TxClient, sucursalId: number, reqs: Requerimiento) {
+export async function validarStockRequerido(tx: TxClient, sucursalId: number, reqs: Requerimiento) {
   for (const [productoId, cantidad] of reqs) {
     const stock = await obtenerStock(productoId, sucursalId, tx);
     if (stock.lessThan(cantidad)) {

@@ -75,13 +75,23 @@ export async function turnosRoutes(app: FastifyInstance) {
     return turnos.map((t) => serializarTurno(t, req.usuario.rol));
   });
 
-  // Resumen financiero completo de un turno (solo admin/socio).
+  // Resumen financiero completo de un turno (solo admin/socio). El serializer
+  // es una whitelist (control ciego) que no conoce las colecciones del
+  // resumen — se adjuntan explícitamente: este endpoint ya está gateado a
+  // roles que ven todo lo financiero.
   app.get('/:id/resumen', { preHandler: [...adminYSocio] }, async (req) => {
     const { id } = paramsId.parse(req.params);
     const resumen = await turnosService.resumenDeTurno(id);
     return {
       ...resumen,
-      turno: serializarTurno(resumen.turno, req.usuario.rol),
+      turno: {
+        ...serializarTurno(resumen.turno, req.usuario.rol),
+        bloqueo: resumen.turno.bloqueo,
+        gastos: resumen.turno.gastos,
+        retiros: resumen.turno.retiros,
+        atenciones: resumen.turno.atenciones,
+        eventosMarcado: resumen.turno.eventosMarcado,
+      },
     };
   });
 }

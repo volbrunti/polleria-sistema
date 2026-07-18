@@ -19,6 +19,7 @@ import { auditoriaRoutes } from './modules/auditoria/auditoria.routes';
 import { alertasRoutes } from './modules/alertas/alertas.routes';
 import { turnosRoutes, clavesEmergenciaRoutes } from './modules/turnos/turnos.routes';
 import { pedidosRoutes } from './modules/pedidos/pedidos.routes';
+import { cajaRoutes } from './modules/caja/caja.routes';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -63,6 +64,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(turnosRoutes, { prefix: '/api/turnos' });
   await app.register(clavesEmergenciaRoutes, { prefix: '/api/claves-emergencia' });
   await app.register(pedidosRoutes, { prefix: '/api/pedidos' });
+  // atenciones, gastos-caja, retiros-caja, marcado-pollos, costo-cero
+  await app.register(cajaRoutes, { prefix: '/api' });
 
   return app;
 }
