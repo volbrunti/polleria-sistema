@@ -1,5 +1,12 @@
 # HANDOFF PARA AUDITORÍA — MÓDULO 2 (POS + Caja y Turnos)
 
+> **ACTUALIZACIÓN 2026-07-20**: la primera auditoría externa YA se hizo y sus
+> hallazgos están aplicados (ver CLAUDE-MODULO-2.md §0 "Auditoría externa
+> aplicada"): salas de socket por sucursal, guard atómico contra carreras,
+> idempotencia en POST /pedidos, y los 8 vectores de §5 cubiertos por
+> `tests/integration/carreras-y-vectores.test.ts` (suite: 196 tests). Una
+> auditoría nueva debería buscar más allá de esos vectores.
+
 > **Para el auditor**: este documento es tu punto de entrada. El contexto de negocio
 > completo está en `CLAUDE.md` (raíz) y `CLAUDE-MODULO-2.md` (spec del módulo 2, con
 > el registro de decisiones en su §0). Leelos antes de auditar. Acá va: qué se

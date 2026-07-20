@@ -9,7 +9,14 @@ export interface ItemPedidoInput {
 
 // Confirmar = crear: el carrito vive en el frontend; este POST descuenta
 // stock, congela precios y emite el ticket a cocina (CLAUDE-MODULO-2.md §4.5).
-export function confirmarPedido(datos: { sucursalId?: number; tipo: TipoPedido; items: ItemPedidoInput[] }) {
+// tokenIdempotencia: UUID por pedido armado — el backend deduplica doble
+// click y retries de red.
+export function confirmarPedido(datos: {
+  sucursalId?: number;
+  tipo: TipoPedido;
+  items: ItemPedidoInput[];
+  tokenIdempotencia?: string;
+}) {
   return apiFetch<Pedido>('/api/pedidos', { method: 'POST', body: datos });
 }
 

@@ -3,6 +3,7 @@ import { Server as SocketServer } from 'socket.io';
 import { buildApp } from './app';
 import { config } from './config';
 import { verificarAccessToken } from './plugins/auth';
+import { prisma } from './lib/prisma';
 import * as alertasService from './modules/alertas/alertas.service';
 
 async function main() {
@@ -28,8 +29,25 @@ async function main() {
   });
 
   io.on('connection', (socket) => {
-    if (socket.data.usuario?.rol === 'ADMINISTRADOR') {
+    const usuario = socket.data.usuario;
+    if (usuario?.rol === 'ADMINISTRADOR') {
       socket.join(alertasService.SALA_ADMIN);
+      return;
+    }
+    // CAJERO/ENCARGADO entran a la sala de SU sucursal (para
+    // turno:desbloqueado y alerta:stock_minimo). La sucursal se relee de la
+    // DB — nunca se confía en el JWT (misma política que los endpoints).
+    if (usuario && (usuario.rol === 'CAJERO' || usuario.rol === 'ENCARGADO')) {
+      void prisma.usuario
+        .findUnique({ where: { id: usuario.id } })
+        .then((u) => {
+          if (u?.activo && u.sucursalId != null) {
+            void socket.join(alertasService.salaSucursal(u.sucursalId));
+          }
+        })
+        .catch(() => {
+          /* best-effort: sin sala, el POS sigue con polling */
+        });
     }
   });
 

@@ -20,6 +20,22 @@ import * as alertasService from '../alertas/alertas.service';
 const CERO = new Prisma.Decimal(0);
 const MEDIO_POLLO = new Prisma.Decimal('0.5');
 
+// Guard atómico contra carreras (doble click / requests en paralelo): el
+// cambio de estado se condiciona al estado LEÍDO antes de la transacción.
+// El UPDATE toma row lock hasta el commit, así que dos transacciones
+// concurrentes se serializan; la que pierde re-evalúa el WHERE contra el
+// estado nuevo, obtiene count=0 y corta acá — sin doble cobro, sin doble
+// reposición de stock, sin pedido reasignado dos veces.
+async function transicionarAtomico(
+  tx: TxClient,
+  pedidoId: number,
+  desde: EstadoPedido,
+  data: Prisma.PedidoUpdateManyMutationInput,
+): Promise<void> {
+  const r = await tx.pedido.updateMany({ where: { id: pedidoId, estado: desde }, data });
+  if (r.count === 0) throw Errores.estadoPedidoInvalido(desde, (data.estado as EstadoPedido) ?? desde);
+}
+
 export interface ItemInput {
   productoId: number;
   cantidad: number;
@@ -168,9 +184,20 @@ export async function confirmarPedido(params: {
   sucursalId?: number;
   tipo: TipoPedido;
   items: ItemInput[];
+  tokenIdempotencia?: string;
 }) {
   if (params.items.length === 0) throw Errores.validacion('El pedido no tiene ítems');
   const sucursalId = await resolverSucursalOperativa(params.usuarioId, params.sucursalId);
+
+  // Idempotencia: si este token ya creó un pedido (doble click, retry de
+  // red), se devuelve ese pedido en vez de duplicar venta y stock.
+  if (params.tokenIdempotencia) {
+    const previo = await prisma.pedido.findUnique({
+      where: { tokenIdempotencia: params.tokenIdempotencia },
+      include: INCLUDE_PEDIDO,
+    });
+    if (previo) return { ...previo, avisosStockMinimo: [] };
+  }
 
   // Precios: fuera de la tx (no cambian en el medio y ahorra round-trips)
   const lineas: {
@@ -216,6 +243,7 @@ export async function confirmarPedido(params: {
         sucursalId,
         tipo: params.tipo,
         usuarioCajeroId: params.usuarioId,
+        tokenIdempotencia: params.tokenIdempotencia,
         items: {
           create: lineas.map((l) => ({
             productoId: l.productoId,
@@ -254,7 +282,24 @@ export async function confirmarPedido(params: {
     });
 
     return { pedido, stockMinimo };
-  }, OPCIONES_TX);
+  }, OPCIONES_TX).catch(async (e) => {
+    // Carrera pura de idempotencia: dos requests con el MISMO token pasaron
+    // el check inicial en paralelo; la que pierde revienta contra el unique
+    // y su transacción se revierte entera (el stock NO se descontó dos
+    // veces). Se le responde el pedido que ganó, como a cualquier retry.
+    if (
+      params.tokenIdempotencia &&
+      e instanceof Prisma.PrismaClientKnownRequestError &&
+      e.code === 'P2002'
+    ) {
+      const previo = await prisma.pedido.findUnique({
+        where: { tokenIdempotencia: params.tokenIdempotencia },
+        include: INCLUDE_PEDIDO,
+      });
+      if (previo) return { pedido: previo, stockMinimo: { avisos: [], alertas: [] } };
+    }
+    throw e;
+  });
 
   stockMinimoService.emitirAlertasStockMinimo(resultado.stockMinimo.alertas);
   alertasService.emitirAAdmins('ticket:nuevo', { pedidoId: resultado.pedido.id });
@@ -301,6 +346,11 @@ export async function modificarPedido(params: { pedidoId: number; items: ItemInp
   }
 
   const resultado = await prisma.$transaction(async (tx) => {
+    // Guard no-op: no cambia el estado pero toma el row lock condicionado al
+    // estado leído — serializa contra un cobro/anulación concurrente (si el
+    // pedido dejó de ser modificable en el medio, corta acá).
+    await transicionarAtomico(tx, existente.id, existente.estado, { estado: existente.estado });
+
     const reqsAnteriores = await resolverRequerimientosStock(
       tx,
       existente.items.map((i) => ({ productoId: i.productoId, cantidad: i.cantidad })),
@@ -412,13 +462,13 @@ export async function cobrarPedido(params: {
       )
       .filter((p) => p.monto.greaterThan(0));
 
+    await transicionarAtomico(tx, pedido.id, pedido.estado, {
+      estado: 'ENTREGADO',
+      fechaCierre: new Date(),
+    });
     const cobrado = await tx.pedido.update({
       where: { id: pedido.id },
-      data: {
-        estado: 'ENTREGADO',
-        fechaCierre: new Date(),
-        pagos: { create: pagosAPersistir },
-      },
+      data: { pagos: { create: pagosAPersistir } },
       include: INCLUDE_PEDIDO,
     });
 
@@ -456,9 +506,9 @@ async function cambiarEstado(params: {
   }
 
   return prisma.$transaction(async (tx) => {
-    const actualizado = await tx.pedido.update({
+    await transicionarAtomico(tx, pedido.id, pedido.estado, { estado: params.hacia });
+    const actualizado = await tx.pedido.findUniqueOrThrow({
       where: { id: pedido.id },
-      data: { estado: params.hacia },
       include: INCLUDE_PEDIDO,
     });
     await registrarAuditoria(tx, {
@@ -495,7 +545,7 @@ export async function reasignarPedido(params: { pedidoId: number; usuarioId: num
   return prisma.$transaction(async (tx) => {
     const turno = await exigirTurnoAbierto(original.sucursalId, tx);
 
-    await tx.pedido.update({ where: { id: original.id }, data: { estado: 'REASIGNADO' } });
+    await transicionarAtomico(tx, original.id, original.estado, { estado: 'REASIGNADO' });
 
     const nuevo = await tx.pedido.create({
       data: {
@@ -543,13 +593,16 @@ export async function marcarPerdido(params: { pedidoId: number; usuarioId: numbe
   }
 
   return prisma.$transaction(async (tx) => {
+    await transicionarAtomico(tx, pedido.id, pedido.estado, {
+      estado: 'PERDIDO',
+      fechaCierre: new Date(),
+    });
     await tx.itemDePedido.updateMany({
       where: { pedidoId: pedido.id },
       data: { esVentaCostoCero: true, tipoCostoCero: 'DESPERDICIO_QUEMADO' },
     });
-    const actualizado = await tx.pedido.update({
+    const actualizado = await tx.pedido.findUniqueOrThrow({
       where: { id: pedido.id },
-      data: { estado: 'PERDIDO', fechaCierre: new Date() },
       include: INCLUDE_PEDIDO,
     });
     await registrarAuditoria(tx, {
@@ -577,14 +630,20 @@ export async function anularPedido(params: { pedidoId: number; usuarioId: number
   }
 
   const anulado = await prisma.$transaction(async (tx) => {
+    // El guard va PRIMERO: dos anulaciones en paralelo repondrían el stock
+    // dos veces — la que pierde la carrera corta acá.
+    await transicionarAtomico(tx, pedido.id, pedido.estado, {
+      estado: 'ANULADO',
+      fechaCierre: new Date(),
+    });
+
     const reqs = await resolverRequerimientosStock(
       tx,
       pedido.items.map((i) => ({ productoId: i.productoId, cantidad: i.cantidad })),
     );
 
-    const actualizado = await tx.pedido.update({
+    const actualizado = await tx.pedido.findUniqueOrThrow({
       where: { id: pedido.id },
-      data: { estado: 'ANULADO', fechaCierre: new Date() },
       include: INCLUDE_PEDIDO,
     });
 

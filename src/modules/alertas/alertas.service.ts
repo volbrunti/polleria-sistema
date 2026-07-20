@@ -34,10 +34,22 @@ export function emitirAlerta(alerta: { id: number; tipo: TipoAlerta; detalle: un
 }
 
 // Eventos del módulo 2 dirigidos a los administradores (turno:bloqueado,
-// turno:desbloqueado, etc.). Las salas por sucursal para el POS del cajero
-// llegan con el frontend del módulo 2 (Fase 6) — pendiente documentado.
+// turno:desbloqueado, etc.).
 export function emitirAAdmins(evento: string, payload: unknown) {
   io?.to(SALA_ADMIN).emit(evento, payload);
+}
+
+// Sala por sucursal: la escuchan los POS de CAJERO/ENCARGADO de ese local
+// (server.ts los suma al conectar, releyendo la sucursal de la DB). Solo
+// para eventos operativos NO ciegos: turno:desbloqueado (el cajero ya sabe
+// que estaba bloqueado) y alerta:stock_minimo (el pop-up del POS es parte
+// de la spec §6.6 — no revela nada financiero).
+export function salaSucursal(sucursalId: number) {
+  return `sucursal:${sucursalId}`;
+}
+
+export function emitirASucursal(sucursalId: number, evento: string, payload: unknown) {
+  io?.to(salaSucursal(sucursalId)).emit(evento, payload);
 }
 
 export async function listar(filtros: { vista?: boolean; tipo?: TipoAlerta }) {

@@ -12,6 +12,9 @@ const confirmarSchema = z.object({
   sucursalId: z.number().int().positive().optional(),
   tipo: z.enum(['PRESENCIAL', 'A_RETIRAR']),
   items: z.array(itemSchema).min(1),
+  // UUID generado por el POS por cada pedido armado — doble click o retry
+  // de red devuelven el pedido ya creado en vez de duplicarlo
+  tokenIdempotencia: z.string().min(8).max(64).optional(),
 });
 
 const modificarSchema = z.object({ items: z.array(itemSchema).min(1) });

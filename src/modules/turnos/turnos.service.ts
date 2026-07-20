@@ -259,6 +259,9 @@ export async function desbloquearRemoto(params: { turnoId: number; usuarioAdminI
   }, OPCIONES_TX);
 
   alertasService.emitirAAdmins('turno:desbloqueado', { turnoId: turno.id });
+  // Push al POS del local: el cajero bloqueado se entera al instante, sin
+  // esperar el próximo ciclo de polling (§9 — sala por sucursal).
+  alertasService.emitirASucursal(turno.sucursalId, 'turno:desbloqueado', { turnoId: turno.id });
   return actualizado;
 }
 

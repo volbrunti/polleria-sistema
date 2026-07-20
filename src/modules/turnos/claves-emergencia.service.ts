@@ -105,5 +105,6 @@ export async function usarClave(params: { codigo: string; turnoId: number; usuar
   }, OPCIONES_TX);
 
   alertasService.emitirAAdmins('turno:desbloqueado', { turnoId: resultado.id });
+  alertasService.emitirASucursal(resultado.sucursalId, 'turno:desbloqueado', { turnoId: resultado.id });
   return resultado;
 }

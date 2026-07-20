@@ -122,11 +122,14 @@ export async function evaluarTrasDescuento(
   return { avisos, alertas };
 }
 
-// Post-commit: alerta clásica a la sala de admins + evento dedicado (lo
-// escuchará también el POS del local cuando exista su sala, Fase 6)
+// Post-commit: alerta clásica a la sala de admins + evento dedicado a la
+// sala de la sucursal (pop-up en el POS del local, §6.6/§9). El detalle de
+// la alerta trae su sucursalId (se setea en evaluarTrasDescuento).
 export function emitirAlertasStockMinimo(alertas: { id: number; tipo: 'STOCK_MINIMO'; detalle: unknown }[]) {
   for (const alerta of alertas) {
     alertasService.emitirAlerta(alerta);
     alertasService.emitirAAdmins('alerta:stock_minimo', alerta.detalle);
+    const sucursalId = (alerta.detalle as { sucursalId?: number } | null)?.sucursalId;
+    if (sucursalId) alertasService.emitirASucursal(sucursalId, 'alerta:stock_minimo', alerta.detalle);
   }
 }

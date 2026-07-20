@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { turnoActivo } from '../../../api/turnos';
+import { usePosSocket } from '../../../lib/useSocket';
 import { AperturaTurno } from './AperturaTurno';
 import { PantallaBloqueada } from './PantallaBloqueada';
 import { POS } from './POS';
@@ -23,8 +24,13 @@ export function CajaTab({ sucursalId }: Props) {
   const turnoQ = useQuery({
     queryKey: ['turno-activo', sucursalId],
     queryFn: () => turnoActivo(sucursalId),
-    refetchInterval: 20_000, // el desbloqueo remoto del admin llega solo
+    // Respaldo del socket: si el push falla, el desbloqueo igual llega solo
+    refetchInterval: 20_000,
   });
+
+  // Push en vivo: el desbloqueo del admin (remoto o por clave) llega al
+  // instante por la sala de la sucursal — sin esperar el polling.
+  usePosSocket({ onTurnoDesbloqueado: () => void turnoQ.refetch() });
 
   if (turnoQ.isLoading) {
     return <div className="flex flex-1 items-center justify-center text-texto-suave">Cargando…</div>;
