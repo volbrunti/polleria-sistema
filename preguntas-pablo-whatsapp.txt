@@ -1,0 +1,27 @@
+Hola Pablo! Te paso 4 preguntas sobre las fichas técnicas para terminar de cargar bien el sistema. Son cortas, pero necesito la respuesta exacta de cada una para no inventar nada 🙏
+
+*1) Medallones y bifes — ¿dónde se hacen?*
+Los medallones de hamburguesa, hamburlomo, y los bifes de lomo y de pollo: ¿se preparan en la planta de producción central, o se arman directo en cada local?
+(Esto define si van a tener control de stock por partida como el resto, o si el local los prepara al momento).
+
+*2) Receta de la empanada de pollo*
+Para la empanada de carne ya tengo la receta exacta (1 kg de carne molida + 24 tapas + 1 kg de tomate + 1 kg de cebolla = 24 empanadas).
+Necesito lo mismo para la empanada de POLLO: ¿cuánto pollo (en kg o gramos), y qué otros ingredientes lleva por cada tanda de 24 unidades (o la cantidad que uses vos de referencia)?
+
+*3) Desperdicio esperado por producto*
+Cuando producís milanesas, empanadas, medallones, etc. — más allá de lo que rinde la receta, ¿cuánto se pierde normalmente por producto (recorte, grasa, rotura)? Puede ser un % aproximado por cada uno (ej: "milanesa de nalga: se pierde un 5%").
+Si no lo tenés a mano ahora, no hay drama — arrancamos en 0% y lo vamos ajustando con la producción real.
+
+*4) Milanesa del sandwich — ¿es la porción completa?*
+Vi que el sandwich de milanesa lleva 250 g de nalga. Esa cantidad ¿es la milanesa entera común (la misma que se vende sola), o es una porción más chica pensada solo para el sandwich?
+
+Con esto termino de cerrar las fichas técnicas reales. ¡Gracias!
+
+--- PREGUNTAS NUEVAS DEL MÓDULO 2 (caja/POS, 2026-07-20) ---
+
+*5) Pollo cocido que vuelve a producción — ¿cómo lo anotamos?*
+Cuando un pollo cocido no se vende y lo mandan de vuelta a producción (para empanadas, por ej.): ¿les sirve que quede registrado como una "entrada de mercadería" propia (tipo un remito interno "retorno del Local 1 del día X"), así después podemos rastrear qué empanadas salieron de ese pollo? ¿O con saber que volvió alcanza?
+(Esto define cómo se ve en los reportes de trazabilidad.)
+
+*6) Vuelto en caja — ¿necesitan ver el monto bruto?*
+Si un cliente paga $10.000 en efectivo y el vuelto es $500, el sistema guarda que a la caja entraron $9.500 netos (así el arqueo cierra solo). El detalle del billete recibido y el vuelto queda guardado aparte en el registro de auditoría. ¿Les alcanza así o necesitan ver "pagó con $10.000" en algún reporte?
