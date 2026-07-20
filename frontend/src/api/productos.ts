@@ -37,6 +37,11 @@ export function tablaPrecioVigente(productoId: number) {
   return apiFetch<Precio[]>(`/api/productos/${productoId}/precios/vigente`);
 }
 
+// Bulk para el POS: tabla vigente de todos los productos en una sola request.
+export function tablasPrecioVigentes() {
+  return apiFetch<{ productoId: number; precios: Precio[] }[]>('/api/productos/precios-vigentes');
+}
+
 export function crearCombo(datos: {
   nombre: string;
   categoria: string;

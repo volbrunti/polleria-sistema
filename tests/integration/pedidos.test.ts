@@ -489,3 +489,41 @@ describe('RBAC y aislamiento', () => {
     expect(ventas.find((v) => v.producto === 'Pollo a la leña (entero)')?.unidades).toBe('2');
   });
 });
+
+describe('Soporte del POS: más vendidos y precios en bloque', () => {
+  it('GET /pedidos/mas-vendidos rankea por unidades vendidas de la sucursal', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/pedidos/mas-vendidos',
+      headers: auth(f.usuarios.cajero.token),
+    });
+    expect(res.statusCode).toBe(200);
+    const ranking = res.json() as { productoId: number; unidades: string }[];
+    expect(ranking.length).toBeGreaterThan(0);
+    // ordenado desc por unidades
+    const unidades = ranking.map((r) => Number(r.unidades));
+    expect([...unidades].sort((a, b) => b - a)).toEqual(unidades);
+    // la empanada (vendida por docena en este archivo) está en el ranking
+    expect(ranking.some((r) => r.productoId === empanadaId)).toBe(true);
+  });
+
+  it('GET /productos/precios-vigentes devuelve la tabla completa por producto y la puede leer el CAJERO', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/productos/precios-vigentes',
+      headers: auth(f.usuarios.cajero.token),
+    });
+    expect(res.statusCode).toBe(200);
+    const filas = res.json() as { productoId: number; precios: { cantidad: number; monto: string }[] }[];
+    const empanada = filas.find((x) => x.productoId === empanadaId);
+    // la tabla de la empanada trae sus 3 tiers (1/6/12) ordenados por cantidad
+    expect(empanada?.precios.map((p) => p.cantidad)).toEqual([1, 6, 12]);
+  });
+
+  it('PRODUCCION no accede a los endpoints del POS (403)', async () => {
+    for (const url of ['/api/pedidos/mas-vendidos', '/api/productos/precios-vigentes']) {
+      const res = await app.inject({ method: 'GET', url, headers: auth(f.usuarios.produccion.token) });
+      expect(res.statusCode).toBe(403);
+    }
+  });
+});

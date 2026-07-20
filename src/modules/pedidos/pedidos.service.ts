@@ -635,6 +635,24 @@ export async function listarPendientes(params: { usuarioId: number; sucursalId?:
   });
 }
 
+// Ranking de más vendidos de la sucursal (CLAUDE-MODULO-2.md §4.1): el POS
+// ordena su grilla con esto. Se calcula del historial completo de ItemDePedido
+// (pedidos no anulados); un producto sin ventas simplemente no aparece y el
+// frontend lo manda al final.
+export async function masVendidos(params: { usuarioId: number; sucursalId?: number }) {
+  const sucursalId = await resolverSucursalOperativa(params.usuarioId, params.sucursalId);
+  const agregado = await prisma.itemDePedido.groupBy({
+    by: ['productoId'],
+    where: { pedido: { sucursalId, estado: { not: 'ANULADO' } } },
+    _sum: { cantidad: true },
+    orderBy: { _sum: { cantidad: 'desc' } },
+  });
+  return agregado.map((a) => ({
+    productoId: a.productoId,
+    unidades: (a._sum.cantidad ?? new Prisma.Decimal(0)).toString(),
+  }));
+}
+
 export async function obtener(pedidoId: number, usuarioId: number) {
   const pedido = await prisma.pedido.findUnique({ where: { id: pedidoId }, include: INCLUDE_PEDIDO });
   if (!pedido) throw Errores.noEncontrado('Pedido');

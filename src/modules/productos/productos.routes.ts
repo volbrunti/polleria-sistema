@@ -88,6 +88,16 @@ export async function productosRoutes(app: FastifyInstance) {
     },
   );
 
+  // Tablas vigentes de TODOS los productos en una sola respuesta — la usa el
+  // POS (módulo 2) para mostrar precios y totales en vivo. El precio de VENTA
+  // no es dato ciego: el cajero se lo cobra al cliente. El historial y el
+  // resto de datos financieros siguen gateados a ADMIN/SOCIO.
+  app.get(
+    '/precios-vigentes',
+    { preHandler: [app.autenticar, app.requerirRoles('ADMINISTRADOR', 'SOCIO', 'ENCARGADO', 'CAJERO')] },
+    async () => productosService.tablasPrecioVigentes(),
+  );
+
   // Precio vigente por cada cantidad cargada (para productos normales, una
   // sola fila con cantidad=1; para un COMBO, la tabla completa de volumen).
   app.get(

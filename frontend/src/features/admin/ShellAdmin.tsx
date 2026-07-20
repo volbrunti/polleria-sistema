@@ -12,6 +12,8 @@ import { FichasTecnicas } from './FichasTecnicas';
 import { Catalogo } from './Catalogo';
 import { Usuarios } from './Usuarios';
 import { Auditoria } from './Auditoria';
+import { Turnos } from './Turnos';
+import { StockMinimo } from './StockMinimo';
 
 interface ItemNav {
   a: string;
@@ -21,7 +23,9 @@ interface ItemNav {
 
 const ITEMS_NAV: ItemNav[] = [
   { a: 'alertas', label: 'Alertas', soloAdmin: true },
+  { a: 'turnos', label: 'Turnos' },
   { a: 'stock', label: 'Stock' },
+  { a: 'stock-minimo', label: 'Stock mínimo' },
   { a: 'produccion', label: 'Producción' },
   { a: 'transferencias', label: 'Transferencias' },
   { a: 'fichas-tecnicas', label: 'Fichas técnicas' },
@@ -60,7 +64,7 @@ export function ShellAdmin() {
           </div>
           <div>
             <div className="text-[15px] font-extrabold tracking-wide">LIMÓN &amp; CHIMI</div>
-            <div className="text-[11px] text-sidebar-texto">Módulo 1</div>
+            <div className="text-[11px] text-sidebar-texto">Panel de gestión</div>
           </div>
         </div>
 
@@ -103,7 +107,9 @@ export function ShellAdmin() {
         <Routes>
           <Route path="/" element={<Navigate to={inicio} replace />} />
           {esAdmin && <Route path="alertas" element={<Alertas />} />}
+          <Route path="turnos" element={<Turnos puedeEscribir={puedeEscribir} />} />
           <Route path="stock" element={<Stock />} />
+          <Route path="stock-minimo" element={<StockMinimo puedeEscribir={puedeEscribir} />} />
           <Route path="produccion" element={<ProduccionLotes />} />
           <Route path="transferencias" element={<Transferencias />} />
           <Route path="fichas-tecnicas" element={<FichasTecnicas puedeEscribir={puedeEscribir} />} />

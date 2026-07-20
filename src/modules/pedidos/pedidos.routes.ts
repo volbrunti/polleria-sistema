@@ -45,6 +45,12 @@ export async function pedidosRoutes(app: FastifyInstance) {
     return pedidosService.listarPendientes({ usuarioId: req.usuario.id, sucursalId: query.sucursalId });
   });
 
+  // Ranking para ordenar la grilla del POS (§4.1: más vendidos primero)
+  app.get('/mas-vendidos', { preHandler: [...operativos] }, async (req) => {
+    const query = z.object({ sucursalId: z.coerce.number().int().positive().optional() }).parse(req.query);
+    return pedidosService.masVendidos({ usuarioId: req.usuario.id, sucursalId: query.sucursalId });
+  });
+
   app.get('/:id', { preHandler: [...operativos] }, async (req) => {
     const { id } = paramsId.parse(req.params);
     return pedidosService.obtener(id, req.usuario.id);

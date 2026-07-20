@@ -102,6 +102,27 @@ export async function tablaPrecioVigente(productoId: number) {
   return [...vigentePorCantidad.values()].sort((a, b) => a.cantidad - b.cantidad);
 }
 
+// Versión bulk para el POS (una sola request en vez de una por producto):
+// tabla vigente de TODOS los productos que tengan algún precio cargado.
+export async function tablasPrecioVigentes() {
+  const historial = await prisma.precio.findMany({ orderBy: { fechaDesde: 'desc' } });
+  const vigentePorProductoYCantidad = new Map<string, (typeof historial)[number]>();
+  for (const p of historial) {
+    const clave = `${p.productoId}:${p.cantidad}`;
+    if (!vigentePorProductoYCantidad.has(clave)) vigentePorProductoYCantidad.set(clave, p);
+  }
+  const porProducto = new Map<number, (typeof historial)[number][]>();
+  for (const p of vigentePorProductoYCantidad.values()) {
+    const lista = porProducto.get(p.productoId) ?? [];
+    lista.push(p);
+    porProducto.set(p.productoId, lista);
+  }
+  return [...porProducto.entries()].map(([productoId, precios]) => ({
+    productoId,
+    precios: precios.sort((a, b) => a.cantidad - b.cantidad),
+  }));
+}
+
 export async function historialPrecios(productoId: number) {
   return prisma.precio.findMany({
     where: { productoId },
