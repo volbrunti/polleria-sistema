@@ -497,6 +497,7 @@ async function cambiarEstado(params: {
   hacia: EstadoPedido;
   usuarioId: number;
   accion: string;
+  datosExtra?: Prisma.PedidoUpdateManyMutationInput;
 }) {
   const pedido = await prisma.pedido.findUnique({ where: { id: params.pedidoId }, include: INCLUDE_PEDIDO });
   if (!pedido) throw Errores.noEncontrado('Pedido');
@@ -506,7 +507,7 @@ async function cambiarEstado(params: {
   }
 
   return prisma.$transaction(async (tx) => {
-    await transicionarAtomico(tx, pedido.id, pedido.estado, { estado: params.hacia });
+    await transicionarAtomico(tx, pedido.id, pedido.estado, { estado: params.hacia, ...params.datosExtra });
     const actualizado = await tx.pedido.findUniqueOrThrow({
       where: { id: pedido.id },
       include: INCLUDE_PEDIDO,
@@ -527,7 +528,37 @@ export const marcarListo = (pedidoId: number, usuarioId: number) =>
   cambiarEstado({ pedidoId, hacia: 'LISTO', usuarioId, accion: 'MARCAR_PEDIDO_LISTO' });
 
 export const marcarNoRetirado = (pedidoId: number, usuarioId: number) =>
-  cambiarEstado({ pedidoId, hacia: 'LISTO_NO_RETIRADO', usuarioId, accion: 'PEDIDO_NO_RETIRADO' });
+  cambiarEstado({
+    pedidoId,
+    hacia: 'LISTO_NO_RETIRADO',
+    usuarioId,
+    accion: 'PEDIDO_NO_RETIRADO',
+    // Arranca el reloj del timer de aviso al admin (ver pedidosNoRetiradosParaAvisar).
+    datosExtra: { fechaListoNoRetirado: new Date() },
+  });
+
+// ── Timer de pedido no retirado (CLAUDE-MODULO-2.md §9, Fase 9) ──
+// Corrido periódicamente por un job en server.ts. Devuelve los pedidos que
+// llevan más de MINUTOS_PEDIDO_NO_RETIRADO_ALERTA en LISTO_NO_RETIRADO y
+// todavía no generaron el aviso, y los marca como avisados en la misma
+// pasada (evita reemitir el evento en cada corrida del job).
+export async function pedidosNoRetiradosParaAvisar(umbralMinutos: number) {
+  const limite = new Date(Date.now() - umbralMinutos * 60 * 1000);
+  const vencidos = await prisma.pedido.findMany({
+    where: {
+      estado: 'LISTO_NO_RETIRADO',
+      avisoNoRetiradoEmitido: false,
+      fechaListoNoRetirado: { lte: limite },
+    },
+    select: { id: true, sucursalId: true, fechaListoNoRetirado: true },
+  });
+  if (vencidos.length === 0) return [];
+  await prisma.pedido.updateMany({
+    where: { id: { in: vencidos.map((p) => p.id) } },
+    data: { avisoNoRetiradoEmitido: true },
+  });
+  return vencidos;
+}
 
 // ── FLUJO 6.5 — Pedido no retirado: reasignar o perder ──
 

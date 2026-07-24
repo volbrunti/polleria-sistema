@@ -11,6 +11,7 @@ import {
   stockDe,
   type Fixtures,
 } from './helpers';
+import { pedidosNoRetiradosParaAvisar } from '../../src/modules/pedidos/pedidos.service';
 
 // Módulo 2 — Pedidos / POS (CLAUDE-MODULO-2.md §4). Corre en serie: el stock
 // y el turno se encadenan entre tests.
@@ -525,5 +526,81 @@ describe('Soporte del POS: más vendidos y precios en bloque', () => {
       const res = await app.inject({ method: 'GET', url, headers: auth(f.usuarios.produccion.token) });
       expect(res.statusCode).toBe(403);
     }
+  });
+});
+
+describe('Timer de pedido no retirado (CLAUDE-MODULO-2.md §9)', () => {
+  beforeAll(async () => {
+    // el turno se cerró en el describe de arriba y el stock de empanada ya
+    // se consumió a lo largo del archivo — reabre turno y repone stock para
+    // no depender del estado acumulado de ejecución.
+    const prisma = await getPrisma();
+    await prisma.movimientoStock.create({
+      data: {
+        productoId: empanadaId,
+        sucursalId: f.sucursales.local1,
+        tipo: 'AJUSTE',
+        cantidad: new Prisma.Decimal(100),
+        usuarioId: f.usuarios.admin.id,
+        tipoOrigen: 'Ajuste',
+        origenId: 0,
+      },
+    });
+    // debe coincidir con lo contado en el cierre anterior (línea ~480) para
+    // que la apertura ciega no bloquee por discrepancia.
+    const apertura = await app.inject({
+      method: 'POST',
+      url: '/api/turnos/abrir',
+      headers: auth(f.usuarios.cajero.token),
+      payload: { conteoEfectivo: 71000, conteoPollosMarcados: 7.5 },
+    });
+    expect(apertura.json().bloqueado).toBe(false);
+  });
+
+  async function crearPedidoNoRetirado() {
+    const pedido = await app.inject({
+      method: 'POST',
+      url: '/api/pedidos',
+      headers: auth(f.usuarios.cajero.token),
+      payload: { tipo: 'A_RETIRAR', items: [{ productoId: empanadaId, cantidad: 6 }] },
+    });
+    expect(pedido.statusCode).toBe(201);
+    const id = pedido.json().id as number;
+    await app.inject({
+      method: 'POST',
+      url: `/api/pedidos/${id}/marcar-listo`,
+      headers: auth(f.usuarios.cajero.token),
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/api/pedidos/${id}/no-retirado`,
+      headers: auth(f.usuarios.cajero.token),
+    });
+    return id;
+  }
+
+  it('no avisa antes de cumplirse el umbral', async () => {
+    const id = await crearPedidoNoRetirado();
+    const vencidos = await pedidosNoRetiradosParaAvisar(30);
+    expect(vencidos.some((p) => p.id === id)).toBe(false);
+  });
+
+  it('avisa una sola vez cuando ya pasó el umbral, y no reemite en la corrida siguiente', async () => {
+    const id = await crearPedidoNoRetirado();
+    const prisma = await getPrisma();
+    // simula que entró a LISTO_NO_RETIRADO hace 40 minutos
+    await prisma.pedido.update({
+      where: { id },
+      data: { fechaListoNoRetirado: new Date(Date.now() - 40 * 60 * 1000) },
+    });
+
+    const primeraCorrida = await pedidosNoRetiradosParaAvisar(30);
+    expect(primeraCorrida.map((p) => p.id)).toContain(id);
+
+    const segundaCorrida = await pedidosNoRetiradosParaAvisar(30);
+    expect(segundaCorrida.map((p) => p.id)).not.toContain(id);
+
+    const actualizado = await prisma.pedido.findUniqueOrThrow({ where: { id } });
+    expect(actualizado.avisoNoRetiradoEmitido).toBe(true);
   });
 });
