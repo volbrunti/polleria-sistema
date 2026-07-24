@@ -42,6 +42,14 @@ export async function actualizar(
 ) {
   const anterior = await prisma.producto.findUnique({ where: { id } });
   if (!anterior) throw Errores.noEncontrado('Producto');
+  // Productos de sistema (ej. "Pollo a la leña (entero) — MARCADO") sostienen
+  // un mecanismo interno por nombre/actividad — renombrarlos o desactivarlos
+  // rompe ese mecanismo en silencio. Cambiar la categoría sigue permitido.
+  if (anterior.esProductoSistema) {
+    const tocaNombre = datos.nombre !== undefined && datos.nombre !== anterior.nombre;
+    const tocaActivo = datos.activo === false;
+    if (tocaNombre || tocaActivo) throw Errores.productoReservadoSistema(anterior.nombre);
+  }
   return prisma.$transaction(async (tx) => {
     const producto = await tx.producto.update({ where: { id }, data: datos });
     await registrarAuditoria(tx, {

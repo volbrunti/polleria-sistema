@@ -91,6 +91,10 @@ async function main() {
     tipo: Prisma.ProductoCreateInput['tipo'];
     unidad: Prisma.ProductoCreateInput['unidadDeMedida'];
     precio?: number;
+    // Productos que sostienen un mecanismo interno del sistema (ej. el
+    // circuito del pollo marcado) y no deben poder renombrarse/desactivarse
+    // desde el catálogo de admin — ver productos.service.ts::actualizar().
+    esSistema?: boolean;
   };
   const productos: Prod[] = [
     // Materias primas
@@ -149,7 +153,7 @@ async function main() {
     // negativo sobre el fresco y uno positivo acá. La venta (entero o medio)
     // descuenta de ESTE producto, nunca del fresco. Sin precio propio: nunca
     // se vende directamente, es un estado intermedio de stock.
-    { nombre: 'Pollo a la leña (entero) — MARCADO', categoria: 'Pollos', tipo: 'ELABORADO', unidad: 'UNIDAD' },
+    { nombre: 'Pollo a la leña (entero) — MARCADO', categoria: 'Pollos', tipo: 'ELABORADO', unidad: 'UNIDAD', esSistema: true },
     // Porciones elaboradas en Producción central (Excel de costos, 2026-07-13):
     // unidades listas para cocinar que después el local arma como plato/sandwich
     // (el armado de venta es módulo 2). Sin precio propio: no se venden sueltas.
@@ -221,8 +225,14 @@ async function main() {
   for (const p of productos) {
     const creado = await prisma.producto.upsert({
       where: { nombre: p.nombre },
-      update: {},
-      create: { nombre: p.nombre, categoria: p.categoria, tipo: p.tipo, unidadDeMedida: p.unidad },
+      update: p.esSistema ? { esProductoSistema: true } : {},
+      create: {
+        nombre: p.nombre,
+        categoria: p.categoria,
+        tipo: p.tipo,
+        unidadDeMedida: p.unidad,
+        esProductoSistema: p.esSistema ?? false,
+      },
     });
     productosPorNombre.set(p.nombre, creado.id);
     if (p.precio !== undefined) {

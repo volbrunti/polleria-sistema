@@ -24,6 +24,12 @@ export const Errores = {
     new AppError('SUCURSAL_NO_AUTORIZADA', 'No podés operar sobre una transferencia de otra sucursal', 403),
   loteYaCerrado: () => new AppError('LOTE_YA_CERRADO', 'El lote de producción ya está cerrado', 409),
   noEncontrado: (entidad: string) => new AppError('NO_ENCONTRADO', `${entidad} no encontrado/a`, 404),
+  productoReservadoSistema: (nombre: string) =>
+    new AppError(
+      'PRODUCTO_RESERVADO_SISTEMA',
+      `"${nombre}" es un producto de sistema — no puede renombrarse ni desactivarse desde el catálogo`,
+      409,
+    ),
   usuarioConHistorial: () =>
     new AppError(
       'USUARIO_CON_HISTORIAL',

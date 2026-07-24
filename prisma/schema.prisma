@@ -232,6 +232,11 @@ model Producto {
   tipo           TipoProducto
   unidadDeMedida UnidadDeMedida
   activo         Boolean        @default(true)
+  // Productos que el sistema gestiona internamente y ningún admin debería
+  // poder renombrar/desactivar desde el catálogo (ej: "Pollo a la leña
+  // (entero) — MARCADO", que sostiene el circuito de marcado del módulo 2).
+  // Bloqueado en productos.service.ts::actualizar().
+  esProductoSistema Boolean     @default(false)
 
   precios                    Precio[]
   movimientosStock           MovimientoStock[]
@@ -648,6 +653,12 @@ model Pedido {
 
   fechaCreacion DateTime  @default(now())
   fechaCierre   DateTime?
+
+  // Timer de "pedido no retirado" (CLAUDE-MODULO-2.md §9): cuándo entró a
+  // LISTO_NO_RETIRADO y si ya se avisó al admin, para no reemitir el evento
+  // en cada corrida del job periódico.
+  fechaListoNoRetirado   DateTime?
+  avisoNoRetiradoEmitido Boolean   @default(false)
 
   @@index([sucursalId, estado])
   @@index([turnoId])
