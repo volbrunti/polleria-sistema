@@ -46,7 +46,7 @@ export interface Fixtures {
   sucursales: { produccion: number; local1: number; local2: number };
   usuarios: Record<'admin' | 'socio' | 'encargado' | 'cajero' | 'produccion', { id: number; token: string }>;
   productos: { nalga: number; panRallado: number; huevo: number; milanesa: number };
-  proveedores: { normal: number; otro: number };
+  proveedores: { normal: number; otro: number; retorno: number };
   fichaMilanesa: { fichaId: number; versionId: number };
 }
 
@@ -96,6 +96,7 @@ export async function sembrarFixtures(): Promise<Fixtures> {
 
   const proveedorNormal = await prisma.proveedor.create({ data: { nombre: 'Granja San José' } });
   const proveedorOtro = await prisma.proveedor.create({ data: { nombre: 'Otro', esOtro: true } });
+  const proveedorRetorno = await prisma.proveedor.create({ data: { nombre: 'Retorno interno', esProveedorSistema: true } });
 
   // Ficha: 0.18 kg nalga (principal) + 0.05 kg pan + 0.5 huevo por milanesa,
   // 5% desperdicio esperado, umbral de alerta 10%
@@ -126,7 +127,7 @@ export async function sembrarFixtures(): Promise<Fixtures> {
     sucursales: { produccion: produccion.id, local1: local1.id, local2: local2.id },
     usuarios,
     productos: { nalga: nalga.id, panRallado: panRallado.id, huevo: huevo.id, milanesa: milanesa.id },
-    proveedores: { normal: proveedorNormal.id, otro: proveedorOtro.id },
+    proveedores: { normal: proveedorNormal.id, otro: proveedorOtro.id, retorno: proveedorRetorno.id },
     fichaMilanesa: { fichaId: ficha.id, versionId: ficha.versiones[0]!.id },
   };
 }

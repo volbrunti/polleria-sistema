@@ -83,6 +83,11 @@ async function main() {
     update: {},
     create: { nombre: 'Otro', esOtro: true },
   });
+  await prisma.proveedor.upsert({
+    where: { nombre: 'Retorno interno' },
+    update: { esProveedorSistema: true },
+    create: { nombre: 'Retorno interno', esProveedorSistema: true },
+  });
 
   // ── Catálogo de productos ──
   type Prod = {

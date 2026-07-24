@@ -30,6 +30,12 @@ export const Errores = {
       `"${nombre}" es un producto de sistema — no puede renombrarse ni desactivarse desde el catálogo`,
       409,
     ),
+  proveedorReservadoSistema: (nombre: string) =>
+    new AppError(
+      'PROVEEDOR_RESERVADO_SISTEMA',
+      `"${nombre}" es un proveedor de sistema — no puede renombrarse ni desactivarse desde el catálogo`,
+      409,
+    ),
   usuarioConHistorial: () =>
     new AppError(
       'USUARIO_CON_HISTORIAL',

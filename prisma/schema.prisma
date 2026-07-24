@@ -357,6 +357,10 @@ model Proveedor {
   contacto String?
   activo   Boolean @default(true)
   esOtro   Boolean @default(false)
+  // Proveedores virtuales que el sistema usa internamente (ej: "Retorno
+  // interno" para partidas generadas por RETORNO_A_PRODUCCION). No se
+  // pueden renombrar, desactivar ni eliminar desde el catálogo.
+  esProveedorSistema Boolean @default(false)
 
   ingresos IngresoMercaderia[]
 

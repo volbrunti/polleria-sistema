@@ -148,7 +148,7 @@ describe('Circuito del pollo dentro de un turno', () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it('retorno a producción: sale del local y entra a Producción como insumo', async () => {
+  it('retorno a producción: sale del local, entra a Producción y crea LineaIngreso trazable', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/costo-cero',
@@ -158,6 +158,19 @@ describe('Circuito del pollo dentro de un turno', () => {
     expect(res.statusCode).toBe(201);
     expect(await stockDe(polloMarcadoId, f.sucursales.local1)).toBe(1.5);
     expect(await stockDe(polloMarcadoId, f.sucursales.produccion)).toBe(1);
+
+    const prisma = await getPrisma();
+    const proveedorRetorno = await prisma.proveedor.findFirst({ where: { esProveedorSistema: true } });
+    expect(proveedorRetorno).not.toBeNull();
+
+    const ingreso = await prisma.ingresoMercaderia.findFirst({
+      where: { proveedorId: proveedorRetorno!.id },
+      include: { lineas: true },
+    });
+    expect(ingreso).not.toBeNull();
+    expect(ingreso!.lineas).toHaveLength(1);
+    expect(ingreso!.lineas[0].productoId).toBe(polloMarcadoId);
+    expect(ingreso!.lineas[0].cantidadRestanteDisponible.toString()).toBe('1');
   });
 
   it('quemado: medio pollo marcado muere ahí, no entra a ningún lado', async () => {

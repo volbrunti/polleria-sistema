@@ -283,10 +283,6 @@ export async function registrarCostoCero(params: {
     await tx.movimientoStock.update({ where: { id: salida.id }, data: { origenId: salida.id } });
 
     if (params.tipo === 'RETORNO_A_PRODUCCION') {
-      // entra a Producción como insumo (mismo producto — un producto puede ser
-      // vendible e insumo a la vez, CLAUDE.md §9). NOTA pendiente: para que
-      // producción lo consuma por partida haría falta generarle una
-      // LineaIngreso — se define con el cliente (ver CLAUDE-MODULO-2.md §11).
       await tx.movimientoStock.create({
         data: {
           productoId: params.productoId,
@@ -298,6 +294,27 @@ export async function registrarCostoCero(params: {
           origenId: salida.id,
         },
       });
+
+      const proveedorRetorno = await tx.proveedor.findFirst({ where: { esProveedorSistema: true } });
+      if (proveedorRetorno) {
+        const ingreso = await tx.ingresoMercaderia.create({
+          data: {
+            proveedorId: proveedorRetorno.id,
+            sucursalId: sucursalProduccion!.id,
+            usuarioId: params.usuarioId,
+            comentarioProveedorOtro: `Retorno desde sucursal #${sucursalId} — ${producto.nombre}`,
+          },
+        });
+        await tx.lineaIngreso.create({
+          data: {
+            ingresoMercaderiaId: ingreso.id,
+            productoId: params.productoId,
+            cantidadSegunRemito: cantidad,
+            cantidadRealPesada: cantidad,
+            cantidadRestanteDisponible: cantidad,
+          },
+        });
+      }
     }
 
     await registrarAuditoria(tx, {

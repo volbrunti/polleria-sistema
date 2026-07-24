@@ -22,7 +22,7 @@ export async function proveedoresRoutes(app: FastifyInstance) {
   app.get(
     '/',
     { preHandler: [app.autenticar, app.requerirRoles('ADMINISTRADOR', 'SOCIO', 'PRODUCCION', 'ENCARGADO')] },
-    async () => prisma.proveedor.findMany({ where: { activo: true }, orderBy: [{ esOtro: 'asc' }, { nombre: 'asc' }] }),
+    async () => prisma.proveedor.findMany({ where: { activo: true, esProveedorSistema: false }, orderBy: [{ esOtro: 'asc' }, { nombre: 'asc' }] }),
   );
 
   app.post(
@@ -53,6 +53,13 @@ export async function proveedoresRoutes(app: FastifyInstance) {
       const datos = actualizarSchema.parse(req.body);
       const anterior = await prisma.proveedor.findUnique({ where: { id } });
       if (!anterior) throw Errores.noEncontrado('Proveedor');
+      if (anterior.esProveedorSistema) {
+        const tocaNombre = datos.nombre !== undefined && datos.nombre !== anterior.nombre;
+        const tocaActivo = datos.activo === false;
+        if (tocaNombre || tocaActivo) {
+          throw Errores.proveedorReservadoSistema(anterior.nombre);
+        }
+      }
       return prisma.$transaction(async (tx) => {
         const proveedor = await tx.proveedor.update({ where: { id }, data: datos });
         await registrarAuditoria(tx, {
