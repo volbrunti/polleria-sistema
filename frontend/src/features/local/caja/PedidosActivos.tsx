@@ -11,6 +11,7 @@ import {
 import { fmtFechaHora, fmtMoneda, fmtNumero } from '../../../lib/formato';
 import { ApiError } from '../../../api/client';
 import { CobrarPedido } from './CobrarPedido';
+import { ModificarPedido } from './ModificarPedido';
 import type { Pedido } from '../../../api/types';
 
 interface Props {
@@ -28,6 +29,7 @@ const ETIQUETA_ESTADO: Record<string, { texto: string; color: string; bg: string
 export function PedidosActivos({ sucursalId }: Props) {
   const queryClient = useQueryClient();
   const [pedidoACobrar, setPedidoACobrar] = useState<Pedido | null>(null);
+  const [pedidoAModificar, setPedidoAModificar] = useState<Pedido | null>(null);
   const [vuelto, setVuelto] = useState<string | null>(null);
   const [confirmando, setConfirmando] = useState<{ accion: 'anular' | 'perdido'; pedido: Pedido } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -137,6 +139,15 @@ export function PedidosActivos({ sucursalId }: Props) {
                     COBRAR
                   </button>
                 )}
+                {(p.estado === 'EN_PREPARACION' || p.estado === 'LISTO') && (
+                  <button
+                    type="button"
+                    onClick={() => setPedidoAModificar(p)}
+                    className="min-h-12 cursor-pointer rounded-xl border border-borde-fuerte bg-white px-5 text-[15px] font-bold text-texto-suave"
+                  >
+                    Modificar
+                  </button>
+                )}
                 {p.estado === 'LISTO' && (
                   <button
                     type="button"
@@ -188,6 +199,10 @@ export function PedidosActivos({ sucursalId }: Props) {
           }}
           onCancelar={() => setPedidoACobrar(null)}
         />
+      )}
+
+      {pedidoAModificar && (
+        <ModificarPedido pedido={pedidoAModificar} onCerrar={() => setPedidoAModificar(null)} />
       )}
 
       {vuelto !== null && (
