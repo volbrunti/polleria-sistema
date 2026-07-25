@@ -7,6 +7,8 @@ const listarQuery = z.object({
   tipo: z
     .enum(['DESVIO_PRODUCCION', 'DISCREPANCIA_TRANSFERENCIA', 'DISCREPANCIA_CAJA', 'BLOQUEO_TURNO', 'STOCK_MINIMO'])
     .optional(),
+  desde: z.coerce.date().optional(),
+  hasta: z.coerce.date().optional(),
 });
 
 const paramsId = z.object({ id: z.coerce.number().int().positive() });

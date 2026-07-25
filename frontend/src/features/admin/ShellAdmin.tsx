@@ -14,6 +14,8 @@ import { Usuarios } from './Usuarios';
 import { Auditoria } from './Auditoria';
 import { Turnos } from './Turnos';
 import { StockMinimo } from './StockMinimo';
+import { Dashboard } from './Dashboard';
+import { Reportes } from './Reportes';
 
 interface ItemNav {
   a: string;
@@ -22,7 +24,9 @@ interface ItemNav {
 }
 
 const ITEMS_NAV: ItemNav[] = [
+  { a: 'dashboard', label: 'Dashboard' },
   { a: 'alertas', label: 'Alertas', soloAdmin: true },
+  { a: 'reportes', label: 'Reportes' },
   { a: 'turnos', label: 'Turnos' },
   { a: 'stock', label: 'Stock' },
   { a: 'stock-minimo', label: 'Stock mínimo' },
@@ -53,7 +57,7 @@ export function ShellAdmin() {
   useAlertasSocket(onAlertaNueva);
 
   const itemsVisibles = ITEMS_NAV.filter((i) => !i.soloAdmin || esAdmin);
-  const inicio = esAdmin ? 'alertas' : 'stock';
+  const inicio = 'dashboard';
 
   return (
     <div className="flex min-h-screen bg-[#f2f4ee]">
@@ -106,7 +110,9 @@ export function ShellAdmin() {
       <div className="max-w-295 flex-1 overflow-auto p-7">
         <Routes>
           <Route path="/" element={<Navigate to={inicio} replace />} />
+          <Route path="dashboard" element={<Dashboard />} />
           {esAdmin && <Route path="alertas" element={<Alertas />} />}
+          <Route path="reportes" element={<Reportes />} />
           <Route path="turnos" element={<Turnos puedeEscribir={puedeEscribir} />} />
           <Route path="stock" element={<Stock />} />
           <Route path="stock-minimo" element={<StockMinimo puedeEscribir={puedeEscribir} />} />

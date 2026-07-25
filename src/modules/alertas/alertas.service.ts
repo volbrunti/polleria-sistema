@@ -52,9 +52,13 @@ export function emitirASucursal(sucursalId: number, evento: string, payload: unk
   io?.to(salaSucursal(sucursalId)).emit(evento, payload);
 }
 
-export async function listar(filtros: { vista?: boolean; tipo?: TipoAlerta }) {
+export async function listar(filtros: { vista?: boolean; tipo?: TipoAlerta; desde?: Date; hasta?: Date }) {
+  const fechaRango =
+    filtros.desde || filtros.hasta
+      ? { ...(filtros.desde && { gte: filtros.desde }), ...(filtros.hasta && { lte: filtros.hasta }) }
+      : undefined;
   return prisma.alerta.findMany({
-    where: { vista: filtros.vista, tipo: filtros.tipo },
+    where: { vista: filtros.vista, tipo: filtros.tipo, fechaHora: fechaRango },
     orderBy: { fechaHora: 'desc' },
     take: 200,
   });
