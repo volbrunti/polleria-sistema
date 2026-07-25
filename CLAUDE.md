@@ -96,7 +96,7 @@ HARDWARE FUTURO
 
 El cliente pidió explícitamente **entregas por módulo, no big-bang** ("prefiero módulos chicos, entregas más chiquitas").
 
-### FASE ACTUAL → Módulo 1: Producción + Stock + Transferencias (Flujos 1, 2 y 3)
+### ✅ Módulo 1: Producción + Stock + Transferencias (Flujos 1, 2 y 3) — COMPLETADO
 
 **Orden de trabajo dentro de la fase:**
 1. ✅ **Backend completo del módulo 1** con tests — TERMINADO (83/83 tests, ver README.md y HANDOFF-AUDITORIA.md).
@@ -127,12 +127,25 @@ El frontend vive en `frontend/` (proyecto Vite independiente, sin monorepo tooli
 
 **Comandos**: `cd frontend && npm run dev` (:5173, requiere backend en :3000) · `npm run build` · `npx tsc -b --noEmit`.
 
-### FASES FUTURAS (para conocimiento, NO desarrollar todavía)
-- **Módulo 2**: POS + Caja y Turnos (Flujos 4 y 5) — van juntos, la venta requiere turno abierto. **En desarrollo desde 2026-07-17 en la rama `feature/modulo-2`** (no en `main`, para poder seguir mostrando el Módulo 1 sin interferencias). Su CLAUDE.md específico vive en `CLAUDE-MODULO-2.md` en esa rama.
-- **Módulo 3**: Alertas de stock mínimo + Reportes y dashboard (Flujos 6 y 7 visibles).
+### ✅ Módulo 2: POS + Caja y Turnos (Flujos 4 y 5) — COMPLETADO
+
+Desarrollado en la rama `feature/modulo-2` desde 2026-07-17. Backend + frontend completos, auditado y verificado end-to-end. Spec detallada en `CLAUDE-MODULO-2.md`. Incluye: turnos con arqueo doble ciego, POS táctil, pedidos con descuento de stock al confirmar, cobro multi-medio (efectivo neto de vuelto), circuito del pollo (fresco→marcado→vendido), atenciones/gastos/retiros, stock mínimo con bloqueo en cero, claves de emergencia, idempotencia, guard atómico contra carreras. 196+ tests.
+
+### ✅ Módulo 3: Reportes y Dashboard — COMPLETADO (2026-07-25)
+
+Las alertas de stock mínimo (originalmente parte del Módulo 3 según §4) se implementaron en el Módulo 2. El Módulo 3 agrega:
+
+- **Dashboard** (`/api/dashboard`): KPIs agregados — totalVentas, cantidadPedidos, ticketPromedio, ventasPorMedio, totalGastos, totalRetiros, mermas, alertasPendientes, lotesConDesvio, cantidadAtenciones. Filtrable por rango de fecha y sucursal.
+- **8 reportes** (`/api/reportes/*`): ventas por producto, ventas por medio de pago, cierres de caja, retiros por socio, mermas por producto, rendimiento de producción, gastos por categoría, atenciones/regalías. Todos ADMIN+SOCIO.
+- **Frontend**: página Dashboard con tarjetas KPI (inicio por defecto del panel admin), página Reportes con 8 pestañas. Ambas con filtros de fecha y sucursal.
+- Alertas extendidas con filtro por fecha.
+
+Archivos: `src/modules/dashboard/` (service + routes), `src/modules/reportes/` (service + routes), `frontend/src/api/{dashboard,reportes}.ts`, `frontend/src/features/admin/{Dashboard,Reportes}.tsx`.
+
+### FASES FUTURAS
 - **Futuro lejano** (fuera de v1): conciliación Mercado Pago/bancos, facturación ARCA/AFIP, pedidos WhatsApp, OCR de remitos.
 
-**IMPORTANTE**: aunque solo se desarrolla el módulo 1 ahora, las tablas transversales (Usuario, Producto, Sucursal, MovimientoStock, RegistroAuditoria, Precio) se diseñan COMPLETAS desde el inicio porque las usan todos los módulos. La auditoría nace en el módulo 1, no se agrega después.
+**NOTA**: las tablas transversales (Usuario, Producto, Sucursal, MovimientoStock, RegistroAuditoria, Precio) se diseñaron COMPLETAS desde el Módulo 1 porque las usan todos los módulos.
 
 ---
 
@@ -344,14 +357,15 @@ Debe poder responderse: "esta milanesa vendida el viernes salió de la entrega d
 
 ---
 
-## 12. CRITERIO DE "MÓDULO 1 TERMINADO"
+## 12. ESTADO DE LOS MÓDULOS
 
-**Estado: backend ✅ terminado y testeado · frontend ✅ construido y verificado end-to-end contra el backend real (§4.1) · auditoría completa ✅ hecha y los 3 hallazgos corregidos (§11). MÓDULO 1 COMPLETO.**
+**Los 3 módulos de la v1 están COMPLETOS.** Lo que resta es la preparación para producción (ver `PRODUCCION-CHECKLIST.md`).
 
-El backend del módulo 1 está terminado cuando:
-1. Un usuario PRODUCCION puede registrar un ingreso con múltiples líneas, foto y proveedor "Otro".
-2. Puede abrir un lote eligiendo líneas de ingreso específicas, cargar todos los insumos (con bloqueo real por stock insuficiente), cerrar el lote con unidades y desperdicio reales, y el sistema calcula desvío y dispara alerta al admin si supera el umbral — sin exponer jamás el esperado al operario.
-3. Puede generar una transferencia que descuenta stock de producción, y un usuario del local puede recibirla a ciegas, recontar o confirmar con discrepancia, generando la alerta correspondiente — SOLO si ese usuario pertenece a la sucursal destino (§11).
-4. El stock de cualquier producto en cualquier sucursal es consultable y cuadra exactamente con la suma de sus MovimientoStock.
-5. Toda la cadena es trazable de punta a punta y auditada.
-6. Todos los tests pasan (83/83), incluidos los de no-filtración de campos ciegos, RBAC, aislamiento de sucursal, combos, precio por cantidad y eliminación de usuarios.
+### Módulo 1 — ✅ COMPLETO
+Backend testeado (83/83 tests) · frontend verificado end-to-end · auditoría completa (234 ítems, 3 hallazgos corregidos).
+
+### Módulo 2 — ✅ COMPLETO
+Backend testeado (196+ tests, incluye carreras, vectores de ataque, RBAC ciego) · frontend verificado end-to-end · auditoría técnica y de negocio aplicadas. Detalle en `CLAUDE-MODULO-2.md`.
+
+### Módulo 3 — ✅ COMPLETO (2026-07-25)
+Dashboard con KPIs + 8 reportes (backend y frontend). Stock mínimo implementado en Módulo 2.

@@ -2,7 +2,7 @@
 
 > **Este documento vive SOLO en la rama `feature/modulo-2`.** Es el CLAUDE.md específico del Módulo 2 — mismo rol que el CLAUDE.md raíz cumple para el Módulo 1: contexto autoritativo, se actualiza en cada fase, no se inventa lógica de negocio que lo contradiga. El CLAUDE.md raíz (`main`) sigue siendo la fuente de verdad del Módulo 1 y de las entidades transversales; este archivo lo complementa mientras el Módulo 2 esté en desarrollo. Cuando el módulo se mergee a `main`, su contenido relevante se vuelca al CLAUDE.md raíz y este archivo se puede retirar.
 
-**Estado**: en desarrollo, rama `feature/modulo-2`, branch de Neon `modulo-2-dev` (aislada de la DB que usa el cliente para ver el Módulo 1 en `main`).
+**Estado**: ✅ **COMPLETADO** (Fases 0–9 + Módulo 3). Rama `feature/modulo-2`, branch de Neon `modulo-2-dev`. Pendiente: merge a `main` y preparación para producción (ver `PRODUCCION-CHECKLIST.md`).
 
 ---
 
@@ -48,6 +48,7 @@ El cliente entregó la especificación completa del Módulo 2 (secciones 1 a 12 
   - ✅ **Housekeeping de git**: se sacaron `.claude/launch.json` y `.claude/settings.local.json` del árbol (`git rm --cached`) y se agregó `.claude/` al `.gitignore` — quedaban versionados desde el commit de Facundo.
   - ✅ **Retorno a producción ahora genera `LineaIngreso` trazable**: `Proveedor.esProveedorSistema Boolean @default(false)` (migración `20260724160000_proveedor_es_sistema`), proveedor "Retorno interno" en el seed (`esProveedorSistema: true`). `caja.service.ts::registrarCostoCero()` al procesar `RETORNO_A_PRODUCCION` crea un `IngresoMercaderia` + `LineaIngreso` sintéticos (misma transacción) con `cantidadRestanteDisponible` = cantidad retornada — producción puede consumirlo por partida en un lote igual que cualquier ingreso de proveedor. El proveedor de sistema no aparece en `GET /proveedores` (filtrado con `esProveedorSistema: false`) y no puede renombrarse ni desactivarse (`PROVEEDOR_RESERVADO_SISTEMA`, 409). Test actualizado en `caja-y-pollo.test.ts`.
   - ⬜ **Sigue pendiente**: motivos de atención (`MOTIVOS_ATENCION` en `frontend/src/api/caja.ts`) sin validar con el cliente.
+- ✅ **Módulo 3: Dashboard y Reportes (2026-07-25)**: implementado directamente sobre esta rama. Backend: `src/modules/dashboard/` y `src/modules/reportes/` (8 endpoints GET, ADMIN+SOCIO). Frontend: `frontend/src/features/admin/{Dashboard,Reportes}.tsx` + API layer. Dashboard como página de inicio del panel admin. Alertas extendidas con filtro por fecha. Las alertas de stock mínimo (originalmente Módulo 3) ya estaban en la Fase 5.
   - **Nota sobre un informe de auditoría de negocio recibido el 2026-07-24**: además de los puntos de arriba, el informe pedía "crear la receta real de empanada de pollo" y documentar la lógica de la milanesa del sandwich — **ambas cosas ya estaban resueltas en `main` desde el 2026-07-18** (commit `eb7b05c`, ya mergeado a esta rama vía `38eaae7`) y ya documentadas en el CLAUDE.md raíz §11. Se verificó contra `prisma/seed.ts` línea por línea antes de descartarlas — no hacía falta ningún cambio ahí. Quien retome este documento: si un informe de otra sesión pide algo que "ya se ve resuelto" acá o en el CLAUDE.md raíz, verificar contra el código antes de reimplementarlo.
 
 ---
