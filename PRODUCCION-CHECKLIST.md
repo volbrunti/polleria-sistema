@@ -16,12 +16,13 @@
     free tier que sobra para fotos de remitos.
   - Código a tocar: `src/modules/ingresos/` (handler de subida de foto).
 
-- [ ] **Cookie de refresh `sameSite: 'strict'`**
-  - Rompe el refresh silencioso de sesión si el frontend (Vercel) y el backend
+- [x] **Cookie de refresh `sameSite: 'strict'`** — resuelto (2026-07-25)
+  - Rompía el refresh silencioso de sesión si el frontend (Vercel) y el backend
     (Railway) quedan en DOMINIOS DISTINTOS.
-  - Consecuencia: los usuarios se desloguean al recargar la página.
-  - Solución: cambiar a `'lax'` o `'none' + secure` en
-    `src/modules/auth/auth.routes.ts`, O servir front y back bajo el mismo dominio.
+  - `src/modules/auth/auth.routes.ts` ahora usa `sameSite: 'none'` en producción
+    (junto con `secure: true`, ya atado a `esProduccion`) y `'lax'` en desarrollo.
+  - Pendiente solo verificar en vivo contra un deploy real con dominios separados
+    (Vercel + Railway) una vez desplegado — no se puede probar sin esa infra.
 
 - [ ] **Variables de entorno en Railway**
   - `JWT_SECRET` y `JWT_REFRESH_SECRET`: OBLIGATORIAS y distintas entre sí,
