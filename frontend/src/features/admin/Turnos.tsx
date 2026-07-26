@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   desbloquearTurno,
@@ -38,6 +39,7 @@ export function Turnos({ puedeEscribir }: Props) {
   const [turnoAbierto, setTurnoAbierto] = useState<number | null>(null);
   const [clave, setClave] = useState<ClaveEmergencia | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
 
   const sucursalesQ = useQuery({ queryKey: ['sucursales'], queryFn: listarSucursales });
   const turnosQ = useQuery({
@@ -45,6 +47,14 @@ export function Turnos({ puedeEscribir }: Props) {
     queryFn: () => listarTurnos({ sucursalId }),
     refetchInterval: 30_000,
   });
+
+  // Llegada desde una alerta (Alertas.tsx "Ver turno"): abre y scrollea a la tarjeta.
+  const turnoDestacado = searchParams.get('turno') ? Number(searchParams.get('turno')) : null;
+  useEffect(() => {
+    if (turnoDestacado == null || !turnosQ.data?.some((t) => t.id === turnoDestacado)) return;
+    setTurnoAbierto(turnoDestacado);
+    document.getElementById(`turno-${turnoDestacado}`)?.scrollIntoView({ block: 'center' });
+  }, [turnoDestacado, turnosQ.data]);
 
   const mutDesbloquear = useMutation({
     mutationFn: desbloquearTurno,
@@ -94,6 +104,7 @@ export function Turnos({ puedeEscribir }: Props) {
             key={t.id}
             turno={t}
             expandido={turnoAbierto === t.id}
+            destacado={t.id === turnoDestacado}
             puedeEscribir={puedeEscribir}
             onToggle={() => setTurnoAbierto((actual) => (actual === t.id ? null : t.id))}
             onDesbloquear={() => mutDesbloquear.mutate(t.id)}
@@ -138,6 +149,7 @@ export function Turnos({ puedeEscribir }: Props) {
 function TarjetaTurno({
   turno,
   expandido,
+  destacado,
   puedeEscribir,
   onToggle,
   onDesbloquear,
@@ -146,6 +158,7 @@ function TarjetaTurno({
 }: {
   turno: Turno;
   expandido: boolean;
+  destacado?: boolean;
   puedeEscribir: boolean;
   onToggle: () => void;
   onDesbloquear: () => void;
@@ -153,7 +166,7 @@ function TarjetaTurno({
   desbloqueando: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-borde bg-white">
+    <div id={`turno-${turno.id}`} className={`rounded-2xl border border-borde bg-white ${destacado ? 'bg-[#fff7d9]' : ''}`}>
       <button type="button" onClick={onToggle} className="flex w-full cursor-pointer items-center gap-3 px-4.5 py-3.5 text-left">
         <span className="font-mono text-sm text-texto-suave">#{String(turno.id).padStart(4, '0')}</span>
         <span className="text-sm font-semibold">{turno.sucursal}</span>

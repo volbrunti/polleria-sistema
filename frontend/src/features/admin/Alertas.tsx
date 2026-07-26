@@ -1,9 +1,27 @@
+import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { listarAlertas, marcarVista } from '../../api/alertas';
 import { listarProductos } from '../../api/productos';
 import { listarUsuarios } from '../../api/usuarios';
 import { fmtFechaHora, fmtNumero } from '../../lib/formato';
 import type { Alerta } from '../../api/types';
+
+// Mapea el origen ciego de la alerta (tipoOrigen + origenId) a la pantalla
+// admin donde se puede ver el evento que la disparó (CLAUDE.md §7 — "no hay
+// forma de navegar al evento que la disparó"). Las páginas destino leen el
+// query param correspondiente para abrir y scrollear a la fila.
+function linkOrigen(alerta: Alerta): { to: string; texto: string } | null {
+  if (alerta.tipoOrigen === 'LoteDeProduccion') {
+    return { to: `/admin/produccion?lote=${alerta.origenId}`, texto: 'Ver lote de producción' };
+  }
+  if (alerta.tipoOrigen === 'Transferencia') {
+    return { to: `/admin/transferencias?transferencia=${alerta.origenId}`, texto: 'Ver transferencia' };
+  }
+  if (alerta.tipoOrigen === 'Turno') {
+    return { to: `/admin/turnos?turno=${alerta.origenId}`, texto: 'Ver turno' };
+  }
+  return null;
+}
 
 const ESTILO_TIPO: Record<string, { texto: string; color: string; bg: string }> = {
   DESVIO_PRODUCCION: { texto: 'DESVÍO DE PRODUCCIÓN', color: '#a02514', bg: '#faeae7' },
@@ -84,6 +102,7 @@ export function Alertas() {
       {alertas.data?.map((a) => {
         const estilo = ESTILO_TIPO[a.tipo] ?? { texto: a.tipo, color: '#5f6d60', bg: '#e6e9e2' };
         const campos = camposDeAlerta(a, nombreProducto, nombreUsuario);
+        const link = linkOrigen(a);
         return (
           <div key={a.id} className="flex flex-col gap-3 rounded-2xl border border-borde bg-white p-5" style={{ opacity: a.vista ? 0.65 : 1 }}>
             <div className="flex items-center gap-3">
@@ -106,17 +125,27 @@ export function Alertas() {
                 </div>
               ))}
             </div>
-            {!a.vista ? (
-              <button
-                type="button"
-                onClick={() => mutVista.mutate(a.id)}
-                className="w-fit min-h-11 cursor-pointer rounded-[10px] border border-borde-fuerte bg-white px-4 text-sm font-bold text-primario hover:bg-chip"
-              >
-                Marcar como vista
-              </button>
-            ) : (
-              <div className="text-[13px] font-semibold text-texto-suave">✓ Vista</div>
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+              {!a.vista ? (
+                <button
+                  type="button"
+                  onClick={() => mutVista.mutate(a.id)}
+                  className="w-fit min-h-11 cursor-pointer rounded-[10px] border border-borde-fuerte bg-white px-4 text-sm font-bold text-primario hover:bg-chip"
+                >
+                  Marcar como vista
+                </button>
+              ) : (
+                <div className="text-[13px] font-semibold text-texto-suave">✓ Vista</div>
+              )}
+              {link && (
+                <Link
+                  to={link.to}
+                  className="w-fit min-h-11 content-center rounded-[10px] px-4 text-sm font-bold text-primario hover:underline"
+                >
+                  {link.texto} →
+                </Link>
+              )}
+            </div>
           </div>
         );
       })}

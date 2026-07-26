@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { listarTransferencias } from '../../api/transferencias';
 import { fmtFechaHora, fmtNumero } from '../../lib/formato';
@@ -16,6 +18,16 @@ const LABEL_ESTADO: Record<string, string> = {
 
 export function Transferencias() {
   const transferencias = useQuery({ queryKey: ['transferencias'], queryFn: () => listarTransferencias() });
+  const [searchParams] = useSearchParams();
+
+  // Llegada desde una alerta (Alertas.tsx "Ver transferencia"): scrollea a la fila.
+  const transferenciaDestacada = searchParams.get('transferencia')
+    ? Number(searchParams.get('transferencia'))
+    : null;
+  useEffect(() => {
+    if (transferenciaDestacada == null) return;
+    document.getElementById(`transferencia-${transferenciaDestacada}`)?.scrollIntoView({ block: 'center' });
+  }, [transferenciaDestacada, transferencias.data]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -42,7 +54,10 @@ export function Transferencias() {
             return (
               <div
                 key={`${t.id}-${l.id}`}
-                className="grid min-w-[1060px] grid-cols-[90px_110px_150px_1fr_90px_90px_80px_170px_130px] items-center gap-x-3 border-t border-[#eef1ea] px-4.5 py-3 text-sm"
+                id={`transferencia-${t.id}`}
+                className={`grid min-w-[1060px] grid-cols-[90px_110px_150px_1fr_90px_90px_80px_170px_130px] items-center gap-x-3 border-t border-[#eef1ea] px-4.5 py-3 text-sm ${
+                  t.id === transferenciaDestacada ? 'bg-[#fff7d9]' : ''
+                }`}
               >
                 <span className="font-mono text-texto-suave">T-{String(t.id).padStart(5, '0')}</span>
                 <span className="text-texto-suave">{fmtFechaHora(t.fechaHoraEnvio)}</span>

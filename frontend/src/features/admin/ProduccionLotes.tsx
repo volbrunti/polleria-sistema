@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { listarLotes } from '../../api/produccion';
 import { listarUsuarios } from '../../api/usuarios';
@@ -10,6 +11,15 @@ export function ProduccionLotes() {
   const usuarios = useQuery({ queryKey: ['usuarios'], queryFn: listarUsuarios });
   const fichas = useQuery({ queryKey: ['fichas'], queryFn: listarFichas });
   const [abiertos, setAbiertos] = useState<Set<number>>(new Set());
+  const [searchParams] = useSearchParams();
+
+  // Llegada desde una alerta (Alertas.tsx "Ver lote"): abre y scrollea a la fila.
+  const loteDestacado = searchParams.get('lote') ? Number(searchParams.get('lote')) : null;
+  useEffect(() => {
+    if (loteDestacado == null || !lotes.data?.some((l) => l.id === loteDestacado)) return;
+    setAbiertos((prev) => new Set(prev).add(loteDestacado));
+    document.getElementById(`lote-${loteDestacado}`)?.scrollIntoView({ block: 'center' });
+  }, [loteDestacado, lotes.data]);
 
   const nombreOperario = (id: number) => usuarios.data?.find((u) => u.id === id)?.nombre ?? `#${id}`;
   const versionDeFicha = (versionId: number) => {
@@ -52,7 +62,11 @@ export function ProduccionLotes() {
         {lotes.data?.map((l) => {
           const desvio = l.desvioPct != null ? Number(l.desvioPct) : null;
           return (
-            <div key={l.id} className="border-t border-[#eef1ea]">
+            <div
+              key={l.id}
+              id={`lote-${l.id}`}
+              className={`border-t border-[#eef1ea] ${l.id === loteDestacado ? 'bg-[#fff7d9]' : ''}`}
+            >
               <div className="grid min-w-[1060px] grid-cols-[90px_110px_1fr_130px_90px_80px_90px_110px_80px_110px] items-center gap-x-3 px-4.5 py-3.5 text-sm">
                 <span className="font-mono text-texto-suave">L-{l.id}</span>
                 <span className="text-texto-suave">{fmtFecha(l.fechaHora)}</span>
