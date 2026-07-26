@@ -24,6 +24,18 @@
   - Pendiente solo verificar en vivo contra un deploy real con dominios separados
     (Vercel + Railway) una vez desplegado — no se puede probar sin esa infra.
 
+- [x] **Migraciones al día en la branch de Neon `modulo-2-dev`** — verificado (2026-07-26)
+  - Se corrió `prisma migrate deploy` contra `neondb` (dev) y contra `polleria_test`
+    (son DOS bases separadas dentro de la misma branch de Neon — cada una necesita
+    su propio `migrate deploy`, no alcanza con correrlo una vez).
+  - Las 11 migraciones estaban al día en `neondb`; a `polleria_test` le faltaban 4
+    (quedó desactualizada desde la Fase 9 del Módulo 2). Ya aplicadas, sin drift.
+  - Suite completa corrida contra `polleria_test`: **202/202 tests pasan**.
+  - Gotcha para quien retome esto: después de `git pull`/`git am` con cambios de
+    schema, hace falta correr `npx prisma generate` a mano — no hay `postinstall`
+    que lo dispare solo. Si no, el cliente de Prisma queda desactualizado y tira
+    `Unknown argument <campo>` aunque la migración ya esté aplicada en la DB.
+
 - [ ] **Variables de entorno en Railway**
   - `JWT_SECRET` y `JWT_REFRESH_SECRET`: OBLIGATORIAS y distintas entre sí,
     generadas al azar (no reutilizar las de dev). El server aborta el arranque
@@ -58,10 +70,12 @@
 
 ## Notas de desarrollo (no afectan producción)
 
-- El `.env` local de esta máquina apunta a un proyecto Neon viejo
-  (`ep-quiet-moon...us-east-2`) que ya no existe. La DB actual del equipo es
-  `ep-bold-flower-acc36pom-pooler.sa-east-1.aws.neon.tech` (pedir credenciales).
+- La branch de Neon activa mientras se trabaja en `feature/modulo-2` es
+  `modulo-2-dev` (`ep-lingering-butterfly-aczyt7qm-pooler.sa-east-1.aws.neon.tech`),
+  con `neondb` (dev) y `polleria_test` (tests) como bases separadas — ambas
+  migradas y verificadas al 2026-07-26. La branch `production`
+  (`ep-bold-flower-acc36pom-pooler...`) es la que ve el cliente en `main` con
+  el Módulo 1; queda comentada en `.env` mientras tanto.
 - Para correr los tests de integración SIN Neon: se puede levantar un Postgres
-  efímero local con `initdb` (PostgreSQL 18 está instalado en esta máquina) —
-  cluster descartable con auth trust, `prisma migrate deploy` y listo.
-  Verificado el 2026-07-18: 83/83 tests pasan así.
+  efímero local con `initdb` — cluster descartable con auth trust, `prisma
+  migrate deploy` y listo. Verificado el 2026-07-18: 83/83 tests pasan así.
