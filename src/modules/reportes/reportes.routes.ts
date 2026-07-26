@@ -50,4 +50,9 @@ export async function reportesRoutes(app: FastifyInstance) {
     const filtros = filtrosFecha.parse(req.query);
     return reportesService.atencionesReporte(filtros);
   });
+
+  app.get('/trazabilidad/pedido/:id', { preHandler: [...soloLectura] }, async (req) => {
+    const { id } = z.object({ id: z.coerce.number().int().positive() }).parse(req.params);
+    return reportesService.trazabilidadPedido(id);
+  });
 }

@@ -124,3 +124,62 @@ export function gastosPorCategoria(f?: FiltrosFecha) {
 export function atencionesReporte(f?: FiltrosFecha) {
   return apiFetch<AtencionReporte[]>(`/api/reportes/atenciones${buildQuery(f)}`);
 }
+
+export interface OrigenProducto {
+  transferencia: {
+    id: number;
+    sucursalOrigen: string;
+    fechaHoraEnvio: string;
+    fechaHoraRecepcion: string | null;
+    cantidadEnviada: string;
+    cantidadRecibida: string | null;
+    estado: string;
+    usuarioEmisor: string;
+    usuarioReceptor: string | null;
+  } | null;
+  lote: {
+    id: number;
+    fechaHora: string;
+    operario: string;
+    versionFicha: number;
+    unidadesProducidas: string | null;
+    desperdicioRealKg: string | null;
+    unidadesEsperadas: string | null;
+    desvioPct: string | null;
+    aproximado: boolean;
+  } | null;
+  insumos: {
+    producto: string;
+    cantidadUsada: string;
+    lineaIngresoId: number;
+    proveedor: string;
+    fechaIngreso: string;
+    cantidadSegunRemito: string;
+    cantidadRealPesada: string;
+  }[];
+  nota?: string;
+}
+
+export interface ItemTrazabilidad {
+  itemId: number;
+  producto: string;
+  tipo: string;
+  cantidad: string;
+  montoTotal: string;
+  esVentaCostoCero: boolean;
+  tipoCostoCero: string | null;
+  origen?: OrigenProducto;
+  componentes?: { productoId: number; producto: string; origen: OrigenProducto }[];
+}
+
+export interface TrazabilidadPedido {
+  pedidoId: number;
+  fechaCreacion: string;
+  sucursal: string;
+  cajero: string;
+  items: ItemTrazabilidad[];
+}
+
+export function trazabilidadPedido(pedidoId: number) {
+  return apiFetch<TrazabilidadPedido>(`/api/reportes/trazabilidad/pedido/${pedidoId}`);
+}

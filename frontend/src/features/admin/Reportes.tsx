@@ -10,7 +10,9 @@ import {
   rendimientoProduccion,
   gastosPorCategoria,
   atencionesReporte,
+  trazabilidadPedido,
   type FiltrosFecha,
+  type OrigenProducto,
 } from '../../api/reportes';
 import { fmtMoneda, fmtNumero, fmtFechaHora } from '../../lib/formato';
 
@@ -23,6 +25,7 @@ const TABS = [
   { key: 'mermas', label: 'Mermas' },
   { key: 'produccion', label: 'Producción' },
   { key: 'atenciones', label: 'Atenciones' },
+  { key: 'trazabilidad', label: 'Trazabilidad' },
 ] as const;
 
 type TabKey = (typeof TABS)[number]['key'];
@@ -69,33 +72,35 @@ export function Reportes() {
             Análisis detallado por período y sucursal
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            type="date"
-            value={desde}
-            onChange={(e) => setDesde(e.target.value)}
-            className="min-h-10 rounded-lg border border-borde-fuerte bg-white px-2.5 text-sm"
-          />
-          <span className="text-sm text-texto-suave">a</span>
-          <input
-            type="date"
-            value={hasta}
-            onChange={(e) => setHasta(e.target.value)}
-            className="min-h-10 rounded-lg border border-borde-fuerte bg-white px-2.5 text-sm"
-          />
-          <select
-            value={sucursalId ?? ''}
-            onChange={(e) => setSucursalId(e.target.value ? Number(e.target.value) : undefined)}
-            className="min-h-10 rounded-lg border border-borde-fuerte bg-white px-2.5 text-sm font-semibold"
-          >
-            <option value="">Todas</option>
-            {locales.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.nombre}
-              </option>
-            ))}
-          </select>
-        </div>
+        {tab !== 'trazabilidad' && (
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="date"
+              value={desde}
+              onChange={(e) => setDesde(e.target.value)}
+              className="min-h-10 rounded-lg border border-borde-fuerte bg-white px-2.5 text-sm"
+            />
+            <span className="text-sm text-texto-suave">a</span>
+            <input
+              type="date"
+              value={hasta}
+              onChange={(e) => setHasta(e.target.value)}
+              className="min-h-10 rounded-lg border border-borde-fuerte bg-white px-2.5 text-sm"
+            />
+            <select
+              value={sucursalId ?? ''}
+              onChange={(e) => setSucursalId(e.target.value ? Number(e.target.value) : undefined)}
+              className="min-h-10 rounded-lg border border-borde-fuerte bg-white px-2.5 text-sm font-semibold"
+            >
+              <option value="">Todas</option>
+              {locales.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
@@ -122,6 +127,7 @@ export function Reportes() {
       {tab === 'mermas' && <TabMermas filtros={filtros} />}
       {tab === 'produccion' && <TabProduccion filtros={filtros} />}
       {tab === 'atenciones' && <TabAtenciones filtros={filtros} />}
+      {tab === 'trazabilidad' && <TabTrazabilidad />}
     </div>
   );
 }
@@ -483,6 +489,153 @@ function TabAtenciones({ filtros }: { filtros: FiltrosFecha }) {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+function TabTrazabilidad() {
+  const [input, setInput] = useState('');
+  const [pedidoId, setPedidoId] = useState<number | undefined>();
+
+  const q = useQuery({
+    queryKey: ['reportes', 'trazabilidad', pedidoId],
+    queryFn: () => trazabilidadPedido(pedidoId!),
+    enabled: pedidoId !== undefined,
+  });
+
+  const buscar = () => {
+    const n = Number(input);
+    setPedidoId(Number.isInteger(n) && n > 0 ? n : undefined);
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="rounded-xl border border-borde bg-white p-4">
+        <div className="flex items-end gap-2">
+          <div className="flex-1">
+            <label className="mb-1 block text-xs font-semibold text-texto-suave">
+              Número de pedido
+            </label>
+            <input
+              type="number"
+              min={1}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && buscar()}
+              placeholder="Ej: 145"
+              className="min-h-10 w-full rounded-lg border border-borde-fuerte bg-white px-2.5 text-sm"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={buscar}
+            className="min-h-10 cursor-pointer rounded-lg bg-primario px-4 text-sm font-bold text-white"
+          >
+            Buscar
+          </button>
+        </div>
+      </div>
+
+      {q.isLoading && <Cargando />}
+      {q.error && (
+        <p className="py-2 text-sm text-error">
+          No se encontró el pedido, o no se pudo cargar la trazabilidad.
+        </p>
+      )}
+
+      {q.data && (
+        <div className="flex flex-col gap-3">
+          <div className="rounded-xl border border-borde bg-white p-4">
+            <div className="font-bold">Pedido #{q.data.pedidoId}</div>
+            <div className="text-xs text-texto-suave">
+              {q.data.sucursal} &middot; {fmtFechaHora(q.data.fechaCreacion)} &middot; Cajero:{' '}
+              {q.data.cajero}
+            </div>
+          </div>
+
+          {q.data.items.map((item) => (
+            <div key={item.itemId} className="rounded-xl border border-borde bg-white p-4">
+              <div className="flex items-center justify-between">
+                <div className="font-bold">
+                  {item.producto}{' '}
+                  <span className="font-normal text-texto-suave">× {fmtNumero(item.cantidad)}</span>
+                </div>
+                <div className="font-bold">{fmtMoneda(item.montoTotal)}</div>
+              </div>
+              {item.esVentaCostoCero && (
+                <div className="mt-1 text-xs font-semibold text-amber-600">
+                  Costo cero{item.tipoCostoCero ? ` — ${item.tipoCostoCero}` : ''}
+                </div>
+              )}
+
+              {item.componentes ? (
+                <div className="mt-3 flex flex-col gap-3 border-t border-borde pt-3">
+                  <div className="text-xs font-semibold text-texto-suave">
+                    Combo — componentes:
+                  </div>
+                  {item.componentes.map((c) => (
+                    <div key={c.productoId} className="rounded-lg bg-[#f7f8f5] p-3">
+                      <div className="mb-2 text-sm font-semibold">{c.producto}</div>
+                      <OrigenDetalle origen={c.origen} />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                item.origen && (
+                  <div className="mt-3 border-t border-borde pt-3">
+                    <OrigenDetalle origen={item.origen} />
+                  </div>
+                )
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OrigenDetalle({ origen }: { origen: OrigenProducto }) {
+  if (!origen.transferencia) {
+    return <div className="text-xs text-texto-suave">{origen.nota}</div>;
+  }
+  const t = origen.transferencia;
+  const l = origen.lote;
+  return (
+    <div className="flex flex-col gap-2 text-xs">
+      <div>
+        <span className="font-semibold">Transferencia T-{t.id}:</span> {t.sucursalOrigen} →{' '}
+        recibida {fmtFechaHora(t.fechaHoraRecepcion ?? t.fechaHoraEnvio)} &middot; enviado{' '}
+        {fmtNumero(t.cantidadEnviada)}, recibido{' '}
+        {t.cantidadRecibida ? fmtNumero(t.cantidadRecibida) : '—'} &middot; {t.usuarioEmisor} →{' '}
+        {t.usuarioReceptor ?? '—'}
+      </div>
+      {l ? (
+        <div className="rounded-lg bg-[#f7f8f5] p-2.5">
+          <div>
+            <span className="font-semibold">Lote L-{l.id}</span> (aproximado por fecha, no es FK
+            directa) &middot; {fmtFechaHora(l.fechaHora)} &middot; operario {l.operario} &middot;
+            ficha v{l.versionFicha}
+          </div>
+          <div className="mt-1">
+            Producidas: {l.unidadesProducidas ? fmtNumero(l.unidadesProducidas) : '—'} &middot;
+            Esperadas: {l.unidadesEsperadas ? fmtNumero(l.unidadesEsperadas) : '—'} &middot; Desvío:{' '}
+            {l.desvioPct ? `${fmtNumero(l.desvioPct, 1)}%` : '—'}
+          </div>
+          {origen.insumos.length > 0 && (
+            <div className="mt-2 flex flex-col gap-1">
+              {origen.insumos.map((i, idx) => (
+                <div key={idx} className="text-texto-suave">
+                  {i.producto}: {fmtNumero(i.cantidadUsada)} (línea de ingreso #{i.lineaIngresoId},{' '}
+                  {i.proveedor}, {fmtFechaHora(i.fechaIngreso)})
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="text-texto-suave">No se encontró un lote de producción anterior a la transferencia.</div>
+      )}
     </div>
   );
 }

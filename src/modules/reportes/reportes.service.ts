@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
+import { Errores } from '../../lib/errores';
 
 const CERO = new Prisma.Decimal(0);
 
@@ -280,6 +281,173 @@ export async function atencionesReporte(filtros: FiltroFecha) {
     usuario: a.usuario.username,
     fechaHora: a.fechaHora.toISOString(),
   }));
+}
+
+// ── Trazabilidad de un pedido ──
+// Reconstruye la cadena Proveedor → IngresoMercaderia → LineaIngreso →
+// InsumoUsado → LoteDeProduccion → Transferencia → ItemDePedido (CLAUDE.md §7).
+// El schema no guarda un FK directo entre LoteDeProduccion y Transferencia
+// (los envíos no reservan unidades de un lote específico), así que el lote
+// de origen se infiere por proximidad temporal: el último lote CERRADO de
+// ese producto anterior al envío que trajo la mercadería a la sucursal. Es
+// una aproximación razonable en un sistema FIFO, no una relación exacta —
+// por eso cada tramo va con `aproximado: true` para que quien lo lea sepa
+// que no es una referencia dura como el resto de la cadena.
+export async function trazabilidadPedido(pedidoId: number) {
+  const pedido = await prisma.pedido.findUnique({
+    where: { id: pedidoId },
+    include: {
+      sucursal: { select: { nombre: true } },
+      usuarioCajero: { select: { username: true } },
+      items: {
+        include: {
+          producto: {
+            select: {
+              id: true,
+              nombre: true,
+              tipo: true,
+              componentesDelCombo: {
+                include: { productoComponente: { select: { id: true, nombre: true } } },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!pedido) throw Errores.noEncontrado('Pedido');
+
+  const items = await Promise.all(
+    pedido.items.map(async (item) => {
+      const base = {
+        itemId: item.id,
+        producto: item.producto.nombre,
+        tipo: item.producto.tipo,
+        cantidad: item.cantidad.toString(),
+        montoTotal: item.montoTotal.toString(),
+        esVentaCostoCero: item.esVentaCostoCero,
+        tipoCostoCero: item.tipoCostoCero,
+      };
+
+      if (item.producto.tipo === 'COMBO') {
+        const componentes = await Promise.all(
+          item.producto.componentesDelCombo.map(async (c) => ({
+            productoId: c.productoComponente.id,
+            producto: c.productoComponente.nombre,
+            origen: await origenDeProducto(c.productoComponente.id, pedido.sucursalId, pedido.fechaCreacion),
+          })),
+        );
+        return { ...base, componentes };
+      }
+
+      return { ...base, origen: await origenDeProducto(item.producto.id, pedido.sucursalId, pedido.fechaCreacion) };
+    }),
+  );
+
+  return {
+    pedidoId: pedido.id,
+    fechaCreacion: pedido.fechaCreacion.toISOString(),
+    sucursal: pedido.sucursal.nombre,
+    cajero: pedido.usuarioCajero.username,
+    items,
+  };
+}
+
+async function origenDeProducto(productoId: number, sucursalId: number, antesDe: Date) {
+  const lineaTransferencia = await prisma.lineaDeTransferencia.findFirst({
+    where: {
+      productoId,
+      transferencia: {
+        sucursalDestinoId: sucursalId,
+        estado: { in: ['CONFIRMADA', 'CONFIRMADA_CON_DISCREPANCIA'] },
+        fechaHoraRecepcion: { lte: antesDe },
+      },
+    },
+    include: {
+      transferencia: {
+        select: {
+          id: true,
+          estado: true,
+          fechaHoraEnvio: true,
+          fechaHoraRecepcion: true,
+          sucursalOrigen: { select: { nombre: true } },
+          usuarioEmisor: { select: { username: true } },
+          usuarioReceptor: { select: { username: true } },
+        },
+      },
+    },
+    orderBy: { transferencia: { fechaHoraRecepcion: 'desc' } },
+  });
+
+  if (!lineaTransferencia) {
+    return {
+      transferencia: null,
+      lote: null,
+      insumos: [] as Array<Record<string, unknown>>,
+      nota: 'No se encontró una transferencia de este producto hacia la sucursal antes de la venta (puede ser stock previo a la trazabilidad, un producto marcado localmente, o venta directa).',
+    };
+  }
+
+  const lote = await prisma.loteDeProduccion.findFirst({
+    where: {
+      productoElaboradoId: productoId,
+      estado: 'CERRADO',
+      fechaHora: { lte: lineaTransferencia.transferencia.fechaHoraEnvio },
+    },
+    include: {
+      usuarioOperario: { select: { username: true } },
+      fichaTecnicaVersion: { select: { numeroVersion: true } },
+      insumosUsados: {
+        include: {
+          productoInsumo: { select: { nombre: true } },
+          lineaIngresoOrigen: {
+            include: {
+              ingresoMercaderia: { include: { proveedor: { select: { nombre: true } } } },
+            },
+          },
+        },
+      },
+    },
+    orderBy: { fechaHora: 'desc' },
+  });
+
+  return {
+    transferencia: {
+      id: lineaTransferencia.transferencia.id,
+      sucursalOrigen: lineaTransferencia.transferencia.sucursalOrigen.nombre,
+      fechaHoraEnvio: lineaTransferencia.transferencia.fechaHoraEnvio.toISOString(),
+      fechaHoraRecepcion: lineaTransferencia.transferencia.fechaHoraRecepcion?.toISOString() ?? null,
+      cantidadEnviada: lineaTransferencia.cantidadEnviada.toString(),
+      cantidadRecibida: lineaTransferencia.cantidadRecibida?.toString() ?? null,
+      estado: lineaTransferencia.transferencia.estado,
+      usuarioEmisor: lineaTransferencia.transferencia.usuarioEmisor.username,
+      usuarioReceptor: lineaTransferencia.transferencia.usuarioReceptor?.username ?? null,
+    },
+    lote: lote
+      ? {
+          id: lote.id,
+          fechaHora: lote.fechaHora.toISOString(),
+          operario: lote.usuarioOperario.username,
+          versionFicha: lote.fichaTecnicaVersion.numeroVersion,
+          unidadesProducidas: lote.unidadesProducidasReales?.toString() ?? null,
+          desperdicioRealKg: lote.desperdicioRealKg?.toString() ?? null,
+          unidadesEsperadas: lote.unidadesEsperadas?.toString() ?? null,
+          desvioPct: lote.desvioPct?.toString() ?? null,
+          aproximado: true,
+        }
+      : null,
+    insumos: lote
+      ? lote.insumosUsados.map((iu) => ({
+          producto: iu.productoInsumo.nombre,
+          cantidadUsada: iu.cantidadUsada.toString(),
+          lineaIngresoId: iu.lineaIngresoOrigen.id,
+          proveedor: iu.lineaIngresoOrigen.ingresoMercaderia.proveedor.nombre,
+          fechaIngreso: iu.lineaIngresoOrigen.ingresoMercaderia.fechaHora.toISOString(),
+          cantidadSegunRemito: iu.lineaIngresoOrigen.cantidadSegunRemito.toString(),
+          cantidadRealPesada: iu.lineaIngresoOrigen.cantidadRealPesada.toString(),
+        }))
+      : [],
+  };
 }
 
 // ── Helpers ──
