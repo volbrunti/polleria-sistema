@@ -4,7 +4,7 @@ import { EncabezadoWizard } from '../../components/ui/EncabezadoWizard';
 import { Selector, type ItemSelector } from '../../components/ui/Selector';
 import { TecladoNumerico } from '../../components/ui/TecladoNumerico';
 import { PantallaExito } from '../../components/ui/PantallaExito';
-import { listarProveedores } from '../../api/proveedores';
+import { listarProveedores, productosHabituales } from '../../api/proveedores';
 import { listarProductos } from '../../api/productos';
 import { registrarIngreso, subirFotoRemito } from '../../api/ingresos';
 import { ApiError } from '../../api/client';
@@ -36,6 +36,7 @@ export function AsistenteIngreso({ onVolver, onFinalizado }: Props) {
   const [overlay, setOverlay] = useState<Overlay>(null);
   const [fotoUrl, setFotoUrl] = useState<string | null>(null);
   const [fotoNombre, setFotoNombre] = useState<string | null>(null);
+  const [fotoPreview, setFotoPreview] = useState<string | null>(null);
   const [subiendoFoto, setSubiendoFoto] = useState(false);
   const [errorEnvio, setErrorEnvio] = useState<string | null>(null);
   const [exito, setExito] = useState(false);
@@ -45,6 +46,13 @@ export function AsistenteIngreso({ onVolver, onFinalizado }: Props) {
   const materiasPrimas = useQuery({
     queryKey: ['productos', 'MATERIA_PRIMA'],
     queryFn: () => listarProductos({ tipo: 'MATERIA_PRIMA', activo: true }),
+  });
+  // Accesos rápidos: qué le suele comprar la pollería a este proveedor (sin
+  // cantidades — eso se sigue cargando en el momento). Lo configura el admin.
+  const habituales = useQuery({
+    queryKey: ['proveedores', proveedor?.id, 'productos-habituales'],
+    queryFn: () => productosHabituales(proveedor!.id),
+    enabled: proveedor != null && !proveedor.esOtro,
   });
 
   const mutSubirFoto = useMutation({
@@ -161,12 +169,34 @@ export function AsistenteIngreso({ onVolver, onFinalizado }: Props) {
               </button>
             </div>
           ))}
+          {(() => {
+            const yaCargados = new Set(lineas.map((l) => l.producto.id));
+            const pendientes = (habituales.data ?? []).filter((p) => !yaCargados.has(p.id));
+            if (pendientes.length === 0) return null;
+            return (
+              <div className="flex flex-col gap-1.5">
+                <div className="text-sm font-bold text-texto-suave">Lo que suele traer este proveedor</div>
+                <div className="flex flex-wrap gap-2">
+                  {pendientes.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setOverlay({ tipo: 'tecladoRemito', producto: p })}
+                      className="min-h-11 cursor-pointer rounded-full border-2 border-primario bg-primario-suave px-4 text-sm font-bold text-primario hover:bg-chip"
+                    >
+                      + {p.nombre}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
           <button
             type="button"
             onClick={() => setOverlay({ tipo: 'selectorProducto' })}
             className="min-h-[62px] w-full cursor-pointer rounded-2xl border-2 border-dashed border-borde-fuerte bg-transparent text-lg font-bold text-primario hover:bg-chip"
           >
-            ＋ AGREGAR PRODUCTO
+            ＋ AGREGAR OTRO PRODUCTO
           </button>
           <div className="flex-1" />
           <button
@@ -184,14 +214,28 @@ export function AsistenteIngreso({ onVolver, onFinalizado }: Props) {
         <div className="flex flex-1 flex-col gap-3 overflow-auto px-4 pb-5 pt-1.5">
           <div className="py-1 text-xl font-extrabold">Foto del remito</div>
           <div className="text-[15px] text-texto-suave">Es opcional. Si podés, sacale una foto.</div>
-          {fotoUrl && (
-            <div className="flex items-center gap-3.5 rounded-2xl border-2 border-primario bg-white p-4.5">
-              <div className="flex h-16 w-16 items-center justify-center rounded-xl border border-borde-fuerte bg-chip text-[10px] text-texto-suave">
-                foto
-              </div>
-              <div className="flex-1">
-                <div className="text-base font-bold text-primario">✓ Foto cargada</div>
-                <div className="text-sm text-texto-suave">{fotoNombre}</div>
+          {fotoPreview && (
+            <div className="flex flex-col gap-2.5 rounded-2xl border-2 border-primario bg-white p-3.5">
+              <img
+                src={fotoPreview}
+                alt="Vista previa del remito"
+                className="max-h-72 w-full rounded-xl border border-borde-fuerte object-contain"
+              />
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate text-base font-bold text-primario">
+                    {subiendoFoto ? 'Subiendo…' : fotoUrl ? '✓ Foto cargada' : 'Foto no se pudo subir'}
+                  </div>
+                  <div className="truncate text-sm text-texto-suave">{fotoNombre}</div>
+                </div>
+                <button
+                  type="button"
+                  disabled={subiendoFoto}
+                  onClick={() => inputFotoRef.current?.click()}
+                  className="min-h-11 shrink-0 cursor-pointer rounded-xl border-2 border-primario bg-white px-4 text-sm font-bold text-primario hover:bg-chip disabled:opacity-50"
+                >
+                  CAMBIAR FOTO
+                </button>
               </div>
             </div>
           )}
@@ -199,31 +243,40 @@ export function AsistenteIngreso({ onVolver, onFinalizado }: Props) {
             ref={inputFotoRef}
             type="file"
             accept="image/*"
-            capture="environment"
             className="hidden"
             onChange={(e) => {
               const archivo = e.target.files?.[0];
               if (archivo) {
+                setFotoPreview((anterior) => {
+                  if (anterior) URL.revokeObjectURL(anterior);
+                  return URL.createObjectURL(archivo);
+                });
+                setFotoUrl(null);
                 setSubiendoFoto(true);
                 mutSubirFoto.mutate(archivo);
               }
+              // Permite volver a elegir el mismo archivo si se cancela y se reintenta
+              e.target.value = '';
             }}
           />
-          <button
-            type="button"
-            disabled={subiendoFoto}
-            onClick={() => inputFotoRef.current?.click()}
-            className="min-h-16 w-full cursor-pointer rounded-2xl border-2 border-primario bg-white text-lg font-extrabold text-primario hover:bg-chip disabled:opacity-50"
-          >
-            {subiendoFoto ? 'SUBIENDO…' : 'SACAR FOTO DEL REMITO'}
-          </button>
+          {!fotoPreview && (
+            <button
+              type="button"
+              disabled={subiendoFoto}
+              onClick={() => inputFotoRef.current?.click()}
+              className="min-h-16 w-full cursor-pointer rounded-2xl border-2 border-primario bg-white text-lg font-extrabold text-primario hover:bg-chip disabled:opacity-50"
+            >
+              SACAR FOTO O ELEGIR DE GALERÍA
+            </button>
+          )}
           <div className="flex-1" />
           <button
             type="button"
+            disabled={subiendoFoto}
             onClick={() => setPaso(4)}
-            className="min-h-15 w-full cursor-pointer rounded-2xl bg-primario text-lg font-extrabold text-white hover:bg-primario-hover"
+            className="min-h-15 w-full cursor-pointer rounded-2xl bg-primario text-lg font-extrabold text-white hover:bg-primario-hover disabled:opacity-50"
           >
-            {fotoUrl ? 'CONTINUAR' : 'SALTEAR'}
+            {subiendoFoto ? 'ESPERANDO LA FOTO…' : fotoPreview ? 'CONTINUAR' : 'SALTEAR'}
           </button>
         </div>
       )}

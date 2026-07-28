@@ -9,6 +9,10 @@ export interface PropsTecladoNumerico {
   permiteCero?: boolean;
   maximo?: number;
   mensajeMaximo?: string;
+  /** Texto fijo siempre visible (ej: "Quedan 8,2 kg disponibles") — no depende de que se pase el máximo. */
+  pistaDisponible?: string;
+  /** Prefill al editar un valor ya cargado. */
+  valorInicial?: number;
   onConfirmar: (valor: number) => void;
   onCancelar: () => void;
 }
@@ -26,10 +30,12 @@ export function TecladoNumerico({
   permiteCero = false,
   maximo,
   mensajeMaximo,
+  pistaDisponible,
+  valorInicial,
   onConfirmar,
   onCancelar,
 }: PropsTecladoNumerico) {
-  const [valor, setValor] = useState('');
+  const [valor, setValor] = useState(valorInicial != null ? String(valorInicial).replace('.', ',') : '');
   const [error, setError] = useState('');
 
   function presionar(tecla: string) {
@@ -57,6 +63,11 @@ export function TecladoNumerico({
       <div className="flex w-full flex-col gap-3 rounded-t-3xl bg-white p-5 sm:w-full sm:max-w-md sm:rounded-3xl">
         <div className="text-lg font-extrabold">{titulo}</div>
         {subtitulo && <div className="-mt-2 text-sm text-texto-suave">{subtitulo}</div>}
+        {pistaDisponible && (
+          <div className="-mt-1 rounded-xl bg-chip px-3.5 py-2 text-sm font-semibold text-texto-suave">
+            {pistaDisponible}
+          </div>
+        )}
         <div className="flex min-h-[64px] items-baseline justify-end gap-2 rounded-2xl border-2 border-borde-fuerte bg-panel px-4 py-3.5">
           <span className="text-4xl font-extrabold tracking-wide">{valor || '0'}</span>
           {unidad && <span className="text-lg font-semibold text-texto-suave">{unidad}</span>}

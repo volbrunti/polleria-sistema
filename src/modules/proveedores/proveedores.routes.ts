@@ -17,6 +17,8 @@ const actualizarSchema = z.object({
 
 const paramsId = z.object({ id: z.coerce.number().int().positive() });
 
+const productosHabitualesSchema = z.object({ productoIds: z.array(z.number().int().positive()) });
+
 export async function proveedoresRoutes(app: FastifyInstance) {
   // Lectura: PRODUCCION la necesita para cargar ingresos
   app.get(
@@ -71,6 +73,54 @@ export async function proveedoresRoutes(app: FastifyInstance) {
           datosNuevos: proveedor,
         });
         return proveedor;
+      });
+    },
+  );
+
+  // Productos habituales de un proveedor (sin cantidades): configuración fija
+  // que carga el admin una vez, usada como acceso rápido al cargar un
+  // ingreso de ese proveedor (AsistenteIngreso en el rol PRODUCCION).
+  app.get(
+    '/:id/productos-habituales',
+    { preHandler: [app.autenticar, app.requerirRoles('ADMINISTRADOR', 'PRODUCCION')] },
+    async (req) => {
+      const { id } = paramsId.parse(req.params);
+      const proveedor = await prisma.proveedor.findUnique({
+        where: { id },
+        include: { productosHabituales: { where: { activo: true }, orderBy: { nombre: 'asc' } } },
+      });
+      if (!proveedor) throw Errores.noEncontrado('Proveedor');
+      return proveedor.productosHabituales;
+    },
+  );
+
+  app.put(
+    '/:id/productos-habituales',
+    { preHandler: [app.autenticar, app.requerirRoles('ADMINISTRADOR')] },
+    async (req) => {
+      const { id } = paramsId.parse(req.params);
+      const { productoIds } = productosHabitualesSchema.parse(req.body);
+      const anterior = await prisma.proveedor.findUnique({
+        where: { id },
+        include: { productosHabituales: { select: { id: true, nombre: true } } },
+      });
+      if (!anterior) throw Errores.noEncontrado('Proveedor');
+
+      return prisma.$transaction(async (tx) => {
+        const actualizado = await tx.proveedor.update({
+          where: { id },
+          data: { productosHabituales: { set: productoIds.map((pid) => ({ id: pid })) } },
+          include: { productosHabituales: { select: { id: true, nombre: true } } },
+        });
+        await registrarAuditoria(tx, {
+          accion: 'CONFIGURAR_PRODUCTOS_HABITUALES',
+          entidad: 'Proveedor',
+          entidadId: id,
+          usuarioId: req.usuario.id,
+          datosAnteriores: { productos: anterior.productosHabituales },
+          datosNuevos: { productos: actualizado.productosHabituales },
+        });
+        return actualizado.productosHabituales;
       });
     },
   );

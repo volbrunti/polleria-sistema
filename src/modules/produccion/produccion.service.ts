@@ -306,6 +306,37 @@ export async function cerrarLote(params: {
   return resultado.lote;
 }
 
+// Productos que efectivamente se producen por lote en planta: tipo ELABORADO
+// CON ficha técnica cargada. Deja afuera lo que se arma en el local a la
+// venta (hamburguesas completas, papas grandes, etc. — son ELABORADO pero
+// nunca tienen FichaTecnica, se arman en el POS del módulo 2) y productos de
+// sistema que no se producen por lote (ej. "Pollo a la leña — MARCADO", que
+// se genera solo marcando pollos en caja).
+export async function listarProductosProducibles() {
+  return prisma.producto.findMany({
+    where: { tipo: 'ELABORADO', activo: true, esProductoSistema: false, fichaTecnica: { isNot: null } },
+    orderBy: { nombre: 'asc' },
+  });
+}
+
+// Identidades de los insumos de la ficha activa de un producto — SIN
+// cantidades ni datos de rendimiento/desvío (control ciego: PRODUCCION nunca
+// ve esos números). Sirve para precargar la lista de insumos al abrir un
+// lote, sin tener que buscarlos uno por uno en el catálogo completo.
+export async function insumosDeFichaActiva(productoElaboradoId: number) {
+  const { version } = await fichasService.obtenerVersionActiva(productoElaboradoId);
+  const ingredientes = await prisma.ingredienteDeReceta.findMany({
+    where: { fichaTecnicaVersionId: version.id },
+    include: { productoInsumo: { select: { nombre: true, unidadDeMedida: true } } },
+  });
+  return ingredientes.map((i) => ({
+    productoInsumoId: i.productoInsumoId,
+    nombre: i.productoInsumo.nombre,
+    unidadDeMedida: i.productoInsumo.unidadDeMedida,
+    esPrincipal: i.esPrincipal,
+  }));
+}
+
 export async function listarLotes(filtros: { estado?: 'ABIERTO' | 'CERRADO'; desde?: Date; hasta?: Date }) {
   return prisma.loteDeProduccion.findMany({
     where: { estado: filtros.estado, fechaHora: { gte: filtros.desde, lte: filtros.hasta } },

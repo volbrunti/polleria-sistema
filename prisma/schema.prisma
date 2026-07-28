@@ -254,6 +254,8 @@ model Producto {
   itemsDePedido              ItemDePedido[]
   atenciones                 Atencion[]
   configuracionesStockMinimo ConfiguracionStockMinimo[]
+  // Proveedores que suelen traer este producto (ver Proveedor.productosHabituales)
+  proveedoresHabituales      Proveedor[]                @relation("ProveedorProductosHabituales")
 
   @@map("productos")
 }
@@ -363,6 +365,11 @@ model Proveedor {
   esProveedorSistema Boolean @default(false)
 
   ingresos IngresoMercaderia[]
+  // Qué productos le suele comprar la pollería a este proveedor — SIN
+  // cantidades, solo identidad. Lo configura el ADMIN una vez (pantalla
+  // Catálogo > Proveedores) y sirve como acceso rápido al cargar un ingreso
+  // (AsistenteIngreso), en vez de tener que buscar cada producto de cero.
+  productosHabituales Producto[] @relation("ProveedorProductosHabituales")
 
   @@map("proveedores")
 }

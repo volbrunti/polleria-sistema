@@ -77,4 +77,23 @@ export async function produccionRoutes(app: FastifyInstance) {
       return serializarLote(lote, req.usuario.rol);
     },
   );
+
+  // Productos que efectivamente se producen por lote (tipo ELABORADO con
+  // ficha técnica activa) — para el selector "¿qué vas a producir?".
+  app.get(
+    '/productos-producibles',
+    { preHandler: [app.autenticar, app.requerirRoles('PRODUCCION', 'ADMINISTRADOR')] },
+    async () => produccionService.listarProductosProducibles(),
+  );
+
+  // Insumos de la ficha activa de un producto — SOLO identidades, sin
+  // cantidades ni datos de rendimiento/desvío (control ciego).
+  app.get(
+    '/productos/:id/insumos-esperados',
+    { preHandler: [app.autenticar, app.requerirRoles('PRODUCCION', 'ADMINISTRADOR')] },
+    async (req) => {
+      const { id } = paramsId.parse(req.params);
+      return produccionService.insumosDeFichaActiva(id);
+    },
+  );
 }
