@@ -9,7 +9,13 @@ import {
   crearCombo,
   tablaPrecioVigente,
 } from '../../api/productos';
-import { listarProveedores, crearProveedor, actualizarProveedor } from '../../api/proveedores';
+import {
+  listarProveedores,
+  crearProveedor,
+  actualizarProveedor,
+  productosHabituales,
+  guardarProductosHabituales,
+} from '../../api/proveedores';
 import { listarSucursales } from '../../api/sucursales';
 import { TecladoNumerico } from '../../components/ui/TecladoNumerico';
 import { ApiError } from '../../api/client';
@@ -72,6 +78,22 @@ function TabProductos({ puedeEscribir }: { puedeEscribir: boolean }) {
   const [tipo, setTipo] = useState<TipoProducto>('MATERIA_PRIMA');
   const [unidad, setUnidad] = useState<UnidadDeMedida>('KG');
   const [error, setError] = useState<string | null>(null);
+
+  const [fBusqueda, setFBusqueda] = useState('');
+  const [fCategoria, setFCategoria] = useState('');
+  const [fTipo, setFTipo] = useState<TipoProducto | ''>('');
+  const [fActivo, setFActivo] = useState<'todos' | 'activos' | 'inactivos'>('activos');
+
+  const categoriasDisponibles = [...new Set((productos.data ?? []).map((p) => p.categoria))].sort();
+
+  const productosFiltrados = (productos.data ?? []).filter((p) => {
+    if (fBusqueda.trim() && !p.nombre.toLowerCase().includes(fBusqueda.trim().toLowerCase())) return false;
+    if (fCategoria && p.categoria !== fCategoria) return false;
+    if (fTipo && p.tipo !== fTipo) return false;
+    if (fActivo === 'activos' && !p.activo) return false;
+    if (fActivo === 'inactivos' && p.activo) return false;
+    return true;
+  });
 
   function abrirNuevo() {
     setEditando(null);
@@ -160,6 +182,46 @@ function TabProductos({ puedeEscribir }: { puedeEscribir: boolean }) {
           </div>
         </div>
       )}
+      <div className="flex flex-wrap items-center gap-2.5 rounded-2xl border border-borde bg-white p-3.5">
+        <input
+          value={fBusqueda}
+          onChange={(e) => setFBusqueda(e.target.value)}
+          placeholder="Buscar por nombre…"
+          className="h-11 min-w-[180px] flex-1 rounded-[10px] border border-borde-fuerte px-3 text-sm"
+        />
+        <select
+          value={fCategoria}
+          onChange={(e) => setFCategoria(e.target.value)}
+          className="h-11 rounded-[10px] border border-borde-fuerte bg-white px-2.5 text-sm"
+        >
+          <option value="">Todas las categorías</option>
+          {categoriasDisponibles.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+        <select
+          value={fTipo}
+          onChange={(e) => setFTipo(e.target.value as TipoProducto | '')}
+          className="h-11 rounded-[10px] border border-borde-fuerte bg-white px-2.5 text-sm"
+        >
+          <option value="">Todos los tipos</option>
+          <option value="MATERIA_PRIMA">Materia prima</option>
+          <option value="ELABORADO">Elaborado</option>
+          <option value="REVENTA">Reventa</option>
+          <option value="COMBO">Combo</option>
+        </select>
+        <select
+          value={fActivo}
+          onChange={(e) => setFActivo(e.target.value as 'todos' | 'activos' | 'inactivos')}
+          className="h-11 rounded-[10px] border border-borde-fuerte bg-white px-2.5 text-sm"
+        >
+          <option value="activos">Solo activos</option>
+          <option value="inactivos">Solo inactivos</option>
+          <option value="todos">Todos</option>
+        </select>
+      </div>
       <div className="overflow-x-auto rounded-2xl border border-borde bg-white">
         <div className="grid grid-cols-[1fr_160px_170px_110px_110px] bg-chip px-5 py-3 text-xs font-extrabold tracking-wide text-texto-suave">
           <span>NOMBRE</span>
@@ -168,9 +230,12 @@ function TabProductos({ puedeEscribir }: { puedeEscribir: boolean }) {
           <span>UNIDAD</span>
           <span />
         </div>
-        {productos.data?.map((p) => (
+        {productosFiltrados.length === 0 && (
+          <div className="px-5 py-6 text-center text-sm text-texto-suave">Sin resultados con estos filtros.</div>
+        )}
+        {productosFiltrados.map((p) => (
           <div key={p.id} className="grid grid-cols-[1fr_160px_170px_110px_110px] items-center border-t border-[#eef1ea] px-5 py-3.5 text-sm">
-            <span className="font-semibold">{p.nombre}</span>
+            <span className={`font-semibold ${p.activo ? '' : 'text-texto-suave line-through'}`}>{p.nombre}</span>
             <span className="text-texto-suave">{p.categoria}</span>
             <span className="font-mono text-xs text-texto-suave">{p.tipo}</span>
             <span className="text-texto-suave">{p.unidadDeMedida}</span>
@@ -543,6 +608,7 @@ function TabProveedores({ puedeEscribir }: { puedeEscribir: boolean }) {
   const [nombre, setNombre] = useState('');
   const [contacto, setContacto] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [editandoHabituales, setEditandoHabituales] = useState<Proveedor | null>(null);
 
   const mutCrear = useMutation({
     mutationFn: crearProveedor,
@@ -617,22 +683,128 @@ function TabProveedores({ puedeEscribir }: { puedeEscribir: boolean }) {
             <span className="font-semibold">{p.esOtro ? 'OTRO' : p.nombre}</span>
             <span className="text-texto-suave">{p.contacto ?? '—'}</span>
             {puedeEscribir && !p.esOtro && (
-              <button
-                type="button"
-                onClick={() => {
-                  setEditando(p);
-                  setNombre(p.nombre);
-                  setContacto(p.contacto ?? '');
-                  setAbierto(true);
-                  setError(null);
-                }}
-                className="min-h-9 w-fit cursor-pointer rounded-lg border border-borde-fuerte bg-white px-3.5 text-[13px] font-bold text-primario"
-              >
-                Editar
-              </button>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditandoHabituales(p)}
+                  className="min-h-9 w-fit cursor-pointer rounded-lg border border-borde-fuerte bg-white px-3.5 text-[13px] font-bold text-primario"
+                >
+                  Habituales
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditando(p);
+                    setNombre(p.nombre);
+                    setContacto(p.contacto ?? '');
+                    setAbierto(true);
+                    setError(null);
+                  }}
+                  className="min-h-9 w-fit cursor-pointer rounded-lg border border-borde-fuerte bg-white px-3.5 text-[13px] font-bold text-primario"
+                >
+                  Editar
+                </button>
+              </div>
             )}
           </div>
         ))}
+      </div>
+      {editandoHabituales && (
+        <ModalProductosHabituales proveedor={editandoHabituales} onCerrar={() => setEditandoHabituales(null)} />
+      )}
+    </div>
+  );
+}
+
+// Configuración fija de qué productos suele traer cada proveedor (sin
+// cantidades) — el admin la carga una vez y sirve de acceso rápido en el
+// asistente de "Llegó mercadería" del rol PRODUCCION.
+function ModalProductosHabituales({ proveedor, onCerrar }: { proveedor: Proveedor; onCerrar: () => void }) {
+  const queryClient = useQueryClient();
+  const materiasPrimas = useQuery({
+    queryKey: ['productos', 'MATERIA_PRIMA', 'activo'],
+    queryFn: () => listarProductos({ tipo: 'MATERIA_PRIMA', activo: true }),
+  });
+  const habituales = useQuery({
+    queryKey: ['proveedores', proveedor.id, 'productos-habituales'],
+    queryFn: () => productosHabituales(proveedor.id),
+  });
+  const [seleccion, setSeleccion] = useState<Set<number> | null>(null);
+  const [busqueda, setBusqueda] = useState('');
+
+  if (seleccion === null && habituales.data) {
+    setSeleccion(new Set(habituales.data.map((p) => p.id)));
+  }
+
+  const mutGuardar = useMutation({
+    mutationFn: () => guardarProductosHabituales(proveedor.id, [...(seleccion ?? [])]),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['proveedores', proveedor.id, 'productos-habituales'] });
+      onCerrar();
+    },
+  });
+
+  const filtrados = (materiasPrimas.data ?? []).filter((p) =>
+    busqueda.trim() ? p.nombre.toLowerCase().includes(busqueda.trim().toLowerCase()) : true,
+  );
+
+  function alternar(id: number) {
+    setSeleccion((s) => {
+      const nuevo = new Set(s);
+      if (nuevo.has(id)) nuevo.delete(id);
+      else nuevo.add(id);
+      return nuevo;
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-20 flex items-end justify-center bg-black/45 sm:items-center sm:p-6">
+      <div className="flex max-h-[85%] w-full flex-col gap-3 overflow-hidden rounded-t-3xl bg-white p-5 sm:max-w-md sm:rounded-3xl">
+        <div className="text-lg font-extrabold">Productos habituales — {proveedor.nombre}</div>
+        <div className="text-sm text-texto-suave">
+          Marcá qué productos suele traer este proveedor. Van a aparecer como acceso rápido al cargar un ingreso, sin
+          cantidades — eso se sigue cargando en el momento.
+        </div>
+        <input
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+          placeholder="Buscar…"
+          className="h-11 w-full rounded-[10px] border border-borde-fuerte px-3 text-sm"
+        />
+        <div className="flex flex-col gap-1.5 overflow-auto">
+          {filtrados.map((p) => (
+            <label
+              key={p.id}
+              className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border border-borde px-3.5 py-2 hover:bg-chip"
+            >
+              <input
+                type="checkbox"
+                checked={seleccion?.has(p.id) ?? false}
+                onChange={() => alternar(p.id)}
+                className="h-5 w-5"
+              />
+              <span className="text-sm font-semibold">{p.nombre}</span>
+            </label>
+          ))}
+          {filtrados.length === 0 && <div className="py-4 text-center text-sm text-texto-suave">Sin resultados.</div>}
+        </div>
+        <div className="flex gap-2.5">
+          <button
+            type="button"
+            onClick={onCerrar}
+            className="min-h-12 flex-1 cursor-pointer rounded-xl border-2 border-borde-fuerte bg-white text-sm font-bold text-texto-suave"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            disabled={mutGuardar.isPending || seleccion === null}
+            onClick={() => mutGuardar.mutate()}
+            className="min-h-12 flex-[2] cursor-pointer rounded-xl bg-primario text-sm font-extrabold text-white disabled:opacity-50"
+          >
+            {mutGuardar.isPending ? 'GUARDANDO…' : 'GUARDAR'}
+          </button>
+        </div>
       </div>
     </div>
   );

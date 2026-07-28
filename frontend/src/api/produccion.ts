@@ -1,10 +1,28 @@
 import { apiFetch } from './client';
-import type { LoteDeProduccion } from './types';
+import type { LoteDeProduccion, Producto } from './types';
 
 export interface InsumoInput {
   productoInsumoId: number;
   lineaIngresoOrigenId: number;
   cantidadUsada: number;
+}
+
+export interface InsumoEsperado {
+  productoInsumoId: number;
+  nombre: string;
+  unidadDeMedida: 'KG' | 'UNIDAD';
+  esPrincipal: boolean;
+}
+
+// Productos que se producen por lote en planta (tipo ELABORADO con ficha
+// técnica activa) — deja afuera lo que se arma en el local a la venta.
+export function listarProductosProducibles() {
+  return apiFetch<Producto[]>('/api/produccion/productos-producibles');
+}
+
+// Insumos de la ficha activa — solo identidades, sin cantidades (control ciego).
+export function insumosEsperados(productoElaboradoId: number) {
+  return apiFetch<InsumoEsperado[]>(`/api/produccion/productos/${productoElaboradoId}/insumos-esperados`);
 }
 
 export function abrirLote(datos: { productoElaboradoId: number; insumos: InsumoInput[] }) {
