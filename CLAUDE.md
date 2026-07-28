@@ -127,6 +127,14 @@ El frontend vive en `frontend/` (proyecto Vite independiente, sin monorepo tooli
 
 **Comandos**: `cd frontend && npm run dev` (:5173, requiere backend en :3000) · `npm run build` · `npx tsc -b --noEmit`.
 
+**Refinamientos de UX (2026-07-27)**, pedidos por Ariel/Pablo después de probar la rama `feature/modulo-2` (portados acá porque son funcionalidad de Módulo 1, no específica del módulo 2):
+- Foto del remito: preview real de la imagen + un solo botón que deja elegir cámara o galería (antes forzaba la cámara y solo mostraba un ícono placeholder).
+- "¿Qué vas a producir?" filtra a solo productos con ficha técnica activa (`GET /produccion/productos-producibles`) — ya no aparecen productos que se arman en el local ni productos de sistema.
+- Catálogo admin: filtros por nombre, categoría, tipo y activo/inactivo.
+- Productos habituales por proveedor: relación `Proveedor.productosHabituales` ↔ `Producto` (sin cantidades, migración `20260727235304_proveedor_productos_habituales`), configurable por el admin en Catálogo > Proveedores, usada como acceso rápido al cargar un ingreso.
+- Insumos de la ficha técnica precargados al elegir qué producir (`GET /produccion/productos/:id/insumos-esperados`, solo identidades, sin cantidades ni datos de rendimiento — control ciego intacto), con reparto automático FIFO entre partidas cuando un insumo está repartido en varias, editable a mano antes de confirmar.
+- Auditoría: el "ver detalle" dejó de mostrar JSON crudo — ahora muestra pares campo/valor legibles (con nombres reales para los xxxId de producto/usuario que se pueden resolver) y cada acción se traduce a una frase en español. La tabla pasó de un grid rígido con ancho mínimo fijo (causaba scroll horizontal y texto cortado en pantallas chicas) a un layout de tarjetas responsive.
+
 ### FASES FUTURAS (para conocimiento, NO desarrollar todavía)
 - **Módulo 2**: POS + Caja y Turnos (Flujos 4 y 5) — van juntos, la venta requiere turno abierto.
 - **Módulo 3**: Alertas de stock mínimo + Reportes y dashboard (Flujos 6 y 7 visibles).
