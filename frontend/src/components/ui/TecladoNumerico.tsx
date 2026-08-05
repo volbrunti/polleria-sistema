@@ -13,6 +13,16 @@ export interface PropsTecladoNumerico {
   pistaDisponible?: string;
   /** Prefill al editar un valor ya cargado. */
   valorInicial?: number;
+  /**
+   * "contraste" pinta el teclado en ámbar en vez de verde. Se usa cuando dos
+   * teclados aparecen uno atrás del otro y el operario podría no registrar que
+   * cambió de paso — el caso que motivó esto es remito → peso real, donde
+   * repetir el número del remito por inercia arruina el control (pedido de
+   * Pablo, reunión 4/8: "no te genera ninguna diferencia visual").
+   */
+  variante?: 'normal' | 'contraste';
+  /** Ícono grande al lado del título. Refuerza de qué paso se trata. */
+  icono?: string;
   onConfirmar: (valor: number) => void;
   onCancelar: () => void;
 }
@@ -32,9 +42,12 @@ export function TecladoNumerico({
   mensajeMaximo,
   pistaDisponible,
   valorInicial,
+  variante = 'normal',
+  icono,
   onConfirmar,
   onCancelar,
 }: PropsTecladoNumerico) {
+  const contraste = variante === 'contraste';
   const [valor, setValor] = useState(valorInicial != null ? String(valorInicial).replace('.', ',') : '');
   const [error, setError] = useState('');
 
@@ -60,15 +73,34 @@ export function TecladoNumerico({
 
   return (
     <div className="fixed inset-0 z-20 flex items-end justify-center bg-black/45 sm:items-center sm:p-6">
-      <div className="flex w-full flex-col gap-3 rounded-t-3xl bg-white p-5 sm:w-full sm:max-w-md sm:rounded-3xl">
-        <div className="text-lg font-extrabold">{titulo}</div>
-        {subtitulo && <div className="-mt-2 text-sm text-texto-suave">{subtitulo}</div>}
+      <div
+        className={`flex w-full flex-col gap-3 rounded-t-3xl bg-white p-5 sm:w-full sm:max-w-md sm:rounded-3xl ${
+          contraste ? 'border-t-8 border-acento sm:border-t-0 sm:ring-8 sm:ring-acento' : ''
+        }`}
+      >
+        <div className="flex items-start gap-2.5">
+          {icono && <span className="text-2xl leading-none">{icono}</span>}
+          <div className="min-w-0 flex-1">
+            <div className="text-lg font-extrabold">{titulo}</div>
+            {subtitulo && <div className="text-sm text-texto-suave">{subtitulo}</div>}
+          </div>
+        </div>
         {pistaDisponible && (
-          <div className="-mt-1 rounded-xl bg-chip px-3.5 py-2 text-sm font-semibold text-texto-suave">
+          <div
+            className={
+              contraste
+                ? '-mt-1 rounded-xl bg-advertencia-suave px-3.5 py-2.5 text-[15px] font-bold text-advertencia-texto'
+                : '-mt-1 rounded-xl bg-chip px-3.5 py-2 text-sm font-semibold text-texto-suave'
+            }
+          >
             {pistaDisponible}
           </div>
         )}
-        <div className="flex min-h-[64px] items-baseline justify-end gap-2 rounded-2xl border-2 border-borde-fuerte bg-panel px-4 py-3.5">
+        <div
+          className={`flex min-h-[64px] items-baseline justify-end gap-2 rounded-2xl border-2 px-4 py-3.5 ${
+            contraste ? 'border-acento bg-advertencia-suave' : 'border-borde-fuerte bg-panel'
+          }`}
+        >
           <span className="text-4xl font-extrabold tracking-wide">{valor || '0'}</span>
           {unidad && <span className="text-lg font-semibold text-texto-suave">{unidad}</span>}
         </div>

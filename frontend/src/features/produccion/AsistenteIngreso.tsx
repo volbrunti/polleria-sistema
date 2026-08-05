@@ -14,6 +14,8 @@ import type { Producto, Proveedor } from '../../api/types';
 interface Props {
   onVolver: () => void;
   onFinalizado: () => void;
+  /** Atajo desde la pantalla de éxito: lo que entró casi siempre se produce. */
+  onIrAProducir?: () => void;
 }
 
 interface LineaIngresoUI {
@@ -28,7 +30,33 @@ type Overlay =
   | { tipo: 'tecladoPesada'; producto: Producto; remito: number }
   | null;
 
-export function AsistenteIngreso({ onVolver, onFinalizado }: Props) {
+// Remito vs pesado, con la diferencia destacada cuando no coinciden. Es el
+// dato que justifica todo el flujo: Ariel contó que pesando bolsas de papa
+// "de 10 kg" descubrió que el promedio real era 9,750.
+function DetalleLinea({ linea }: { linea: LineaIngresoUI }) {
+  const u = linea.producto.unidadDeMedida.toLowerCase();
+  const diferencia = linea.cantidadRealPesada - linea.cantidadSegunRemito;
+  const coincide = Math.abs(diferencia) < 0.0005;
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-texto-suave">
+      <span>
+        Remito: {fmtNumero(linea.cantidadSegunRemito)} {u}
+      </span>
+      <span aria-hidden>·</span>
+      <span>
+        Pesado: {fmtNumero(linea.cantidadRealPesada)} {u}
+      </span>
+      {!coincide && (
+        <span className="rounded-md bg-advertencia-suave px-2 py-0.5 text-[13px] font-extrabold text-advertencia-texto">
+          {diferencia > 0 ? '+' : '−'}
+          {fmtNumero(Math.abs(diferencia))} {u}
+        </span>
+      )}
+    </div>
+  );
+}
+
+export function AsistenteIngreso({ onVolver, onFinalizado, onIrAProducir }: Props) {
   const [paso, setPaso] = useState(1);
   const [proveedor, setProveedor] = useState<Proveedor | null>(null);
   const [comentarioOtro, setComentarioOtro] = useState('');
@@ -77,6 +105,7 @@ export function AsistenteIngreso({ onVolver, onFinalizado }: Props) {
         titulo="Ingreso registrado"
         subtitulo={`${lineas.length} producto${lineas.length === 1 ? '' : 's'} cargado${lineas.length === 1 ? '' : 's'}.`}
         onContinuar={onFinalizado}
+        accionSugerida={onIrAProducir ? { texto: 'AHORA PRODUCIR →', onClick: onIrAProducir } : undefined}
       />
     );
   }
@@ -154,10 +183,7 @@ export function AsistenteIngreso({ onVolver, onFinalizado }: Props) {
             <div key={i} className="flex items-center gap-3 rounded-2xl border border-borde bg-white px-4 py-3.5">
               <div className="min-w-0 flex-1">
                 <div className="text-[17px] font-bold">{l.producto.nombre}</div>
-                <div className="text-sm text-texto-suave">
-                  Remito: {fmtNumero(l.cantidadSegunRemito)} {l.producto.unidadDeMedida.toLowerCase()} · Pesado:{' '}
-                  {fmtNumero(l.cantidadRealPesada)} {l.producto.unidadDeMedida.toLowerCase()}
-                </div>
+                <DetalleLinea linea={l} />
               </div>
               <button
                 type="button"
@@ -299,10 +325,7 @@ export function AsistenteIngreso({ onVolver, onFinalizado }: Props) {
           {lineas.map((l, i) => (
             <div key={i} className="rounded-2xl border border-borde bg-white px-4 py-3.5">
               <div className="text-[17px] font-bold">{l.producto.nombre}</div>
-              <div className="text-sm text-texto-suave">
-                Remito: {fmtNumero(l.cantidadSegunRemito)} {l.producto.unidadDeMedida.toLowerCase()} · Pesado:{' '}
-                {fmtNumero(l.cantidadRealPesada)} {l.producto.unidadDeMedida.toLowerCase()}
-              </div>
+              <DetalleLinea linea={l} />
             </div>
           ))}
           {errorEnvio && (
@@ -339,6 +362,8 @@ export function AsistenteIngreso({ onVolver, onFinalizado }: Props) {
           titulo="Elegí el producto"
           buscable
           items={(materiasPrimas.data ?? []).map((p) => ({ id: p.id, label: p.nombre }))}
+          idsDestacados={(habituales.data ?? []).map((p) => p.id)}
+          etiquetaResto="Otros productos — no es lo que suele traer"
           onCancelar={() => setOverlay(null)}
           onSeleccionar={(item) => {
             const producto = materiasPrimas.data!.find((p) => p.id === item.id)!;
@@ -351,6 +376,7 @@ export function AsistenteIngreso({ onVolver, onFinalizado }: Props) {
         <TecladoNumerico
           titulo="¿Cuánto dice el remito?"
           subtitulo={overlay.producto.nombre}
+          icono="📄"
           unidad={overlay.producto.unidadDeMedida === 'KG' ? 'kg' : 'u'}
           permiteDecimal={overlay.producto.unidadDeMedida === 'KG'}
           onCancelar={() => setOverlay(null)}
@@ -358,10 +384,16 @@ export function AsistenteIngreso({ onVolver, onFinalizado }: Props) {
         />
       )}
 
+      {/* Segundo paso en ámbar y con la referencia del remito arriba: si el
+          operario repite el número del papel, que sea a propósito y no por
+          inercia de venir de una pantalla idéntica. */}
       {overlay?.tipo === 'tecladoPesada' && (
         <TecladoNumerico
-          titulo="¿Cuánto pesaste vos?"
+          titulo="Ahora pesalo vos"
           subtitulo={overlay.producto.nombre}
+          icono="⚖️"
+          variante="contraste"
+          pistaDisponible={`El remito decía ${fmtNumero(overlay.remito)} ${overlay.producto.unidadDeMedida === 'KG' ? 'kg' : 'u'} — cargá lo que da la balanza`}
           unidad={overlay.producto.unidadDeMedida === 'KG' ? 'kg' : 'u'}
           permiteDecimal={overlay.producto.unidadDeMedida === 'KG'}
           onCancelar={() => setOverlay(null)}
