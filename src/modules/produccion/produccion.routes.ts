@@ -78,6 +78,29 @@ export async function produccionRoutes(app: FastifyInstance) {
     },
   );
 
+  // Lotes cerrados con saldo sin enviar — para elegir de qué partida sale un
+  // envío. Devuelve solo identidad, fecha y saldo: nada de rendimiento ni
+  // desvío, así que PRODUCCION lo puede leer sin romper el control ciego.
+  app.get(
+    '/lotes-disponibles',
+    { preHandler: [app.autenticar, app.requerirRoles('PRODUCCION', 'ADMINISTRADOR')] },
+    async (req) => {
+      const { productoId } = z
+        .object({ productoId: z.coerce.number().int().positive().optional() })
+        .parse(req.query);
+      const lotes = await produccionService.lotesDisponibles(productoId);
+      return lotes.map((l) => ({
+        id: l.id,
+        productoElaboradoId: l.productoElaboradoId,
+        producto: l.productoElaborado.nombre,
+        unidadDeMedida: l.productoElaborado.unidadDeMedida,
+        fechaHora: l.fechaHora,
+        operario: l.usuarioOperario.username,
+        cantidadRestanteDisponible: l.cantidadRestanteDisponible?.toString() ?? '0',
+      }));
+    },
+  );
+
   app.get(
     '/lotes/:id',
     { preHandler: [app.autenticar, app.requerirRoles('PRODUCCION', 'ADMINISTRADOR', 'SOCIO')] },

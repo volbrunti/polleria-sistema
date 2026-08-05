@@ -8,6 +8,13 @@ import * as alertasService from '../alertas/alertas.service';
 export interface LineaTransferenciaInput {
   productoId: number;
   cantidadEnviada: number;
+  /**
+   * De qué lote de producción salen estas unidades. Opcional: hay stock sin
+   * lote (reventa, ajustes, retornos, y todo lo producido antes de que el lote
+   * llevara saldo). Pablo lo pidió para poder mandar "las de ayer, no las que
+   * produjeron hoy a la mañana" (reunión 4/8).
+   */
+  loteOrigenId?: number;
 }
 
 export interface LineaRecepcionInput {
@@ -40,14 +47,40 @@ export async function generarTransferencia(params: {
   }
 
   return prisma.$transaction(async (tx) => {
-    // validación bloqueante de stock dentro de la transacción
+    // validación bloqueante de stock dentro de la transacción. Se agrupa por
+    // producto porque un mismo envío puede llevarlo desde varios lotes.
+    const totalPorProducto = new Map<number, Prisma.Decimal>();
     for (const linea of params.lineas) {
-      const stock = await obtenerStock(linea.productoId, sucursalOrigen.id, tx);
-      const enviada = new Prisma.Decimal(linea.cantidadEnviada);
-      if (stock.lessThan(enviada)) {
-        const producto = await tx.producto.findUnique({ where: { id: linea.productoId } });
+      const acumulado = totalPorProducto.get(linea.productoId) ?? new Prisma.Decimal(0);
+      totalPorProducto.set(linea.productoId, acumulado.plus(linea.cantidadEnviada));
+    }
+    for (const [productoId, total] of totalPorProducto) {
+      const stock = await obtenerStock(productoId, sucursalOrigen.id, tx);
+      if (stock.lessThan(total)) {
+        const producto = await tx.producto.findUnique({ where: { id: productoId } });
         throw Errores.stockInsuficiente(
-          `"${producto?.nombre ?? linea.productoId}" — disponible ${stock.toString()}, a enviar ${enviada.toString()}`,
+          `"${producto?.nombre ?? productoId}" — disponible ${stock.toString()}, a enviar ${total.toString()}`,
+        );
+      }
+    }
+
+    // Saldo por lote: mismo control que las partidas de materia prima, para
+    // que dos envíos no vacíen dos veces el mismo lote.
+    for (const linea of params.lineas) {
+      if (linea.loteOrigenId == null) continue;
+      const lote = await tx.loteDeProduccion.findUnique({
+        where: { id: linea.loteOrigenId },
+        include: { productoElaborado: { select: { nombre: true } } },
+      });
+      if (!lote) throw Errores.noEncontrado(`Lote ${linea.loteOrigenId}`);
+      if (lote.productoElaboradoId !== linea.productoId) {
+        throw Errores.validacion(`El lote ${lote.id} no corresponde al producto ${linea.productoId}`);
+      }
+      const restante = lote.cantidadRestanteDisponible ?? new Prisma.Decimal(0);
+      const enviada = new Prisma.Decimal(linea.cantidadEnviada);
+      if (restante.lessThan(enviada)) {
+        throw Errores.stockInsuficiente(
+          `"${lote.productoElaborado.nombre}" lote ${lote.id} — quedan ${restante.toString()}, a enviar ${enviada.toString()}`,
         );
       }
     }
@@ -62,11 +95,21 @@ export async function generarTransferencia(params: {
           create: params.lineas.map((l) => ({
             productoId: l.productoId,
             cantidadEnviada: new Prisma.Decimal(l.cantidadEnviada),
+            loteOrigenId: l.loteOrigenId,
           })),
         },
       },
       include: INCLUDE_TRANSFERENCIA,
     });
+
+    // Se descuenta el saldo del lote: deja de estar disponible para enviar.
+    for (const linea of params.lineas) {
+      if (linea.loteOrigenId == null) continue;
+      await tx.loteDeProduccion.update({
+        where: { id: linea.loteOrigenId },
+        data: { cantidadRestanteDisponible: { decrement: new Prisma.Decimal(linea.cantidadEnviada) } },
+      });
+    }
 
     for (const linea of params.lineas) {
       await tx.movimientoStock.create({

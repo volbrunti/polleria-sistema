@@ -159,6 +159,91 @@ describe('Cerrar lote corrigiendo lo realmente usado', () => {
     expect(loteDb.alertaDisparada).toBe(false);
   });
 
+  it('el lote cerrado aparece como partida disponible para enviar', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/produccion/lotes-disponibles?productoId=${f.productos.milanesa}`,
+      headers: auth(f.usuarios.produccion.token),
+    });
+    expect(res.statusCode).toBe(200);
+    const lotes = res.json();
+    expect(lotes.length).toBeGreaterThan(0);
+    // Solo identidad, fecha y saldo: nada de rendimiento ni desvío
+    expect(lotes[0]).not.toHaveProperty('unidadesEsperadas');
+    expect(lotes[0]).not.toHaveProperty('desvioPct');
+    expect(lotes[0].cantidadRestanteDisponible).toBeDefined();
+  });
+
+  it('enviar desde un lote descuenta su saldo y deja la trazabilidad', async () => {
+    const prisma = await getPrisma();
+    const lotes = await prisma.loteDeProduccion.findMany({
+      where: { estado: 'CERRADO', cantidadRestanteDisponible: { gt: 0 } },
+      orderBy: { fechaHora: 'asc' },
+    });
+    const lote = lotes[0]!;
+    const saldoAntes = lote.cantidadRestanteDisponible!.toNumber();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/transferencias',
+      headers: auth(f.usuarios.produccion.token),
+      payload: {
+        sucursalDestinoId: f.sucursales.local1,
+        lineas: [
+          { productoId: f.productos.milanesa, cantidadEnviada: 2, loteOrigenId: lote.id },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(201);
+
+    const loteDespues = await prisma.loteDeProduccion.findUniqueOrThrow({ where: { id: lote.id } });
+    expect(loteDespues.cantidadRestanteDisponible!.toNumber()).toBeCloseTo(saldoAntes - 2, 3);
+
+    const linea = await prisma.lineaDeTransferencia.findFirstOrThrow({
+      where: { transferenciaId: res.json().id },
+    });
+    expect(linea.loteOrigenId).toBe(lote.id);
+  });
+
+  it('rechaza enviar más de lo que queda en la partida', async () => {
+    const prisma = await getPrisma();
+    const lote = await prisma.loteDeProduccion.findFirstOrThrow({
+      where: { estado: 'CERRADO', cantidadRestanteDisponible: { gt: 0 } },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/transferencias',
+      headers: auth(f.usuarios.produccion.token),
+      payload: {
+        sucursalDestinoId: f.sucursales.local1,
+        lineas: [
+          { productoId: f.productos.milanesa, cantidadEnviada: 9999, loteOrigenId: lote.id },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().codigo).toBe('STOCK_INSUFICIENTE');
+  });
+
+  it('rechaza un lote que no corresponde al producto de la línea', async () => {
+    const prisma = await getPrisma();
+    const lote = await prisma.loteDeProduccion.findFirstOrThrow({
+      where: { estado: 'CERRADO', cantidadRestanteDisponible: { gt: 0 } },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/transferencias',
+      headers: auth(f.usuarios.produccion.token),
+      payload: {
+        sucursalDestinoId: f.sucursales.local1,
+        lineas: [{ productoId: f.productos.nalga, cantidadEnviada: 1, loteOrigenId: lote.id }],
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
   it('rechaza corregir un insumo que no pertenece al lote', async () => {
     const prisma = await getPrisma();
     const insumoAjeno = await prisma.insumoUsado.findFirstOrThrow({ orderBy: { id: 'asc' } });

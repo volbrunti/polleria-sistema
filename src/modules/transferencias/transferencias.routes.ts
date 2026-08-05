@@ -10,6 +10,8 @@ const generarSchema = z.object({
       z.object({
         productoId: z.number().int().positive(),
         cantidadEnviada: z.number().positive(),
+        // De qué lote sale. Opcional: hay stock sin lote (reventa, ajustes).
+        loteOrigenId: z.number().int().positive().optional(),
       }),
     )
     .min(1, 'La transferencia debe tener al menos una línea'),

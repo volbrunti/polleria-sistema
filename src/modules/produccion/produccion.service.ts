@@ -368,6 +368,25 @@ export async function cerrarLote(params: {
   return resultado.lote;
 }
 
+// Lotes cerrados con saldo sin enviar — las "partidas" del producto terminado.
+// Con productoId, para elegir de cuál sale un envío; sin él, todo lo que hay.
+// Orden FIFO (más viejo primero), igual que las partidas de materia prima:
+// Pablo quiere mandar primero lo de ayer, no lo recién producido.
+export async function lotesDisponibles(productoId?: number) {
+  return prisma.loteDeProduccion.findMany({
+    where: {
+      ...(productoId != null ? { productoElaboradoId: productoId } : {}),
+      estado: 'CERRADO',
+      cantidadRestanteDisponible: { gt: 0 },
+    },
+    include: {
+      productoElaborado: { select: { nombre: true, unidadDeMedida: true } },
+      usuarioOperario: { select: { username: true } },
+    },
+    orderBy: { fechaHora: 'asc' },
+  });
+}
+
 // Productos que efectivamente se producen por lote en planta: tipo ELABORADO
 // CON ficha técnica cargada. Deja afuera lo que se arma en el local a la
 // venta (hamburguesas completas, papas grandes, etc. — son ELABORADO pero

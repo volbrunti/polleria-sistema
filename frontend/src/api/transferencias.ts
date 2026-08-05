@@ -3,7 +3,7 @@ import type { RecepcionResultado, Transferencia } from './types';
 
 export function generarTransferencia(datos: {
   sucursalDestinoId: number;
-  lineas: { productoId: number; cantidadEnviada: number }[];
+  lineas: { productoId: number; cantidadEnviada: number; loteOrigenId?: number }[];
 }) {
   return apiFetch<Transferencia>('/api/transferencias', { method: 'POST', body: datos });
 }

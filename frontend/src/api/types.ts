@@ -65,6 +65,17 @@ export interface Proveedor {
   horarios?: string | null;
 }
 
+/** Lote cerrado con saldo sin enviar — la "partida" del producto terminado. */
+export interface LoteDisponible {
+  id: number;
+  productoElaboradoId: number;
+  producto: string;
+  unidadDeMedida: UnidadDeMedida;
+  fechaHora: string;
+  operario: string;
+  cantidadRestanteDisponible: string;
+}
+
 /** Campos de contacto editables desde el catálogo. */
 export type DatosContactoProveedor = Pick<
   Proveedor,

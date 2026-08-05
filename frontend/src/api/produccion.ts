@@ -1,5 +1,5 @@
 import { apiFetch } from './client';
-import type { LoteDeProduccion, Producto } from './types';
+import type { LoteDeProduccion, LoteDisponible, Producto } from './types';
 
 export interface InsumoInput {
   productoInsumoId: number;
@@ -42,6 +42,12 @@ export function cerrarLote(
     method: 'POST',
     body: datos,
   });
+}
+
+/** Lotes cerrados con saldo sin enviar, del más viejo al más nuevo (FIFO). */
+export function lotesDisponibles(productoId?: number) {
+  const qs = productoId != null ? `?productoId=${productoId}` : '';
+  return apiFetch<LoteDisponible[]>(`/api/produccion/lotes-disponibles${qs}`);
 }
 
 export function listarLotes(filtros?: { estado?: 'ABIERTO' | 'CERRADO'; desde?: string; hasta?: string }) {
