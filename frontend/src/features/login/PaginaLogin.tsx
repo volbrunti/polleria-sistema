@@ -6,8 +6,6 @@ import { rutaInicioPorRol } from '../../auth/RutaProtegida';
 const ACCESOS_DEMO = [
   { username: 'admin', password: 'admin123', label: 'Admin' },
   { username: 'ariel', password: 'socio123', label: 'Socio (Ariel)' },
-  { username: 'eliana', password: 'socio123', label: 'Socia (Eliana)' },
-  { username: 'ema', password: 'socio123', label: 'Socia (Ema)' },
   { username: 'encargado', password: 'encargado123', label: 'Encargado' },
   { username: 'cajero', password: 'cajero123', label: 'Cajero' },
   { username: 'produccion', password: 'produccion123', label: 'Producción' },
