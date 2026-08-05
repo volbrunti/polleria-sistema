@@ -19,6 +19,15 @@ const abrirSchema = z.object({
 const cerrarSchema = z.object({
   unidadesProducidasReales: z.number().positive(),
   desperdicioRealKg: z.number().min(0),
+  // Corrección opcional de lo realmente usado (ver cerrarLote en el service)
+  insumosReales: z
+    .array(
+      z.object({
+        insumoUsadoId: z.number().int().positive(),
+        cantidadUsada: z.number().min(0),
+      }),
+    )
+    .optional(),
 });
 
 const listarQuery = z.object({
@@ -52,6 +61,7 @@ export async function produccionRoutes(app: FastifyInstance) {
         loteId: id,
         unidadesProducidasReales: datos.unidadesProducidasReales,
         desperdicioRealKg: datos.desperdicioRealKg,
+        insumosReales: datos.insumosReales,
         usuarioId: req.usuario.id,
       });
       return serializarLote(lote, req.usuario.rol);

@@ -479,8 +479,17 @@ model LoteDeProduccion {
   unidadesEsperadas        Decimal?             @db.Decimal(12, 3)
   desvioPct                Decimal?             @db.Decimal(7, 2)
   alertaDisparada          Boolean              @default(false)
+  // Saldo del producto terminado que todavía no se envió a ningún local —
+  // mismo patrón que LineaIngreso.cantidadRestanteDisponible para la materia
+  // prima. Con esto el lote funciona como "partida" del producto terminado y
+  // se puede elegir de cuál sale cada envío (pedido de Pablo, reunión 4/8:
+  // "no le mandé las que produjeron hoy, sino las de ayer").
+  // Se setea al CERRAR el lote (= unidadesProducidasReales); null mientras
+  // está abierto.
+  cantidadRestanteDisponible Decimal?           @db.Decimal(12, 3)
 
-  insumosUsados InsumoUsado[]
+  insumosUsados       InsumoUsado[]
+  lineasTransferencia LineaDeTransferencia[]
 
   @@map("lotes_produccion")
 }
@@ -531,8 +540,19 @@ model LineaDeTransferencia {
   cantidadEnviada  Decimal       @db.Decimal(12, 3)
   cantidadRecibida Decimal?      @db.Decimal(12, 3)
   diferencia       Decimal?      @db.Decimal(12, 3)
+  // De qué lote de producción salieron estas unidades. Nullable porque hay
+  // stock que no viene de un lote: reventa (gaseosas), ajustes manuales,
+  // retornos, y todo lo producido antes de que existiera este campo.
+  loteOrigen       LoteDeProduccion? @relation(fields: [loteOrigenId], references: [id])
+  loteOrigenId     Int?
 
-  @@unique([transferenciaId, productoId])
+  // Incluye el lote: un mismo envío puede llevar el mismo producto desde dos
+  // partidas distintas, que es justo lo que pidió Pablo ("que te deje
+  // seleccionar el de 15 y después 45 del lote de 90, aunque queden dos
+  // líneas"). Ojo: Postgres considera los NULL distintos entre sí, así que
+  // esto no impide dos líneas sin lote del mismo producto — inofensivo, solo
+  // quedarían redundantes.
+  @@unique([transferenciaId, productoId, loteOrigenId])
   @@map("lineas_transferencia")
 }
 

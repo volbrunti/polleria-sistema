@@ -247,6 +247,7 @@ describe('Flujo 2 — Producción', () => {
     expect(lote.unidadesEsperadas).toBe('47.5');
     expect(lote.alertaDisparada).toBe(true);
   });
+
 });
 
 describe('Flujo 3 — Transferencias', () => {

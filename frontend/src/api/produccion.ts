@@ -31,7 +31,12 @@ export function abrirLote(datos: { productoElaboradoId: number; insumos: InsumoI
 
 export function cerrarLote(
   loteId: number,
-  datos: { unidadesProducidasReales: number; desperdicioRealKg: number },
+  datos: {
+    unidadesProducidasReales: number;
+    desperdicioRealKg: number;
+    /** Correcciones de lo realmente usado; vacío si coincide con lo estimado. */
+    insumosReales?: { insumoUsadoId: number; cantidadUsada: number }[];
+  },
 ) {
   return apiFetch<LoteDeProduccion>(`/api/produccion/lotes/${loteId}/cerrar`, {
     method: 'POST',
