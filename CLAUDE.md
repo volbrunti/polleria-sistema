@@ -110,8 +110,8 @@ El frontend vive en `frontend/` (proyecto Vite independiente, sin monorepo tooli
 **Qué está implementado** (fiel al brief de `PROMPT-DISENO-FRONTEND.md`):
 - **Login** único con detección de rol y accesos rápidos a los usuarios del seed.
 - **Rol PRODUCCION** (mobile-first, marco de celular): menú de 3 botones + banner de lote abierto; wizard "Llegó mercadería" (proveedor con "Otro", líneas remito/pesado con teclado numérico, foto opcional, confirmación); wizard "Producir" (producto elaborado → insumos por partida con validación de restante → lote abierto → cerrar con unidades y desperdicio); wizard "Enviar a local" (destino, líneas en unidades con tope de stock); "Mis envíos".
-- **Rol CAJERO/ENCARGADO** (tablet): entregas pendientes SIN cantidades, conteo ciego con teclado, resultado coincide (verde) / no coincide (pantalla NEUTRAL con "VOLVER A CONTAR" y "CONFIRMAR IGUAL", sin revelar diferencia), "Mis recepciones"; ENCARGADO además tab "Stock" de su local.
-- **Rol ADMINISTRADOR/SOCIO** (dashboard con sidebar): Alertas (con badge en vivo vía Socket.io + marcar vista), Stock por sucursal + movimientos con filtros, Producción (esperado vs. real, desvío en rojo, trazabilidad de insumos por partida), Transferencias (enviado/recibido/diferencia/firmas), Fichas técnicas (crear ficha y nueva versión — la anterior se desactiva), Catálogo (productos, precios con historial, proveedores, sucursales), Usuarios (solo admin), Auditoría con filtros. **SOCIO no ve ningún botón de escritura** (`puedeEscribir = rol === 'ADMINISTRADOR'`); Alertas y Usuarios ni aparecen en su menú.
+- **Rol CAJERO/ENCARGADO** (tablet): entregas pendientes SIN cantidades, conteo ciego con teclado, resultado coincide (verde) / no coincide (pantalla NEUTRAL con "VOLVER A CONTAR" y "DEJARLO PARA DESPUÉS", sin revelar diferencia y **sin poder confirmar igual** — ver §7), "Mis recepciones"; ENCARGADO además tab "Stock" de su local.
+- **Rol ADMINISTRADOR/SOCIO** (dashboard con sidebar): Alertas (con badge en vivo vía Socket.io + marcar vista), Stock por sucursal + movimientos con filtros, Producción (esperado vs. real, desvío en rojo, trazabilidad de insumos por partida), Transferencias (enviado/recibido/diferencia/firmas + panel "Recepciones trabadas" para destrabar las que el cajero no pudo cerrar), Fichas técnicas (crear ficha y nueva versión — la anterior se desactiva), Catálogo (productos, precios con historial, proveedores, sucursales), Usuarios (solo admin), Auditoría con filtros. **SOCIO no ve ningún botón de escritura** (`puedeEscribir = rol === 'ADMINISTRADOR'`); Alertas y Usuarios ni aparecen en su menú.
 - **Auth**: accessToken en memoria (NUNCA localStorage), refresh silencioso al montar vía cookie httpOnly, retry automático en 401. En dev el proxy de Vite hace todo same-origin (`/api`, `/uploads`, `/socket.io` → localhost:3000).
 - **Control ciego respetado en UI**: las pantallas de PRODUCCION no tienen ningún espacio/campo para esperado-desvío-alerta; el receptor jamás ve `cantidadEnviada` (la API ya no la manda, y la UI tampoco deja hueco visual que la insinúe).
 - **PWA**: manifest + service worker con cache de catálogo (productos/proveedores/sucursales) + banner "Sin conexión". NO hay offline real (decisión de §3).
@@ -222,11 +222,14 @@ El movimiento de unidades desde Producción hacia los locales de venta. El clien
 3. **El local recibe — CONTEO CIEGO**: el usuario del local ve la transferencia pendiente (producto y origen) pero **NUNCA ve la cantidad enviada**. Cuenta físicamente y carga su número. Su usuario es la firma de recepción.
 4. El sistema compara internamente:
    - **Coinciden** → estado `CONFIRMADA`, stock del local se incrementa (MovimientoStock `TRANSFERENCIA_ENTRADA`).
-   - **No coinciden** → respuesta a la UI: "los números no coinciden, ¿recontar o confirmar igual?" **SIN revelar la diferencia ni de qué lado está el error**. Dos caminos:
-     - **Recontar**: vuelve a cargar, se compara de nuevo. Iterable sin límite.
-     - **Confirmar igual**: estado `CONFIRMADA_CON_DISCREPANCIA`. El stock del local se actualiza con **la cantidad declarada por el receptor**. Se genera **Alerta al Administrador** con: producto, cantidad enviada, cantidad recibida, diferencia, fecha/hora, usuario emisor Y usuario receptor.
-5. **El sistema nunca se bloquea** por discrepancia de transferencia. La operación sigue.
-6. Historial completo: remito virtual, ambas firmas, discrepancia si existió.
+   - **No coinciden** → respuesta a la UI: "los números no coinciden" **SIN revelar la diferencia ni de qué lado está el error**. El receptor tiene **un solo camino: recontar**, iterable sin límite.
+5. **El receptor NO puede "confirmar igual"** — decisión de la reunión del 4/8/2026, que **deroga la versión original de este punto** (Pablo: *"el confirmar igual no existiría; en todo caso lo usaría el administrador, pero el cajero no"*; la política es arrancar estrictos y aflojar después si molesta). En consecuencia:
+   - `POST /api/transferencias/:id/confirmar-con-discrepancia` es **exclusivo de ADMINISTRADOR**.
+   - Como el cajero ya no cierra el circuito, el sistema avisa solo: **el primer conteo que no coincide genera la Alerta al Administrador** (`DISCREPANCIA_TRANSFERENCIA`) con producto, cantidad enviada, cantidad contada, diferencia, fecha/hora, usuario emisor Y receptor. Los conteos siguientes se auditan (`CONTEO_RECEPCION_NO_COINCIDE`) pero **no duplican la alerta**.
+   - Si un conteo posterior coincide, la recepción se confirma normalmente y se registra `RECEPCION_RESUELTA_RECONTANDO` con la cantidad de intentos fallidos — el admin ve que se destrabó sola y no tiene que investigar.
+   - El admin destraba desde **Admin → Transferencias → "Recepciones trabadas"**: ve la secuencia completa de conteos (`GET /:id/intentos`, solo admin) y decide con qué cantidad entra la mercadería. Queda `CONFIRMADA_CON_DISCREPANCIA` con su firma.
+6. **El sistema nunca se bloquea** por discrepancia de transferencia: el resto de la operación sigue. Lo único que queda pendiente es esa recepción.
+7. Historial completo: remito virtual, ambas firmas, discrepancia si existió.
 
 ---
 

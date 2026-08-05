@@ -11,7 +11,7 @@ import { MisRecepciones } from './MisRecepciones';
 import { StockLocal } from './StockLocal';
 import { CajaTab } from './caja/CajaTab';
 
-type Pantalla = 'lista' | 'conteo' | 'ok' | 'diff' | 'registrado' | 'historial';
+type Pantalla = 'lista' | 'conteo' | 'ok' | 'diff' | 'historial';
 // "caja" (POS + turnos, módulo 2) es la tab por defecto; "recibir" mantiene
 // intacto el flujo de recepción ciega del módulo 1 — recibir mercadería no
 // requiere turno abierto (la caja y la mercadería son circuitos distintos).
@@ -193,14 +193,10 @@ export function ShellLocal() {
             {pantalla === 'diff' && transferenciaActual && (
               <ResultadoRecepcion
                 variante="diff"
-                transferenciaId={transferenciaActual.id}
-                valores={valoresConteo}
                 onRecontar={() => setPantalla('conteo')}
-                onConfirmado={() => setPantalla('registrado')}
+                onSalir={irALista}
               />
             )}
-
-            {pantalla === 'registrado' && <ResultadoRecepcion variante="registrado" onListo={irALista} />}
 
             {pantalla === 'historial' && sucursalId != null && (
               <MisRecepciones sucursalId={sucursalId} onVolver={irALista} />
