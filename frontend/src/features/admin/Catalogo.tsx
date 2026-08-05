@@ -22,6 +22,18 @@ import { ApiError } from '../../api/client';
 import { fmtFecha, fmtMoneda, fmtNumero } from '../../lib/formato';
 import type { Producto, Proveedor, TipoProducto, UnidadDeMedida } from '../../api/types';
 
+// "Hace cuánto que no cambia" al lado de la fecha. Pablo: "ahí donde le ponen
+// la fecha de la última vez que cambió, le haría una resta entre hoy y esa
+// fecha — que te diga un mes, dos meses, 30 días, 40 días" (reunión 4/8).
+function antiguedadPrecio(fechaDesde: string): string {
+  const dias = Math.floor((Date.now() - new Date(fechaDesde).getTime()) / 86_400_000);
+  if (dias <= 0) return 'hoy';
+  if (dias === 1) return 'hace 1 día';
+  if (dias < 30) return `hace ${dias} días`;
+  const meses = Math.floor(dias / 30);
+  return meses === 1 ? 'hace 1 mes' : `hace ${meses} meses`;
+}
+
 interface Props {
   puedeEscribir: boolean;
 }
@@ -498,7 +510,16 @@ function TabPrecios({ puedeEscribir }: { puedeEscribir: boolean }) {
                     <span className="ml-1.5 font-normal text-texto-suave">(×1)</span>
                   )}
                 </span>
-                <span className="text-texto-suave">{base ? fmtFecha(base.fechaDesde) : '—'}</span>
+                <span className="text-texto-suave">
+                  {base ? (
+                    <>
+                      {fmtFecha(base.fechaDesde)}
+                      <span className="ml-1.5 text-[13px] font-semibold">({antiguedadPrecio(base.fechaDesde)})</span>
+                    </>
+                  ) : (
+                    '—'
+                  )}
+                </span>
                 <div className="flex justify-end gap-2">
                   {(historial.length > 0 || esCombo) && (
                     <button
@@ -610,6 +631,42 @@ function TabProveedores({ puedeEscribir }: { puedeEscribir: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [editandoHabituales, setEditandoHabituales] = useState<Proveedor | null>(null);
 
+  // Datos de contacto (reunión 4/8). El punto de contacto es el que más pesa:
+  // "si se lo pide Franco capaz no le dan bola, pero si lo llama Ariel sí".
+  const [direccion, setDireccion] = useState('');
+  const [urlMaps, setUrlMaps] = useState('');
+  const [telefono, setTelefono] = useState('');
+  const [personaContacto, setPersonaContacto] = useState('');
+  const [horarios, setHorarios] = useState('');
+
+  function limpiarFormulario() {
+    setNombre('');
+    setContacto('');
+    setDireccion('');
+    setUrlMaps('');
+    setTelefono('');
+    setPersonaContacto('');
+    setHorarios('');
+  }
+
+  function cargarFormulario(p: Proveedor) {
+    setNombre(p.nombre);
+    setContacto(p.contacto ?? '');
+    setDireccion(p.direccion ?? '');
+    setUrlMaps(p.urlMaps ?? '');
+    setTelefono(p.telefono ?? '');
+    setPersonaContacto(p.personaContacto ?? '');
+    setHorarios(p.horarios ?? '');
+  }
+
+  const camposContacto = () => ({
+    direccion: direccion.trim() || null,
+    urlMaps: urlMaps.trim() || null,
+    telefono: telefono.trim() || null,
+    personaContacto: personaContacto.trim() || null,
+    horarios: horarios.trim() || null,
+  });
+
   const mutCrear = useMutation({
     mutationFn: crearProveedor,
     onSuccess: () => {
@@ -621,7 +678,11 @@ function TabProveedores({ puedeEscribir }: { puedeEscribir: boolean }) {
 
   const mutActualizar = useMutation({
     mutationFn: (vars: { id: number; nombre: string; contacto: string }) =>
-      actualizarProveedor(vars.id, { nombre: vars.nombre, contacto: vars.contacto || null }),
+      actualizarProveedor(vars.id, {
+        nombre: vars.nombre,
+        contacto: vars.contacto || null,
+        ...camposContacto(),
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['proveedores'] });
       setAbierto(false);
@@ -636,8 +697,7 @@ function TabProveedores({ puedeEscribir }: { puedeEscribir: boolean }) {
           type="button"
           onClick={() => {
             setEditando(null);
-            setNombre('');
-            setContacto('');
+            limpiarFormulario();
             setAbierto(true);
             setError(null);
           }}
@@ -651,6 +711,14 @@ function TabProveedores({ puedeEscribir }: { puedeEscribir: boolean }) {
           <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3">
             <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre" className="h-11.5 rounded-[10px] border border-borde-fuerte px-3 text-sm" />
             <input value={contacto} onChange={(e) => setContacto(e.target.value)} placeholder="Teléfono / contacto" className="h-11.5 rounded-[10px] border border-borde-fuerte px-3 text-sm" />
+          </div>
+          <div className="text-[13px] font-bold text-texto-suave">Datos para ir a buscar o llamar</div>
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3">
+            <input value={personaContacto} onChange={(e) => setPersonaContacto(e.target.value)} placeholder="Con quién hablar" className="h-11.5 rounded-[10px] border border-borde-fuerte px-3 text-sm" />
+            <input value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="Teléfono directo" className="h-11.5 rounded-[10px] border border-borde-fuerte px-3 text-sm" />
+            <input value={direccion} onChange={(e) => setDireccion(e.target.value)} placeholder="Dirección" className="h-11.5 rounded-[10px] border border-borde-fuerte px-3 text-sm" />
+            <input value={urlMaps} onChange={(e) => setUrlMaps(e.target.value)} placeholder="Link de Google Maps" className="h-11.5 rounded-[10px] border border-borde-fuerte px-3 text-sm" />
+            <input value={horarios} onChange={(e) => setHorarios(e.target.value)} placeholder="Horarios de atención" className="h-11.5 rounded-[10px] border border-borde-fuerte px-3 text-sm" />
           </div>
           {error && <div className="rounded-xl bg-error-suave px-3.5 py-2.5 text-sm font-semibold text-error-texto">{error}</div>}
           <div className="flex gap-2.5">
@@ -673,15 +741,32 @@ function TabProveedores({ puedeEscribir }: { puedeEscribir: boolean }) {
         </div>
       )}
       <div className="overflow-x-auto rounded-2xl border border-borde bg-white">
-        <div className="grid grid-cols-[1fr_200px_110px] bg-chip px-5 py-3 text-xs font-extrabold tracking-wide text-texto-suave">
+        <div className="grid grid-cols-[1fr_260px_110px] bg-chip px-5 py-3 text-xs font-extrabold tracking-wide text-texto-suave">
           <span>NOMBRE</span>
-          <span>TELÉFONO</span>
+          <span>CONTACTO</span>
           <span />
         </div>
         {proveedores.data?.map((p) => (
-          <div key={p.id} className="grid grid-cols-[1fr_200px_110px] items-center border-t border-[#eef1ea] px-5 py-3.5 text-sm">
+          <div key={p.id} className="grid grid-cols-[1fr_260px_110px] items-center border-t border-[#eef1ea] px-5 py-3.5 text-sm">
             <span className="font-semibold">{p.esOtro ? 'OTRO' : p.nombre}</span>
-            <span className="text-texto-suave">{p.contacto ?? '—'}</span>
+            <div className="flex flex-col gap-0.5 text-texto-suave">
+              <span>
+                {p.personaContacto ? `${p.personaContacto} · ` : ''}
+                {p.telefono ?? p.contacto ?? '—'}
+              </span>
+              {p.direccion && (
+                <span className="text-[13px]">
+                  {p.urlMaps ? (
+                    <a href={p.urlMaps} target="_blank" rel="noreferrer" className="text-primario underline">
+                      {p.direccion}
+                    </a>
+                  ) : (
+                    p.direccion
+                  )}
+                </span>
+              )}
+              {p.horarios && <span className="text-[13px]">{p.horarios}</span>}
+            </div>
             {puedeEscribir && !p.esOtro && (
               <div className="flex justify-end gap-2">
                 <button
@@ -695,8 +780,7 @@ function TabProveedores({ puedeEscribir }: { puedeEscribir: boolean }) {
                   type="button"
                   onClick={() => {
                     setEditando(p);
-                    setNombre(p.nombre);
-                    setContacto(p.contacto ?? '');
+                    cargarFormulario(p);
                     setAbierto(true);
                     setError(null);
                   }}

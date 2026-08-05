@@ -41,7 +41,7 @@ export function OperacionesCaja({ sucursalId }: Props) {
     { op: 'gasto', titulo: 'Gasto de caja', detalle: 'Papas, leña, limpieza…', icono: '🧾' },
     { op: 'retiro', titulo: 'Retiro de socio', detalle: 'Ariel, Eliana o Ema', icono: '💸' },
     { op: 'atencion', titulo: 'Atención / regalía', detalle: 'Producto sin cargo con motivo', icono: '🎁' },
-    { op: 'costoCero', titulo: 'Quemado o retorno', detalle: 'Merma o vuelta a producción', icono: '♻️' },
+    { op: 'costoCero', titulo: 'Quemado o vuelve a stock', detalle: 'Merma o devolución', icono: '♻️' },
   ];
 
   return (
@@ -461,7 +461,7 @@ function FormCostoCero({ sucursalId, onListo, onCancelar }: { sucursalId: number
   });
 
   return (
-    <Modal titulo="Quemado o retorno a producción" onCancelar={onCancelar}>
+    <Modal titulo="Quemado o vuelve a stock" onCancelar={onCancelar}>
       <div className="flex gap-2">
         <button
           type="button"
@@ -475,7 +475,7 @@ function FormCostoCero({ sucursalId, onListo, onCancelar }: { sucursalId: number
           onClick={() => setTipo('RETORNO_A_PRODUCCION')}
           className={`flex-1 ${chips(tipo === 'RETORNO_A_PRODUCCION')}`}
         >
-          ♻️ Vuelve a producción
+          ♻️ Vuelve a stock
         </button>
       </div>
       <SelectorProducto valor={productoId} onCambiar={setProductoId} />

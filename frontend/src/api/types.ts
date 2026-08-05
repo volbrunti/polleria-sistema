@@ -58,7 +58,18 @@ export interface Proveedor {
   contacto: string | null;
   activo: boolean;
   esOtro: boolean;
+  direccion?: string | null;
+  urlMaps?: string | null;
+  telefono?: string | null;
+  personaContacto?: string | null;
+  horarios?: string | null;
 }
+
+/** Campos de contacto editables desde el catálogo. */
+export type DatosContactoProveedor = Pick<
+  Proveedor,
+  'direccion' | 'urlMaps' | 'telefono' | 'personaContacto' | 'horarios'
+>;
 
 export interface Sucursal {
   id: number;

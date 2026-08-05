@@ -19,6 +19,7 @@ export function StockMinimo({ puedeEscribir }: Props) {
   const [sucursalId, setSucursalId] = useState<number | null>(null);
   const [minimo, setMinimo] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [busquedaProducto, setBusquedaProducto] = useState('');
 
   const configsQ = useQuery({ queryKey: ['stock-minimo'], queryFn: () => listarConfigStockMinimo() });
   const productosQ = useQuery({ queryKey: ['productos'], queryFn: () => listarProductos({ activo: true }) });
@@ -26,6 +27,9 @@ export function StockMinimo({ puedeEscribir }: Props) {
 
   const locales = sucursalesQ.data?.filter((s) => s.tipo === 'VENTA') ?? [];
   const vendibles = (productosQ.data ?? []).filter((p) => p.tipo !== 'COMBO');
+  const vendiblesFiltrados = busquedaProducto.trim()
+    ? vendibles.filter((p) => p.nombre.toLowerCase().includes(busquedaProducto.trim().toLowerCase()))
+    : vendibles;
 
   const mutGuardar = useMutation({
     mutationFn: (datos: { productoId: number; sucursalId: number; minimo: number; activa?: boolean }) =>
@@ -115,20 +119,32 @@ export function StockMinimo({ puedeEscribir }: Props) {
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/45 p-6">
           <div className="flex w-full max-w-md flex-col gap-3 rounded-3xl bg-white p-5">
             <div className="text-xl font-extrabold">Configurar stock mínimo</div>
+            {/* Con casi 60 productos, encontrar uno en el desplegable a mano
+                era incómodo — lo detectó Facundo en la propia demo. */}
+            <input
+              value={busquedaProducto}
+              onChange={(e) => setBusquedaProducto(e.target.value)}
+              placeholder="Buscar producto…"
+              className="min-h-[48px] rounded-xl border-2 border-borde-fuerte bg-white px-3 text-sm"
+            />
             <select
               value={productoId ?? ''}
               onChange={(e) => setProductoId(Number(e.target.value))}
+              size={busquedaProducto.trim() ? 6 : undefined}
               className="min-h-[48px] rounded-xl border-2 border-borde-fuerte bg-white px-3 text-sm font-semibold"
             >
               <option value="" disabled>
                 Producto…
               </option>
-              {vendibles.map((p) => (
+              {vendiblesFiltrados.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.nombre}
                 </option>
               ))}
             </select>
+            {busquedaProducto.trim() && vendiblesFiltrados.length === 0 && (
+              <div className="text-sm text-texto-suave">Ningún producto coincide con la búsqueda.</div>
+            )}
             <select
               value={sucursalId ?? ''}
               onChange={(e) => setSucursalId(Number(e.target.value))}

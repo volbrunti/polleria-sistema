@@ -359,6 +359,15 @@ model Proveedor {
   contacto String?
   activo   Boolean @default(true)
   esOtro   Boolean @default(false)
+  // Datos de contacto (reunión 4/8). El motivo real que dio Pablo: "el día de
+  // mañana no estamos nosotros dos" y alguien tiene que poder ir a buscar el
+  // aceite sin llamarlos. El punto de contacto importa porque "si se lo pide
+  // Franco capaz no le dan bola, pero si lo llama Ariel, que los conoce, sí".
+  direccion       String?
+  urlMaps         String?
+  telefono        String?
+  personaContacto String?
+  horarios        String?
   // Proveedores virtuales que el sistema usa internamente (ej: "Retorno
   // interno" para partidas generadas por RETORNO_A_PRODUCCION). No se
   // pueden renombrar, desactivar ni eliminar desde el catálogo.

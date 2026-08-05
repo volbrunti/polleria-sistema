@@ -4,15 +4,26 @@ import { prisma } from '../../lib/prisma';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { Errores } from '../../lib/errores';
 
+// Datos de contacto: todos opcionales, se completan con el tiempo.
+const datosContacto = {
+  direccion: z.string().nullable().optional(),
+  urlMaps: z.string().nullable().optional(),
+  telefono: z.string().nullable().optional(),
+  personaContacto: z.string().nullable().optional(),
+  horarios: z.string().nullable().optional(),
+};
+
 const crearSchema = z.object({
   nombre: z.string().min(1),
   contacto: z.string().optional(),
+  ...datosContacto,
 });
 
 const actualizarSchema = z.object({
   nombre: z.string().min(1).optional(),
   contacto: z.string().nullable().optional(),
   activo: z.boolean().optional(),
+  ...datosContacto,
 });
 
 const paramsId = z.object({ id: z.coerce.number().int().positive() });
