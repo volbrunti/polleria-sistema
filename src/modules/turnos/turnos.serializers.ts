@@ -49,6 +49,18 @@ function arqueoCompleto(a: ArqueoDb) {
   };
 }
 
+// Qué concepto no cerró, sin decir cuánto ni para qué lado. Pablo lo pidió
+// para que el cajero no busque el error en los dos lugares a la vez: "que no
+// pierdan tiempo — si es la plata, o si es lo del pollo, o si son las dos
+// cosas" (reunión 4/8). Sigue sin poder deducir el monto ni si sobra o falta,
+// así que el control ciego se mantiene.
+function conceptosConDiferencia(arqueos: ArqueoDb[] | undefined): string[] {
+  const tipos = (arqueos ?? [])
+    .filter((a) => a.resultado != null && a.resultado !== 'COINCIDE')
+    .map((a) => a.tipo);
+  return [...new Set(tipos)];
+}
+
 function turnoBase(t: TurnoDb) {
   return {
     id: t.id,
@@ -67,5 +79,9 @@ export function serializarTurno(turno: TurnoDb, rol: Rol) {
     return { ...turnoBase(turno), arqueos: turno.arqueos?.map(arqueoCompleto) };
   }
   // CAJERO / ENCARGADO (y cualquier otro): DTO ciego
-  return { ...turnoBase(turno), arqueos: turno.arqueos?.map(arqueoCiego) };
+  return {
+    ...turnoBase(turno),
+    arqueos: turno.arqueos?.map(arqueoCiego),
+    conceptosConDiferencia: conceptosConDiferencia(turno.arqueos),
+  };
 }

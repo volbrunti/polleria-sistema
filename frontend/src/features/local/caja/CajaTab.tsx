@@ -46,6 +46,7 @@ export function CajaTab({ sucursalId }: Props) {
     return (
       <PantallaBloqueada
         turnoId={turno.id}
+        conceptos={turno.conceptosConDiferencia}
         onReintentar={() => void turnoQ.refetch()}
         onDesbloqueado={() => void turnoQ.refetch()}
       />

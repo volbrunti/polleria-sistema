@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../auth/AuthContext';
 import { listarSucursales } from '../../api/sucursales';
+import { listarTransferencias } from '../../api/transferencias';
 import type { Sucursal, Transferencia } from '../../api/types';
 import { EntregasPendientes } from './EntregasPendientes';
 import { ConteoCiego } from './ConteoCiego';
@@ -53,6 +54,17 @@ export function ShellLocal() {
   const sucursalId = sucursalFija ?? sucursalElegida;
 
   const sucursal: Sucursal | undefined = locales.find((s) => s.id === sucursalId);
+
+  // Contador en la pestaña Recibir: el caso que planteó Pablo es que la
+  // mercadería ya llegó al local y el cajero, ocupado vendiendo, nunca entró a
+  // confirmarla — la transferencia queda colgada sin que nadie lo note.
+  const pendientesQ = useQuery({
+    queryKey: ['transferencias', 'pendientes', sucursalId],
+    queryFn: () => listarTransferencias({ estado: 'PENDIENTE_RECEPCION', sucursalDestinoId: sucursalId! }),
+    enabled: sucursalId != null,
+    refetchInterval: 15000,
+  });
+  const cantidadPendientes = pendientesQ.data?.length ?? 0;
 
   const [tab, setTab] = useState<Tab>('caja');
   const [pantalla, setPantalla] = useState<Pantalla>('lista');
@@ -106,11 +118,23 @@ export function ShellLocal() {
             <button
               type="button"
               onClick={() => setTab('recibir')}
-              className={`min-h-[46px] cursor-pointer rounded-lg px-4.5 text-base font-bold ${
-                tab === 'recibir' ? 'bg-primario text-white' : 'bg-transparent text-texto-suave'
+              className={`relative min-h-[46px] cursor-pointer rounded-lg px-4.5 text-base font-bold ${
+                tab === 'recibir'
+                  ? 'bg-primario text-white'
+                  : cantidadPendientes > 0
+                    ? 'bg-error text-white'
+                    : 'bg-transparent text-texto-suave'
               }`}
             >
               Recibir
+              {cantidadPendientes > 0 && (
+                <span
+                  aria-label={`${cantidadPendientes} recepciones pendientes`}
+                  className="ml-1.5 inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-white px-1.5 text-sm font-extrabold text-error"
+                >
+                  {cantidadPendientes}
+                </span>
+              )}
             </button>
             {esEncargado && (
               <button

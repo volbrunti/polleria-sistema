@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { lineasDisponibles } from '../../api/ingresos';
+import { listarSucursales } from '../../api/sucursales';
+import { bajoMinimo } from '../../api/stockMinimo';
 import { fmtFecha, fmtNumero } from '../../lib/formato';
 import type { LoteDeProduccion } from '../../api/types';
 
@@ -24,8 +26,35 @@ export function MenuProduccion({ loteAbierto, onIrIngreso, onIrProducir, onIrEnv
   });
   const lineas = disponible.data ?? [];
 
+  // Lo que está bajo el mínimo en el depósito de producción. Pablo lo quiere
+  // como primer golpe de vista: "es como que lo primero que te choca es la
+  // alerta".
+  const sucursales = useQuery({ queryKey: ['sucursales'], queryFn: listarSucursales });
+  const sucursalProduccion = sucursales.data?.find((s) => s.tipo === 'PRODUCCION');
+  const minimosQ = useQuery({
+    queryKey: ['stock-minimo', 'bajo-minimo', sucursalProduccion?.id],
+    queryFn: () => bajoMinimo(sucursalProduccion!.id),
+    enabled: sucursalProduccion != null,
+  });
+  const bajoElMinimo = minimosQ.data ?? [];
+
   return (
     <div className="flex flex-1 flex-col gap-3.5 p-5">
+      {bajoElMinimo.length > 0 && (
+        <div className="flex flex-col gap-1.5 rounded-2xl border-2 border-error bg-error-suave px-4 py-3.5">
+          <span className="text-[13px] font-extrabold tracking-wide text-error-texto">
+            STOCK BAJO EL MÍNIMO
+          </span>
+          {bajoElMinimo.map((a) => (
+            <div key={a.productoId} className="flex justify-between gap-2.5 text-[15px] font-bold text-error-texto">
+              <span className="min-w-0 truncate">{a.producto}</span>
+              <span className="shrink-0">
+                quedan {fmtNumero(a.stockRestante)} (mín. {fmtNumero(a.minimo)})
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
       {loteAbierto && (
         <button
           type="button"

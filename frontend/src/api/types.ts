@@ -275,6 +275,11 @@ export interface Turno {
   fechaCierre: string | null;
   estado: EstadoTurno;
   arqueos?: Arqueo[];
+  /**
+   * Qué conceptos no cerraron ('EFECTIVO' | 'POLLOS_MARCADOS'). Solo viene en
+   * el DTO ciego: dice DÓNDE está la diferencia, nunca cuánto ni para qué lado.
+   */
+  conceptosConDiferencia?: string[];
 }
 
 export interface AperturaResultado {

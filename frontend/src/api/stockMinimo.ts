@@ -1,5 +1,10 @@
 import { apiFetch } from './client';
-import type { ConfigStockMinimo } from './types';
+import type { AvisoStockMinimo, ConfigStockMinimo } from './types';
+
+/** Qué está hoy por debajo del mínimo configurado en esa sucursal. */
+export function bajoMinimo(sucursalId: number) {
+  return apiFetch<AvisoStockMinimo[]>(`/api/config-stock-minimo/bajo-minimo?sucursalId=${sucursalId}`);
+}
 
 export function listarConfigStockMinimo(sucursalId?: number) {
   const qs = sucursalId ? `?sucursalId=${sucursalId}` : '';

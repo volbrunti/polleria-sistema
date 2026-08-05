@@ -4,14 +4,30 @@ import { usarClaveEmergencia } from '../../../api/turnos';
 
 interface Props {
   turnoId: number;
+  /** 'EFECTIVO' | 'POLLOS_MARCADOS' — qué conceptos no cerraron. */
+  conceptos?: string[];
   onReintentar: () => void; // refetch: si el admin desbloqueó remoto, pasa a ABIERTO
   onDesbloqueado: () => void;
 }
 
-// Pantalla de bloqueo (CLAUDE-MODULO-2.md §5.1): mensaje genérico SIN números,
-// sin decir cuál de los dos arqueos falló ni de qué lado está el error.
-// La opción de clave de emergencia es discreta (chica, en un rincón).
-export function PantallaBloqueada({ turnoId, onReintentar, onDesbloqueado }: Props) {
+// Dice en cuál de los dos conteos está la diferencia, nunca cuánto ni si
+// sobra o falta. Pablo lo pidió para no mandar al cajero a revisar los dos
+// lados a la vez (reunión 4/8).
+function textoConcepto(conceptos: string[] | undefined): string | null {
+  if (!conceptos || conceptos.length === 0) return null;
+  const efectivo = conceptos.includes('EFECTIVO');
+  const pollos = conceptos.includes('POLLOS_MARCADOS');
+  if (efectivo && pollos) return 'La diferencia está en el efectivo y en los pollos marcados.';
+  if (efectivo) return 'La diferencia está en el efectivo.';
+  if (pollos) return 'La diferencia está en los pollos marcados.';
+  return null;
+}
+
+// Pantalla de bloqueo (CLAUDE-MODULO-2.md §5.1): mensaje genérico SIN números
+// y sin decir de qué lado está el error. La opción de clave de emergencia es
+// discreta (chica, en un rincón).
+export function PantallaBloqueada({ turnoId, conceptos, onReintentar, onDesbloqueado }: Props) {
+  const detalleConcepto = textoConcepto(conceptos);
   const [mostrarClave, setMostrarClave] = useState(false);
   const [codigo, setCodigo] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +44,11 @@ export function PantallaBloqueada({ turnoId, onReintentar, onDesbloqueado }: Pro
       <div className="flex h-24 w-24 items-center justify-center rounded-full bg-chip text-5xl">🔒</div>
       <div className="max-w-[440px]">
         <div className="text-[24px] font-extrabold">Hay una diferencia en el conteo</div>
+        {detalleConcepto && (
+          <div className="mt-2.5 rounded-xl bg-advertencia-suave px-4 py-2.5 text-[17px] font-bold text-advertencia-texto">
+            {detalleConcepto}
+          </div>
+        )}
         <div className="mt-2 text-lg text-texto-suave">
           Se notificó al administrador. Esperá la autorización para continuar.
         </div>

@@ -24,4 +24,16 @@ export async function stockMinimoRoutes(app: FastifyInstance) {
     const query = z.object({ sucursalId: z.coerce.number().int().positive().optional() }).parse(req.query);
     return stockMinimoService.listar(query);
   });
+
+  // Qué está hoy bajo el mínimo en una sucursal. Lo lee el banner de
+  // Producción, así que PRODUCCION también entra — solo devuelve nombre,
+  // stock y umbral, nada sensible.
+  app.get(
+    '/bajo-minimo',
+    { preHandler: [app.autenticar, app.requerirRoles('ADMINISTRADOR', 'SOCIO', 'PRODUCCION', 'ENCARGADO')] },
+    async (req) => {
+      const { sucursalId } = z.object({ sucursalId: z.coerce.number().int().positive() }).parse(req.query);
+      return stockMinimoService.bajoMinimo(sucursalId);
+    },
+  );
 }

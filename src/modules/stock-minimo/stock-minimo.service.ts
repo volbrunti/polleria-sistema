@@ -71,6 +71,33 @@ export interface AvisoStockMinimo {
   minimo: string;
 }
 
+// Foto del momento: qué está hoy por debajo del mínimo en una sucursal. A
+// diferencia de evaluarTrasDescuento (que corre dentro de la tx de una venta y
+// solo mira lo que se descontó), esto recorre todas las configuraciones
+// activas. Lo consume el banner de Producción, que Pablo pidió ver apenas
+// abre la app: "así como dice lote abierto arriba, que te digan en rojo los
+// mínimos que tenés".
+export async function bajoMinimo(sucursalId: number): Promise<AvisoStockMinimo[]> {
+  const configs = await prisma.configuracionStockMinimo.findMany({
+    where: { sucursalId, activa: true },
+    include: { producto: { select: { nombre: true } } },
+  });
+
+  const avisos: AvisoStockMinimo[] = [];
+  for (const config of configs) {
+    const stock = await obtenerStock(config.productoId, sucursalId);
+    if (stock.lessThan(config.minimo)) {
+      avisos.push({
+        productoId: config.productoId,
+        producto: config.producto.nombre,
+        stockRestante: stock.toString(),
+        minimo: config.minimo.toString(),
+      });
+    }
+  }
+  return avisos;
+}
+
 // Se llama DENTRO de la transacción que descuenta stock, después de crear los
 // MovimientoStock. Devuelve los avisos para el POS y crea la Alerta al admin
 // solo si esta operación CRUZÓ el umbral. La emisión por socket es post-commit
