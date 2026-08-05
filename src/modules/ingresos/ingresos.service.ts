@@ -114,17 +114,22 @@ export async function listar(filtros: { desde?: Date; hasta?: Date; proveedorId?
   });
 }
 
-// Líneas con stock restante de un producto — para que producción elija
-// sobre qué lote de ingreso trabaja (Flujo 2 paso 2)
-export async function lineasDisponibles(productoId: number) {
+// Líneas con stock restante. Con productoId, para que producción elija sobre
+// qué lote de ingreso trabaja (Flujo 2 paso 2). Sin productoId devuelve toda
+// la materia prima con saldo, para el panel "lo que hay" del menú.
+//
+// El orden cambia según para qué se pide: al elegir sobre qué producir importa
+// gastar primero lo más viejo (FIFO), pero al mirar el panel lo que interesa
+// es qué acaba de entrar.
+export async function lineasDisponibles(productoId?: number) {
   return prisma.lineaIngreso.findMany({
-    where: { productoId, cantidadRestanteDisponible: { gt: 0 } },
+    where: { ...(productoId != null ? { productoId } : {}), cantidadRestanteDisponible: { gt: 0 } },
     include: {
       ingresoMercaderia: {
         select: { fechaHora: true, proveedor: { select: { nombre: true } } },
       },
       producto: { select: { nombre: true, unidadDeMedida: true } },
     },
-    orderBy: { ingresoMercaderia: { fechaHora: 'asc' } }, // FIFO sugerido
+    orderBy: { ingresoMercaderia: { fechaHora: productoId != null ? 'asc' : 'desc' } },
   });
 }

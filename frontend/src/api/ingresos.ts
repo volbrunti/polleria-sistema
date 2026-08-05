@@ -31,6 +31,8 @@ export function listarIngresos(filtros?: { desde?: string; hasta?: string; prove
   return apiFetch<IngresoMercaderia[]>(`/api/ingresos${query ? `?${query}` : ''}`);
 }
 
-export function lineasDisponibles(productoId: number) {
-  return apiFetch<LineaIngresoDisponible[]>(`/api/ingresos/lineas-disponibles?productoId=${productoId}`);
+/** Sin productoId trae toda la materia prima con saldo, de lo más nuevo a lo más viejo. */
+export function lineasDisponibles(productoId?: number) {
+  const qs = productoId != null ? `?productoId=${productoId}` : '';
+  return apiFetch<LineaIngresoDisponible[]>(`/api/ingresos/lineas-disponibles${qs}`);
 }
