@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { fmtNumero } from '../../lib/formato';
 
 export interface PropsTecladoNumerico {
@@ -9,8 +9,12 @@ export interface PropsTecladoNumerico {
   permiteCero?: boolean;
   maximo?: number;
   mensajeMaximo?: string;
-  /** Texto fijo siempre visible (ej: "Quedan 8,2 kg disponibles") — no depende de que se pase el máximo. */
-  pistaDisponible?: string;
+  /**
+   * Contenido fijo siempre visible (ej: "Quedan 8,2 kg disponibles") — no
+   * depende de que se pase el máximo. Acepta JSX para poder desglosar el saldo
+   * partida por partida en vez de mostrar solo el total.
+   */
+  pistaDisponible?: ReactNode;
   /** Prefill al editar un valor ya cargado. */
   valorInicial?: number;
   /**

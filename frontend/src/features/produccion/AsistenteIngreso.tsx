@@ -6,10 +6,10 @@ import { TecladoNumerico } from '../../components/ui/TecladoNumerico';
 import { PantallaExito } from '../../components/ui/PantallaExito';
 import { listarProveedores, productosHabituales } from '../../api/proveedores';
 import { listarProductos } from '../../api/productos';
-import { registrarIngreso, subirFotoRemito } from '../../api/ingresos';
+import { registrarIngreso, subirFotoRemito, lineasDisponibles } from '../../api/ingresos';
 import { ApiError } from '../../api/client';
-import { fmtNumero } from '../../lib/formato';
-import type { Producto, Proveedor } from '../../api/types';
+import { fmtFecha, fmtNumero } from '../../lib/formato';
+import type { LineaIngresoDisponible, Producto, Proveedor } from '../../api/types';
 
 interface Props {
   onVolver: () => void;
@@ -22,13 +22,40 @@ interface LineaIngresoUI {
   producto: Producto;
   cantidadSegunRemito: number;
   cantidadRealPesada: number;
+  /** Partidas de este producto que TODAVÍA tienen saldo cuando llega la nueva. */
+  saldoPrevio: LineaIngresoDisponible[];
 }
 
 type Overlay =
   | { tipo: 'selectorProducto' }
-  | { tipo: 'tecladoRemito'; producto: Producto }
-  | { tipo: 'tecladoPesada'; producto: Producto; remito: number }
+  | { tipo: 'buscandoSaldo'; producto: Producto }
+  | { tipo: 'tecladoRemito'; producto: Producto; saldoPrevio: LineaIngresoDisponible[] }
+  | { tipo: 'tecladoPesada'; producto: Producto; remito: number; saldoPrevio: LineaIngresoDisponible[] }
   | null;
+
+// "Todavía te queda de antes". Ariel lo pidió con estas palabras: "que me
+// salte una alerta en rojo, acordate que te quedan dos kilos de esta". El caso
+// real que lo motivó es la bolsita olvidada en el fondo de la heladera.
+function AvisoSaldoPrevio({ producto, saldo }: { producto: Producto; saldo: LineaIngresoDisponible[] }) {
+  if (saldo.length === 0) return null;
+  const u = producto.unidadDeMedida.toLowerCase();
+  const total = saldo.reduce((acc, l) => acc + Number(l.cantidadRestanteDisponible), 0);
+  return (
+    <div className="rounded-xl border-2 border-error bg-error-suave px-3.5 py-2.5">
+      <div className="text-[15px] font-extrabold text-error-texto">
+        ⚠️ Ojo: todavía te quedan {fmtNumero(total)} {u} de antes
+      </div>
+      <div className="mt-1 flex flex-col gap-0.5 text-sm font-semibold text-error-texto">
+        {saldo.map((l) => (
+          <div key={l.id}>
+            · Partida del {l.ingresoMercaderia ? fmtFecha(l.ingresoMercaderia.fechaHora) : '?'}:{' '}
+            {fmtNumero(l.cantidadRestanteDisponible)} {u}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 // Remito vs pesado, con la diferencia destacada cuando no coinciden. Es el
 // dato que justifica todo el flujo: Ariel contó que pesando bolsas de papa
@@ -115,6 +142,20 @@ export function AsistenteIngreso({ onVolver, onFinalizado, onIrAProducir }: Prop
     setPaso((p) => p - 1);
   }
 
+  // Antes de cargar el remito, mira si de este producto ya queda stock sin usar.
+  // Si la consulta falla no bloquea el ingreso — solo se pierde el aviso.
+  async function elegirProducto(producto: Producto) {
+    setOverlay({ tipo: 'buscandoSaldo', producto });
+    let saldoPrevio: LineaIngresoDisponible[] = [];
+    try {
+      const lineas = await lineasDisponibles(producto.id);
+      saldoPrevio = lineas.filter((l) => Number(l.cantidadRestanteDisponible) > 0);
+    } catch {
+      saldoPrevio = [];
+    }
+    setOverlay({ tipo: 'tecladoRemito', producto, saldoPrevio });
+  }
+
   const itemsProveedores: ItemSelector[] =
     proveedores.data?.map((p) => ({ id: p.id, label: p.esOtro ? 'OTRO' : p.nombre })) ?? [];
 
@@ -180,19 +221,22 @@ export function AsistenteIngreso({ onVolver, onFinalizado, onIrAProducir }: Prop
           <div className="py-1 text-xl font-extrabold">Productos del remito</div>
           <div className="text-[15px] text-texto-suave">Cargá lo que dice el remito y lo que pesaste vos.</div>
           {lineas.map((l, i) => (
-            <div key={i} className="flex items-center gap-3 rounded-2xl border border-borde bg-white px-4 py-3.5">
-              <div className="min-w-0 flex-1">
-                <div className="text-[17px] font-bold">{l.producto.nombre}</div>
-                <DetalleLinea linea={l} />
+            <div key={i} className="flex flex-col gap-2 rounded-2xl border border-borde bg-white px-4 py-3.5">
+              <div className="flex items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="text-[17px] font-bold">{l.producto.nombre}</div>
+                  <DetalleLinea linea={l} />
+                </div>
+                <button
+                  type="button"
+                  aria-label="Borrar"
+                  onClick={() => setLineas((ls) => ls.filter((_, idx) => idx !== i))}
+                  className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-[10px] border border-red-200 bg-white text-lg font-bold text-error hover:bg-error-suave"
+                >
+                  ✕
+                </button>
               </div>
-              <button
-                type="button"
-                aria-label="Borrar"
-                onClick={() => setLineas((ls) => ls.filter((_, idx) => idx !== i))}
-                className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-[10px] border border-red-200 bg-white text-lg font-bold text-error hover:bg-error-suave"
-              >
-                ✕
-              </button>
+              <AvisoSaldoPrevio producto={l.producto} saldo={l.saldoPrevio} />
             </div>
           ))}
           {(() => {
@@ -207,7 +251,7 @@ export function AsistenteIngreso({ onVolver, onFinalizado, onIrAProducir }: Prop
                     <button
                       key={p.id}
                       type="button"
-                      onClick={() => setOverlay({ tipo: 'tecladoRemito', producto: p })}
+                      onClick={() => void elegirProducto(p)}
                       className="min-h-11 cursor-pointer rounded-full border-2 border-primario bg-primario-suave px-4 text-sm font-bold text-primario hover:bg-chip"
                     >
                       + {p.nombre}
@@ -367,9 +411,15 @@ export function AsistenteIngreso({ onVolver, onFinalizado, onIrAProducir }: Prop
           onCancelar={() => setOverlay(null)}
           onSeleccionar={(item) => {
             const producto = materiasPrimas.data!.find((p) => p.id === item.id)!;
-            setOverlay({ tipo: 'tecladoRemito', producto });
+            void elegirProducto(producto);
           }}
         />
+      )}
+
+      {overlay?.tipo === 'buscandoSaldo' && (
+        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/45">
+          <div className="rounded-2xl bg-white px-6 py-5 text-base font-bold text-texto-suave">Un segundo…</div>
+        </div>
       )}
 
       {overlay?.tipo === 'tecladoRemito' && (
@@ -379,8 +429,20 @@ export function AsistenteIngreso({ onVolver, onFinalizado, onIrAProducir }: Prop
           icono="📄"
           unidad={overlay.producto.unidadDeMedida === 'KG' ? 'kg' : 'u'}
           permiteDecimal={overlay.producto.unidadDeMedida === 'KG'}
+          pistaDisponible={
+            overlay.saldoPrevio.length > 0 ? (
+              <AvisoSaldoPrevio producto={overlay.producto} saldo={overlay.saldoPrevio} />
+            ) : undefined
+          }
           onCancelar={() => setOverlay(null)}
-          onConfirmar={(remito) => setOverlay({ tipo: 'tecladoPesada', producto: overlay.producto, remito })}
+          onConfirmar={(remito) =>
+            setOverlay({
+              tipo: 'tecladoPesada',
+              producto: overlay.producto,
+              remito,
+              saldoPrevio: overlay.saldoPrevio,
+            })
+          }
         />
       )}
 
@@ -400,7 +462,12 @@ export function AsistenteIngreso({ onVolver, onFinalizado, onIrAProducir }: Prop
           onConfirmar={(pesada) => {
             setLineas((ls) => [
               ...ls,
-              { producto: overlay.producto, cantidadSegunRemito: overlay.remito, cantidadRealPesada: pesada },
+              {
+                producto: overlay.producto,
+                cantidadSegunRemito: overlay.remito,
+                cantidadRealPesada: pesada,
+                saldoPrevio: overlay.saldoPrevio,
+              },
             ]);
             setOverlay(null);
           }}
