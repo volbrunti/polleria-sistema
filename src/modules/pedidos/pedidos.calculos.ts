@@ -44,6 +44,18 @@ export function precioUnitarioReferencia(montoTotal: Prisma.Decimal, cantidad: n
   return montoTotal.div(cantidad).toDecimalPlaces(2);
 }
 
+// Descuento a empleados (reunión 4/8). Se aplica por línea y se redondea
+// HACIA ABAJO a pesos enteros: el empleado nunca paga de más por un redondeo,
+// y la suma de las líneas sigue dando exactamente el total del pedido.
+export function aplicarDescuentoEmpleado(
+  montoTotal: Prisma.Decimal,
+  porcentaje: Prisma.Decimal,
+): Prisma.Decimal {
+  if (porcentaje.lessThanOrEqualTo(0)) return montoTotal;
+  const conDescuento = montoTotal.mul(new Prisma.Decimal(100).minus(porcentaje)).div(100);
+  return conDescuento.floor();
+}
+
 // ── Cobro ──
 
 // Recargo de tarjeta (reunión 4/8): plata EXTRA que paga el cliente encima de

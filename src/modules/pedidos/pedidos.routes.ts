@@ -15,6 +15,9 @@ const confirmarSchema = z.object({
   // UUID generado por el POS por cada pedido armado — doble click o retry
   // de red devuelven el pedido ya creado en vez de duplicarlo
   tokenIdempotencia: z.string().min(8).max(64).optional(),
+  // Retiro de socio (costo cero) / venta a empleado (con descuento)
+  beneficiario: z.enum(['SOCIO', 'EMPLEADO']).optional(),
+  socioBeneficiario: z.enum(['ARIEL', 'ELIANA', 'EMA']).optional(),
 });
 
 const modificarSchema = z.object({ items: z.array(itemSchema).min(1) });
@@ -29,7 +32,9 @@ const cobrarSchema = z.object({
         recargoPct: z.number().min(0).max(100).optional(),
       }),
     )
-    .min(1),
+    // Vacío es válido SOLO si el pedido no tiene nada que cobrar (retiro de
+    // socio): el servicio lo valida contra el total real.
+    .default([]),
 });
 
 const paramsId = z.object({ id: z.coerce.number().int().positive() });

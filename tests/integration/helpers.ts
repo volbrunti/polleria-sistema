@@ -123,6 +123,21 @@ export async function sembrarFixtures(): Promise<Fixtures> {
     include: { versiones: true },
   });
 
+  // limpiarDb() trunca todo, incluida la configuración que siembra la
+  // migración. Se repone acá para que los endpoints de admin la encuentren
+  // igual que en la base real.
+  // Upsert y no create: si un test anterior dejó otro valor, acá vuelve al
+  // conocido — los tests no pueden depender de en qué orden corrió el resto.
+  await prisma.configuracionGeneral.upsert({
+    where: { clave: 'DESCUENTO_EMPLEADO_PCT' },
+    update: { valor: '20' },
+    create: {
+      clave: 'DESCUENTO_EMPLEADO_PCT',
+      valor: '20',
+      descripcion: 'Descuento que se aplica a un pedido marcado como venta a empleado.',
+    },
+  });
+
   return {
     sucursales: { produccion: produccion.id, local1: local1.id, local2: local2.id },
     usuarios,

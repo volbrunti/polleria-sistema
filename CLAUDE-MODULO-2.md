@@ -180,6 +180,17 @@ Validado con Ariel textualmente: *"Si se mandó a preparar, se consumió, se ret
   - En el resumen del turno y en Reportes → Ventas por medio, el recargo aparece **separado de la venta** (`recargo` por medio + `totalRecargosTarjeta`): es plata que el cliente pagó de más por el plástico, no facturación.
   - Los porcentajes se **desactivan**, no se borran: cada pago guarda el suyo, así que cambiar la lista no altera el histórico.
 
+### 4.7 bis Retiro de socio y venta a empleado (reunión 4/8)
+
+En el carrito, junto a Presencial / A retirar, el cajero elige quién se lleva el pedido: **Cliente** (default), **Socio** o **Empleado**. Es solo por **mercadería** — el retiro de PLATA sigue donde estaba, en Operaciones de caja (Pablo lo aclaró expresamente).
+
+- **Socio** → obliga a elegir cuál (`ARIEL`/`ELIANA`/`EMA`, mismo selector cerrado de los retiros). El pedido queda a **costo cero**: cada línea con `montoTotal = 0`, `esVentaCostoCero = true` y `tipoCostoCero = RETIRO_SOCIO`, así **no cuenta como venta** en ningún total. **El stock igual se descuenta** — se lo llevó. No se cobra: se cierra con `POST /:id/cobrar` sin pagos, queda `ENTREGADO` **sin ningún `Pago`** (si generara uno, ensuciaría el arqueo de caja) y se audita como `ENTREGAR_SIN_COBRO` con el socio.
+- **Empleado** → sí es venta, con el **descuento global configurable** (`ConfiguracionGeneral.DESCUENTO_EMPLEADO_PCT`, editable en **Catálogo → Recargos y descuentos**, default 20%). Se aplica **por línea y redondeando hacia abajo** a pesos enteros: el empleado nunca paga de más por un redondeo y la suma de las líneas da exacto el total.
+- El `%` queda **congelado en `Pedido.descuentoPct`** al confirmar. Cambiarlo después no toca lo ya vendido, y si el pedido se modifica se le reaplica **el suyo**, no el vigente.
+- Un pedido normal **no** se puede cerrar sin pagos (`PAGO_INSUFICIENTE`): la vía sin cobro existe solo cuando el total es 0.
+
+`ConfiguracionGeneral` es una tabla clave-valor a propósito: cada parámetro nuevo que el admin deba poder tocar no debería costar una migración.
+
 ### 4.8 Atenciones / Regalías
 
 - Producto o combo sin cargo.

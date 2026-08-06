@@ -1,5 +1,13 @@
 import { apiFetch } from './client';
-import type { CobroResultado, MasVendido, MedioPago, Pedido, TipoPedido } from './types';
+import type {
+  BeneficiarioPedido,
+  CobroResultado,
+  MasVendido,
+  MedioPago,
+  Pedido,
+  SocioRetiro,
+  TipoPedido,
+} from './types';
 
 export interface ItemPedidoInput {
   productoId: number;
@@ -16,6 +24,9 @@ export function confirmarPedido(datos: {
   tipo: TipoPedido;
   items: ItemPedidoInput[];
   tokenIdempotencia?: string;
+  /** Retiro de socio (costo cero) o venta a empleado (con descuento). */
+  beneficiario?: BeneficiarioPedido;
+  socioBeneficiario?: SocioRetiro;
 }) {
   return apiFetch<Pedido>('/api/pedidos', { method: 'POST', body: datos });
 }

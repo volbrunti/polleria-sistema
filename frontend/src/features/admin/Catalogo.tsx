@@ -18,6 +18,11 @@ import {
 } from '../../api/proveedores';
 import { listarSucursales } from '../../api/sucursales';
 import { listarRecargos, crearRecargo, actualizarRecargo } from '../../api/recargos';
+import {
+  listarConfiguracion,
+  actualizarConfiguracion,
+  CLAVE_DESCUENTO_EMPLEADO,
+} from '../../api/configuracion';
 import { TecladoNumerico } from '../../components/ui/TecladoNumerico';
 import { ApiError } from '../../api/client';
 import { fmtFecha, fmtMoneda, fmtNumero } from '../../lib/formato';
@@ -45,7 +50,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'productos', label: 'Productos' },
   { id: 'combos', label: 'Combos' },
   { id: 'precios', label: 'Precios' },
-  { id: 'recargos', label: 'Recargos de tarjeta' },
+  { id: 'recargos', label: 'Recargos y descuentos' },
   { id: 'proveedores', label: 'Proveedores' },
   { id: 'sucursales', label: 'Sucursales' },
 ];
@@ -995,6 +1000,9 @@ function TabRecargos({ puedeEscribir }: { puedeEscribir: boolean }) {
 
   return (
     <div className="flex flex-col gap-3.5">
+      <DescuentoEmpleado puedeEscribir={puedeEscribir} />
+
+      <div className="mt-1 text-base font-extrabold">Recargos de tarjeta</div>
       <div className="w-fit rounded-xl bg-[#fff7d9] px-3.5 py-3 text-sm font-semibold text-advertencia-texto">
         Lo que cargues acá es lo que el cajero ve al cobrar con tarjeta. El recargo se suma al total
         del pedido y queda desglosado en el turno y en los reportes.
@@ -1107,6 +1115,71 @@ function TabRecargos({ puedeEscribir }: { puedeEscribir: boolean }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// Descuento a empleados (reunión 4/8): un solo porcentaje global. Se congela
+// en cada pedido al confirmarlo, así que cambiarlo no toca lo ya vendido.
+function DescuentoEmpleado({ puedeEscribir }: { puedeEscribir: boolean }) {
+  const queryClient = useQueryClient();
+  const config = useQuery({ queryKey: ['configuracion'], queryFn: listarConfiguracion });
+  const guardado = config.data?.find((c) => c.clave === CLAVE_DESCUENTO_EMPLEADO)?.valor ?? '';
+
+  const [valor, setValor] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const enEdicion = valor ?? guardado;
+  const cambio = valor !== null && valor !== guardado;
+
+  const mut = useMutation({
+    mutationFn: (nuevo: string) => actualizarConfiguracion(CLAVE_DESCUENTO_EMPLEADO, nuevo),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['configuracion'] });
+      setValor(null);
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : 'No se pudo guardar.'),
+  });
+
+  const pctValido = Number(enEdicion) >= 0 && Number(enEdicion) <= 100 && enEdicion.trim() !== '';
+
+  return (
+    <div className="flex flex-col gap-3 rounded-2xl border border-borde bg-white p-4.5">
+      <div className="text-base font-extrabold">Descuento a empleados</div>
+      <div className="text-sm text-texto-suave">
+        Se aplica cuando el cajero marca el pedido como “Empleado”. El total de cada línea se
+        redondea hacia abajo. Los pedidos ya confirmados conservan el porcentaje que tenían.
+      </div>
+      <div className="flex flex-wrap items-center gap-2.5">
+        <input
+          value={enEdicion}
+          onChange={(e) => setValor(e.target.value)}
+          disabled={!puedeEscribir}
+          type="number"
+          min={0}
+          max={100}
+          step="0.01"
+          className="h-11.5 w-28 rounded-[10px] border border-borde-fuerte px-3 text-right text-sm font-bold disabled:bg-chip"
+        />
+        <span className="text-sm font-bold text-texto-suave">% de descuento</span>
+        {puedeEscribir && cambio && (
+          <button
+            type="button"
+            disabled={!pctValido || mut.isPending}
+            onClick={() => {
+              setError(null);
+              mut.mutate(enEdicion.trim());
+            }}
+            className="min-h-11.5 cursor-pointer rounded-xl bg-primario px-5 text-sm font-extrabold text-white disabled:opacity-50"
+          >
+            {mut.isPending ? 'GUARDANDO…' : 'GUARDAR'}
+          </button>
+        )}
+      </div>
+      {error && (
+        <div className="rounded-xl bg-error-suave px-3.5 py-2.5 text-sm font-semibold text-error-texto">
+          {error}
+        </div>
+      )}
     </div>
   );
 }

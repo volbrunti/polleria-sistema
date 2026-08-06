@@ -1,4 +1,12 @@
-import { Prisma, type EstadoPedido, type MedioPago, type Producto, type TipoPedido } from '@prisma/client';
+import {
+  Prisma,
+  type BeneficiarioPedido,
+  type EstadoPedido,
+  type MedioPago,
+  type Producto,
+  type SocioRetiro,
+  type TipoPedido,
+} from '@prisma/client';
 import { prisma, OPCIONES_TX, type TxClient } from '../../lib/prisma';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { Errores } from '../../lib/errores';
@@ -11,10 +19,12 @@ import {
   precioUnitarioReferencia,
   calcularCobro,
   calcularRecargo,
+  aplicarDescuentoEmpleado,
   transicionValida,
   esModificable,
 } from './pedidos.calculos';
 import { admiteRecargo } from '../recargos/recargos.service';
+import * as configuracionService from '../configuracion/configuracion.service';
 import { emitirTicket } from './comandera';
 import * as stockMinimoService from '../stock-minimo/stock-minimo.service';
 import * as alertasService from '../alertas/alertas.service';
@@ -187,8 +197,18 @@ export async function confirmarPedido(params: {
   tipo: TipoPedido;
   items: ItemInput[];
   tokenIdempotencia?: string;
+  /**
+   * Retiro de socio / venta a empleado (reunión 4/8). El SOCIO se lleva la
+   * mercadería a costo cero (el retiro de PLATA sigue en Operaciones de caja);
+   * al EMPLEADO se le aplica el descuento configurado por el admin.
+   */
+  beneficiario?: BeneficiarioPedido;
+  socioBeneficiario?: SocioRetiro;
 }) {
   if (params.items.length === 0) throw Errores.validacion('El pedido no tiene ítems');
+  if (params.beneficiario === 'SOCIO' && !params.socioBeneficiario) {
+    throw Errores.validacion('Indicá qué socio retira la mercadería');
+  }
   const sucursalId = await resolverSucursalOperativa(params.usuarioId, params.sucursalId);
 
   // Idempotencia: si este token ya creó un pedido (doble click, retry de
@@ -200,6 +220,11 @@ export async function confirmarPedido(params: {
     });
     if (previo) return { ...previo, avisosStockMinimo: [] };
   }
+
+  // % congelado al confirmar: si el admin lo cambia mañana, este pedido
+  // conserva el que se le aplicó hoy.
+  const descuentoPct =
+    params.beneficiario === 'EMPLEADO' ? await configuracionService.descuentoEmpleadoPct() : null;
 
   // Precios: fuera de la tx (no cambian en el medio y ahorra round-trips)
   const lineas: {
@@ -223,6 +248,10 @@ export async function confirmarPedido(params: {
     } catch {
       throw Errores.productoSinPrecio(producto.nombre, item.cantidad);
     }
+    // Socio: se lo lleva sin pagar. Empleado: paga con descuento.
+    if (params.beneficiario === 'SOCIO') montoTotal = CERO;
+    else if (descuentoPct) montoTotal = aplicarDescuentoEmpleado(montoTotal, descuentoPct);
+
     lineas.push({
       ...item,
       montoTotal,
@@ -246,6 +275,9 @@ export async function confirmarPedido(params: {
         tipo: params.tipo,
         usuarioCajeroId: params.usuarioId,
         tokenIdempotencia: params.tokenIdempotencia,
+        beneficiario: params.beneficiario,
+        socioBeneficiario: params.socioBeneficiario,
+        descuentoPct,
         items: {
           create: lineas.map((l) => ({
             productoId: l.productoId,
@@ -253,6 +285,10 @@ export async function confirmarPedido(params: {
             montoTotal: l.montoTotal,
             precioUnitario: l.precioUnitario,
             aclaraciones: l.aclaraciones,
+            // El retiro del socio sale del stock pero NO es venta: queda
+            // fuera de todos los totales de facturación.
+            esVentaCostoCero: params.beneficiario === 'SOCIO',
+            tipoCostoCero: params.beneficiario === 'SOCIO' ? ('RETIRO_SOCIO' as const) : undefined,
           })),
         },
       },
@@ -344,6 +380,14 @@ export async function modificarPedido(params: { pedidoId: number; items: ItemInp
     } catch {
       throw Errores.productoSinPrecio(producto.nombre, item.cantidad);
     }
+    // Se respeta el beneficiario con el que nació el pedido: si era retiro de
+    // socio sigue en cero, y si era de empleado se reaplica el MISMO % que se
+    // le congeló al confirmar, no el que esté configurado hoy.
+    if (existente.beneficiario === 'SOCIO') montoTotal = CERO;
+    else if (existente.descuentoPct) {
+      montoTotal = aplicarDescuentoEmpleado(montoTotal, existente.descuentoPct);
+    }
+
     lineas.push({ ...item, montoTotal, precioUnitario: precioUnitarioReferencia(montoTotal, item.cantidad) });
   }
 
@@ -384,6 +428,8 @@ export async function modificarPedido(params: { pedidoId: number; items: ItemInp
             montoTotal: l.montoTotal,
             precioUnitario: l.precioUnitario,
             aclaraciones: l.aclaraciones,
+            esVentaCostoCero: existente.beneficiario === 'SOCIO',
+            tipoCostoCero: existente.beneficiario === 'SOCIO' ? ('RETIRO_SOCIO' as const) : undefined,
           })),
         },
       },
@@ -448,6 +494,12 @@ export async function cobrarPedido(params: {
   }
 
   const total = totalDelPedido(pedido.items);
+  // Retiro de socio: el total es 0 y no hay nada que cobrar — se cierra sin pagos.
+  if (total.isZero() && params.pagos.length === 0) {
+    return { pedido: await cerrarSinCobro(pedido, params.usuarioId), vuelto: '0' };
+  }
+  if (params.pagos.length === 0) throw Errores.pagoInsuficiente();
+
   let cobro: { vuelto: Prisma.Decimal; efectivoNeto: Prisma.Decimal };
   try {
     cobro = calcularCobro({
@@ -513,6 +565,37 @@ export async function cobrarPedido(params: {
   }, OPCIONES_TX);
 
   return { pedido: actualizado, vuelto: cobro.vuelto.toString() };
+}
+
+// Retiro de socio: el pedido salió a costo cero, no hay plata que contar. Se
+// cierra igual que un cobro (ENTREGADO + auditoría) pero sin ningún Pago, así
+// no ensucia el arqueo de caja ni las ventas por medio de pago.
+async function cerrarSinCobro(
+  pedido: {
+    id: number;
+    estado: EstadoPedido;
+    beneficiario: BeneficiarioPedido | null;
+    socioBeneficiario: SocioRetiro | null;
+  },
+  usuarioId: number,
+) {
+  return prisma.$transaction(async (tx) => {
+    await transicionarAtomico(tx, pedido.id, pedido.estado, {
+      estado: 'ENTREGADO',
+      fechaCierre: new Date(),
+    });
+    await registrarAuditoria(tx, {
+      accion: 'ENTREGAR_SIN_COBRO',
+      entidad: 'Pedido',
+      entidadId: pedido.id,
+      usuarioId,
+      datosNuevos: {
+        motivo: pedido.beneficiario ?? 'TOTAL_CERO',
+        socio: pedido.socioBeneficiario ?? null,
+      },
+    });
+    return tx.pedido.findUniqueOrThrow({ where: { id: pedido.id }, include: INCLUDE_PEDIDO });
+  }, OPCIONES_TX);
 }
 
 // ── Cambios de estado simples ──

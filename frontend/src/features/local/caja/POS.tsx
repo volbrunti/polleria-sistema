@@ -1,12 +1,22 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { listarProductos, tablasPrecioVigentes } from '../../../api/productos';
-import { confirmarPedido, masVendidos } from '../../../api/pedidos';
+import { listarConfiguracion, CLAVE_DESCUENTO_EMPLEADO } from '../../../api/configuracion';
+import { cobrarPedido, confirmarPedido, masVendidos } from '../../../api/pedidos';
 import { calcularPrecioTotal, type TierPrecio } from '../../../lib/precios';
 import { fmtMoneda } from '../../../lib/formato';
 import { ApiError } from '../../../api/client';
 import { CobrarPedido } from './CobrarPedido';
-import type { AvisoStockMinimo, Pedido, Producto, TipoPedido } from '../../../api/types';
+import type {
+  AvisoStockMinimo,
+  BeneficiarioPedido,
+  Pedido,
+  Producto,
+  SocioRetiro,
+  TipoPedido,
+} from '../../../api/types';
+
+const SOCIOS: SocioRetiro[] = ['ARIEL', 'ELIANA', 'EMA'];
 
 interface Props {
   sucursalId: number;
@@ -54,6 +64,28 @@ function Chip({
   );
 }
 
+function BotonBeneficiario({
+  activo,
+  onClick,
+  children,
+}: {
+  activo: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`min-h-[42px] flex-1 cursor-pointer rounded-xl text-sm font-bold ${
+        activo ? 'bg-texto text-white' : 'border border-borde-fuerte bg-white text-texto-suave'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
 // POS táctil (CLAUDE-MODULO-2.md §4.1, INNEGOCIABLE): botones grandes por
 // categoría, productos ordenados por MÁS VENDIDOS (ranking del backend, no
 // manual), carrito siempre visible, total en tiempo real.
@@ -67,6 +99,14 @@ export function POS({ sucursalId }: Props) {
     queryFn: () => masVendidos(sucursalId),
     staleTime: 5 * 60 * 1000,
   });
+  const configQ = useQuery({
+    queryKey: ['configuracion'],
+    queryFn: listarConfiguracion,
+    staleTime: 10 * 60 * 1000,
+  });
+  const descuentoEmpleadoPct = Number(
+    configQ.data?.find((c) => c.clave === CLAVE_DESCUENTO_EMPLEADO)?.valor ?? 0,
+  );
 
   const tablaPorProducto = useMemo(() => {
     const mapa = new Map<number, TierPrecio[]>();
@@ -125,12 +165,16 @@ export function POS({ sucursalId }: Props) {
     [vendibles, rankingPorProducto],
   );
   const [tipo, setTipo] = useState<TipoPedido>('PRESENCIAL');
+  // Retiro de socio / venta a empleado (reunión 4/8). null = venta normal.
+  const [beneficiario, setBeneficiario] = useState<BeneficiarioPedido | null>(null);
+  const [socio, setSocio] = useState<SocioRetiro | null>(null);
   const [carrito, setCarrito] = useState<LineaCarrito[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [avisos, setAvisos] = useState<AvisoStockMinimo[] | null>(null);
   const [pedidoACobrar, setPedidoACobrar] = useState<Pedido | null>(null);
   const [vueltoFinal, setVueltoFinal] = useState<string | null>(null);
   const [confirmadoSinCobro, setConfirmadoSinCobro] = useState(false);
+  const [retiroConfirmado, setRetiroConfirmado] = useState<Pedido | null>(null);
 
   // Buscando: la búsqueda pisa los filtros y busca en TODO el catálogo, para
   // no obligar al cajero a acordarse en qué categoría está lo que escribió.
@@ -163,12 +207,26 @@ export function POS({ sucursalId }: Props) {
     );
   }
 
-  const lineasConTotal = carrito.map((l) => ({
-    ...l,
-    total: calcularPrecioTotal(l.cantidad, tablaPorProducto.get(l.producto.id) ?? []),
-  }));
+  // Mismo criterio que el backend (pedidos.calculos.ts): el socio se lo lleva
+  // a costo cero, el empleado paga con el descuento configurado redondeado
+  // hacia abajo. Acá es solo la previsualización — la autoridad es el POST.
+  function conBeneficio(precio: number): number {
+    if (beneficiario === 'SOCIO') return 0;
+    if (beneficiario === 'EMPLEADO' && descuentoEmpleadoPct > 0) {
+      return Math.floor((precio * (100 - descuentoEmpleadoPct)) / 100);
+    }
+    return precio;
+  }
+
+  const lineasConTotal = carrito.map((l) => {
+    const lista = calcularPrecioTotal(l.cantidad, tablaPorProducto.get(l.producto.id) ?? []);
+    return { ...l, lista, total: lista === null ? null : conBeneficio(lista) };
+  });
   const haySinPrecio = lineasConTotal.some((l) => l.total === null);
+  const totalLista = lineasConTotal.reduce((acc, l) => acc + (l.lista ?? 0), 0);
   const totalCarrito = lineasConTotal.reduce((acc, l) => acc + (l.total ?? 0), 0);
+  // Falta elegir el socio: no se puede confirmar un retiro sin decir de quién.
+  const faltaSocio = beneficiario === 'SOCIO' && socio === null;
 
   const mutConfirmar = useMutation({
     mutationFn: () =>
@@ -177,18 +235,37 @@ export function POS({ sucursalId }: Props) {
         tipo,
         items: carrito.map((l) => ({ productoId: l.producto.id, cantidad: l.cantidad })),
         tokenIdempotencia: tokenPedido.current,
+        ...(beneficiario ? { beneficiario } : {}),
+        ...(beneficiario === 'SOCIO' && socio ? { socioBeneficiario: socio } : {}),
       }),
     onSuccess: (pedido) => {
       void queryClient.invalidateQueries({ queryKey: ['pedidos'] });
       void queryClient.invalidateQueries({ queryKey: ['mas-vendidos'] });
       setCarrito([]);
+      const eraRetiroDeSocio = beneficiario === 'SOCIO';
+      setBeneficiario(null);
+      setSocio(null);
       if (pedido.avisosStockMinimo && pedido.avisosStockMinimo.length > 0) {
         setAvisos(pedido.avisosStockMinimo);
       }
-      if (tipo === 'PRESENCIAL') setPedidoACobrar(pedido);
+      // El retiro del socio no se cobra: se cierra solo y no abre la pantalla
+      // de cobro (la maneja cobrarPedido con pagos vacíos).
+      if (eraRetiroDeSocio) setRetiroConfirmado(pedido);
+      else if (tipo === 'PRESENCIAL') setPedidoACobrar(pedido);
       else setConfirmadoSinCobro(true);
     },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'No se pudo confirmar el pedido.'),
+  });
+
+  // Cierra el retiro del socio sin pagos: queda ENTREGADO igual que un cobro.
+  const mutCerrarRetiro = useMutation({
+    mutationFn: (pedidoId: number) => cobrarPedido(pedidoId, []),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['pedidos'] });
+      setRetiroConfirmado(null);
+    },
+    onError: (e) =>
+      setError(e instanceof ApiError ? e.message : 'El retiro quedó abierto — cerralo desde Pedidos.'),
   });
 
   function precioBoton(p: Producto): string {
@@ -310,6 +387,67 @@ export function POS({ sucursalId }: Props) {
           ))}
         </div>
 
+        {/* Retiro de socio / venta a empleado (reunión 4/8). El retiro de
+            PLATA sigue en Operaciones de caja — acá va solo la mercadería. */}
+        <div className="flex flex-col gap-2 border-t border-borde px-3 pb-3">
+          <div className="flex gap-1.5 pt-3">
+            <BotonBeneficiario
+              activo={beneficiario === null}
+              onClick={() => {
+                setBeneficiario(null);
+                setSocio(null);
+              }}
+            >
+              Cliente
+            </BotonBeneficiario>
+            <BotonBeneficiario
+              activo={beneficiario === 'SOCIO'}
+              onClick={() => setBeneficiario('SOCIO')}
+            >
+              Socio
+            </BotonBeneficiario>
+            <BotonBeneficiario
+              activo={beneficiario === 'EMPLEADO'}
+              onClick={() => {
+                setBeneficiario('EMPLEADO');
+                setSocio(null);
+              }}
+            >
+              Empleado
+            </BotonBeneficiario>
+          </div>
+
+          {beneficiario === 'SOCIO' && (
+            <div className="flex gap-1.5">
+              {SOCIOS.map((sc) => (
+                <button
+                  key={sc}
+                  type="button"
+                  onClick={() => setSocio(sc)}
+                  className={`min-h-[42px] flex-1 cursor-pointer rounded-xl text-sm font-bold ${
+                    socio === sc ? 'bg-primario text-white' : 'border border-borde-fuerte bg-white text-texto-suave'
+                  }`}
+                >
+                  {sc.charAt(0) + sc.slice(1).toLowerCase()}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {beneficiario === 'SOCIO' && (
+            <div className="rounded-xl bg-advertencia-suave px-3 py-2 text-[13px] font-semibold text-advertencia-texto">
+              Retiro de mercadería: sale del stock y no se cobra. No es venta.
+            </div>
+          )}
+          {beneficiario === 'EMPLEADO' && (
+            <div className="rounded-xl bg-advertencia-suave px-3 py-2 text-[13px] font-semibold text-advertencia-texto">
+              {descuentoEmpleadoPct > 0
+                ? `Se aplica ${descuentoEmpleadoPct}% de descuento, redondeado para abajo.`
+                : 'No hay descuento de empleado configurado — se cobra precio de lista.'}
+            </div>
+          )}
+        </div>
+
         <div className="flex-1 overflow-auto px-3">
           {carrito.length === 0 ? (
             <div className="p-5 text-center text-[15px] text-texto-suave">
@@ -321,8 +459,13 @@ export function POS({ sucursalId }: Props) {
                 <div key={l.producto.id} className="rounded-xl border border-borde bg-panel px-3 py-2.5">
                   <div className="flex items-start justify-between gap-2">
                     <span className="text-[15px] font-extrabold leading-tight">{l.producto.nombre}</span>
-                    <span className="text-[15px] font-extrabold">
+                    <span className="flex flex-col items-end text-[15px] font-extrabold">
                       {l.total !== null ? fmtMoneda(l.total) : 'sin precio'}
+                      {l.lista !== null && l.total !== null && l.total !== l.lista && (
+                        <span className="text-[13px] font-semibold text-texto-suave line-through">
+                          {fmtMoneda(l.lista)}
+                        </span>
+                      )}
                     </span>
                   </div>
                   <div className="mt-1.5 flex items-center gap-2">
@@ -360,20 +503,37 @@ export function POS({ sucursalId }: Props) {
         )}
 
         <div className="flex flex-col gap-2.5 border-t border-borde p-3">
+          {totalCarrito !== totalLista && (
+            <div className="flex items-baseline justify-between text-sm">
+              <span className="text-texto-suave">Precio de lista</span>
+              <span className="font-semibold text-texto-suave line-through">{fmtMoneda(totalLista)}</span>
+            </div>
+          )}
           <div className="flex items-baseline justify-between">
-            <span className="text-base font-bold text-texto-suave">Total</span>
+            <span className="text-base font-bold text-texto-suave">
+              {beneficiario === 'SOCIO' ? 'Se lleva' : 'Total'}
+            </span>
             <span className="text-[28px] font-extrabold">{fmtMoneda(totalCarrito)}</span>
           </div>
+          {faltaSocio && (
+            <div className="rounded-xl bg-error-suave px-3.5 py-2.5 text-[14px] font-semibold text-error-texto">
+              Elegí qué socio se lleva la mercadería.
+            </div>
+          )}
           <button
             type="button"
-            disabled={carrito.length === 0 || haySinPrecio || mutConfirmar.isPending}
+            disabled={carrito.length === 0 || haySinPrecio || faltaSocio || mutConfirmar.isPending}
             onClick={() => {
               setError(null);
               mutConfirmar.mutate();
             }}
             className="min-h-[60px] w-full cursor-pointer rounded-2xl bg-primario text-lg font-extrabold text-white hover:bg-primario-hover disabled:opacity-50"
           >
-            {mutConfirmar.isPending ? 'CONFIRMANDO…' : 'CONFIRMAR PEDIDO'}
+            {mutConfirmar.isPending
+              ? 'CONFIRMANDO…'
+              : beneficiario === 'SOCIO'
+                ? 'REGISTRAR RETIRO'
+                : 'CONFIRMAR PEDIDO'}
           </button>
         </div>
       </div>
@@ -427,6 +587,26 @@ export function POS({ sucursalId }: Props) {
               className="mt-1 min-h-[56px] w-full cursor-pointer rounded-2xl bg-primario text-lg font-extrabold text-white"
             >
               LISTO
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Retiro de socio: no hay cobro, solo se confirma y se cierra */}
+      {retiroConfirmado && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/45 p-6">
+          <div className="flex w-full max-w-sm flex-col items-center gap-3 rounded-3xl bg-white p-6 text-center">
+            <div className="text-xl font-extrabold">Retiro registrado ✓</div>
+            <div className="text-base text-texto-suave">
+              La mercadería salió del stock. No se cobra nada.
+            </div>
+            <button
+              type="button"
+              disabled={mutCerrarRetiro.isPending}
+              onClick={() => mutCerrarRetiro.mutate(retiroConfirmado.id)}
+              className="mt-1 min-h-[56px] w-full cursor-pointer rounded-2xl bg-primario text-lg font-extrabold text-white disabled:opacity-50"
+            >
+              {mutCerrarRetiro.isPending ? 'CERRANDO…' : 'LISTO'}
             </button>
           </div>
         </div>

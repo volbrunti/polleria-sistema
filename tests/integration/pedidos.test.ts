@@ -723,3 +723,147 @@ describe('Recargo de tarjeta', () => {
     expect(res.json().totalRecargosTarjeta).toBe('250');
   });
 });
+
+// Retiro de socio / venta a empleado (reunión 4/8). El retiro de PLATA sigue
+// en Operaciones de caja: acá va solo la mercadería que alguien se lleva.
+describe('Retiro de socio y venta a empleado', () => {
+  // Los tests anteriores de este archivo ya consumieron milanesas: se repone
+  // stock para que lo que falle acá sea el beneficiario, no el inventario.
+  beforeAll(async () => {
+    const prisma = await getPrisma();
+    await prisma.movimientoStock.create({
+      data: {
+        productoId: f.productos.milanesa,
+        sucursalId: f.sucursales.local1,
+        tipo: 'AJUSTE',
+        cantidad: new Prisma.Decimal(30),
+        usuarioId: f.usuarios.admin.id,
+        tipoOrigen: 'Ajuste',
+        origenId: 0,
+      },
+    });
+  });
+
+  function crearPedido(payload: Record<string, unknown>) {
+    return app.inject({
+      method: 'POST',
+      url: '/api/pedidos',
+      headers: auth(f.usuarios.cajero.token),
+      payload: { tipo: 'PRESENCIAL', items: [{ productoId: f.productos.milanesa, cantidad: 1 }], ...payload },
+    });
+  }
+
+  // Cada test fija el % que necesita en vez de confiar en el de los fixtures:
+  // así el resultado no depende de qué corrió antes.
+  function fijarDescuento(valor: string) {
+    return app.inject({
+      method: 'PATCH',
+      url: '/api/configuracion/DESCUENTO_EMPLEADO_PCT',
+      headers: auth(f.usuarios.admin.token),
+      payload: { valor },
+    });
+  }
+
+  it('el retiro de socio exige decir QUÉ socio se la lleva', async () => {
+    const res = await crearPedido({ beneficiario: 'SOCIO' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().mensaje).toContain('socio');
+  });
+
+  it('retiro de socio: total en cero, marcado como costo cero, pero el stock igual sale', async () => {
+    const antes = await stockDe(f.productos.milanesa, f.sucursales.local1);
+
+    const res = await crearPedido({ beneficiario: 'SOCIO', socioBeneficiario: 'ARIEL' });
+    expect(res.statusCode).toBe(201);
+    const pedido = res.json();
+    expect(pedido.beneficiario).toBe('SOCIO');
+    expect(pedido.socioBeneficiario).toBe('ARIEL');
+    expect(pedido.items[0].montoTotal).toBe('0');
+    expect(pedido.items[0].esVentaCostoCero).toBe(true);
+    expect(pedido.items[0].tipoCostoCero).toBe('RETIRO_SOCIO');
+
+    // se lo lleva de verdad: el stock baja igual que en una venta
+    expect(await stockDe(f.productos.milanesa, f.sucursales.local1)).toBe(antes - 1);
+
+    // se cierra sin pagos y NO genera ningún Pago que ensucie el arqueo
+    const cerrado = await app.inject({
+      method: 'POST',
+      url: `/api/pedidos/${pedido.id}/cobrar`,
+      headers: auth(f.usuarios.cajero.token),
+      payload: {},
+    });
+    expect(cerrado.statusCode).toBe(200);
+    expect(cerrado.json().vuelto).toBe('0');
+    expect(cerrado.json().pedido.estado).toBe('ENTREGADO');
+
+    const prisma = await getPrisma();
+    expect(await prisma.pago.count({ where: { pedidoId: pedido.id } })).toBe(0);
+    const auditoria = await prisma.registroAuditoria.findFirst({
+      where: { accion: 'ENTREGAR_SIN_COBRO', entidad: 'Pedido', entidadId: pedido.id },
+    });
+    expect(auditoria).not.toBeNull();
+    expect((auditoria!.datosNuevos as { socio: string }).socio).toBe('ARIEL');
+  });
+
+  it('venta a empleado: aplica el % configurado, redondeando hacia abajo', async () => {
+    await fijarDescuento('20');
+    const res = await crearPedido({ beneficiario: 'EMPLEADO' });
+    expect(res.statusCode).toBe(201);
+    const pedido = res.json();
+    // milanesa 2500 − 20% = 2000
+    expect(pedido.descuentoPct).toBe('20');
+    expect(pedido.items[0].montoTotal).toBe('2000');
+    // sí es venta: entra en los totales y hay que cobrarla
+    expect(pedido.items[0].esVentaCostoCero).toBe(false);
+
+    const cobrado = await app.inject({
+      method: 'POST',
+      url: `/api/pedidos/${pedido.id}/cobrar`,
+      headers: auth(f.usuarios.cajero.token),
+      payload: { pagos: [{ medio: 'EFECTIVO', monto: 2000 }] },
+    });
+    expect(cobrado.statusCode).toBe(200);
+  });
+
+  it('cambiar el % no toca los pedidos ya confirmados: cada uno guarda el suyo', async () => {
+    await fijarDescuento('20');
+    const conVeinte = await crearPedido({ beneficiario: 'EMPLEADO' });
+    expect(conVeinte.json().items[0].montoTotal).toBe('2000');
+
+    expect((await fijarDescuento('50')).statusCode).toBe(200);
+
+    const conCincuenta = await crearPedido({ beneficiario: 'EMPLEADO' });
+    expect(conCincuenta.json().items[0].montoTotal).toBe('1250');
+
+    // el viejo sigue con su 20% congelado
+    const prisma = await getPrisma();
+    const viejo = await prisma.pedido.findUniqueOrThrow({ where: { id: conVeinte.json().id } });
+    expect(viejo.descuentoPct?.toString()).toBe('20');
+  });
+
+  it('solo el ADMIN cambia el descuento, y no acepta cualquier número', async () => {
+    const prohibido = await app.inject({
+      method: 'PATCH',
+      url: '/api/configuracion/DESCUENTO_EMPLEADO_PCT',
+      headers: auth(f.usuarios.cajero.token),
+      payload: { valor: '5' },
+    });
+    expect(prohibido.statusCode).toBe(403);
+
+    const absurdo = await fijarDescuento('150');
+    expect(absurdo.statusCode).toBe(400);
+  });
+
+  it('un pedido normal NO se puede cerrar sin pagos', async () => {
+    const pedido = await crearPedido({});
+    expect(pedido.statusCode).toBe(201);
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/pedidos/${pedido.json().id}/cobrar`,
+      headers: auth(f.usuarios.cajero.token),
+      payload: {},
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().codigo).toBe('PAGO_INSUFICIENTE');
+  });
+});

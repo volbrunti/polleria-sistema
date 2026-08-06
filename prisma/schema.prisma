@@ -138,6 +138,16 @@ enum MedioPago {
 enum TipoCostoCero {
   DESPERDICIO_QUEMADO
   RETORNO_A_PRODUCCION
+  // Mercadería que se lleva un socio: sale del stock pero no es venta
+  RETIRO_SOCIO
+}
+
+/// Quién se lleva el pedido cuando no es un cliente (reunión 4/8). El SOCIO
+/// retira mercadería a costo cero (análogo al retiro de plata, que sigue en
+/// Operaciones de caja); el EMPLEADO paga con el descuento configurado.
+enum BeneficiarioPedido {
+  SOCIO
+  EMPLEADO
 }
 
 // Selector CERRADO de quién retira — nunca texto libre (CLAUDE.md módulo 1 §8)
@@ -692,6 +702,14 @@ model Pedido {
   // Canal de origen (WhatsApp es futuro lejano — hoy siempre mostrador)
   canalOrigen    String  @default("MOSTRADOR")
 
+  // Retiro de socio / venta a empleado (reunión 4/8). null = venta normal.
+  beneficiario       BeneficiarioPedido?
+  // Cuál socio retira — obligatorio si beneficiario = SOCIO. Selector cerrado.
+  socioBeneficiario  SocioRetiro?
+  // % de descuento CONGELADO al confirmar: si el admin lo cambia después, los
+  // pedidos viejos conservan el que se les aplicó.
+  descuentoPct       Decimal?            @db.Decimal(5, 2)
+
   items   ItemDePedido[]
   pagos   Pago[]
   tickets TicketCocina[]
@@ -857,4 +875,16 @@ model ConfiguracionStockMinimo {
 
   @@unique([productoId, sucursalId])
   @@map("configuraciones_stock_minimo")
+}
+
+/// Parámetros que el admin cambia sin tocar código (clave-valor, para no
+/// migrar el schema por cada número configurable). Hoy: el porcentaje de
+/// descuento a empleados.
+model ConfiguracionGeneral {
+  clave       String   @id
+  valor       String
+  descripcion String
+  actualizado DateTime @updatedAt
+
+  @@map("configuracion_general")
 }

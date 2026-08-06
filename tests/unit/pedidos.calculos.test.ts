@@ -5,6 +5,7 @@ import {
   precioUnitarioReferencia,
   calcularCobro,
   calcularRecargo,
+  aplicarDescuentoEmpleado,
   transicionValida,
   esModificable,
   type TierPrecio,
@@ -139,5 +140,28 @@ describe('calcularRecargo', () => {
 
   it('0% no cobra nada de más', () => {
     expect(calcularRecargo(d(9999), d(0)).toString()).toBe('0');
+  });
+});
+
+describe('aplicarDescuentoEmpleado', () => {
+  const d = (n: string | number) => new Prisma.Decimal(n);
+
+  it('descuenta el porcentaje configurado', () => {
+    expect(aplicarDescuentoEmpleado(d(2500), d(20)).toString()).toBe('2000');
+  });
+
+  it('redondea HACIA ABAJO — el empleado nunca paga de más por el redondeo', () => {
+    // 1600 - 15% = 1360 exacto; 1650 - 15% = 1402,5 → 1402
+    expect(aplicarDescuentoEmpleado(d(1600), d(15)).toString()).toBe('1360');
+    expect(aplicarDescuentoEmpleado(d(1650), d(15)).toString()).toBe('1402');
+    expect(aplicarDescuentoEmpleado(d(8500), d(33)).toString()).toBe('5695');
+  });
+
+  it('0% deja el precio de lista intacto', () => {
+    expect(aplicarDescuentoEmpleado(d(2500), d(0)).toString()).toBe('2500');
+  });
+
+  it('100% lo deja en cero', () => {
+    expect(aplicarDescuentoEmpleado(d(2500), d(100)).toString()).toBe('0');
   });
 });

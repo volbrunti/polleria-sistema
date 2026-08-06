@@ -358,6 +358,16 @@ export interface AvisoStockMinimo {
   minimo: string;
 }
 
+/** Quién se lleva el pedido cuando no es un cliente (ver SocioRetiro arriba). */
+export type BeneficiarioPedido = 'SOCIO' | 'EMPLEADO';
+
+export interface ConfiguracionGeneral {
+  clave: string;
+  valor: string;
+  descripcion: string;
+  actualizado: string;
+}
+
 export interface Pedido {
   id: number;
   turnoId: number;
@@ -365,6 +375,10 @@ export interface Pedido {
   sucursal?: { nombre: string };
   tipo: TipoPedido;
   estado: EstadoPedido;
+  beneficiario: BeneficiarioPedido | null;
+  socioBeneficiario: SocioRetiro | null;
+  /** % de descuento congelado al confirmar (solo EMPLEADO). */
+  descuentoPct: string | null;
   usuarioCajero?: { username: string };
   pedidoOrigenId: number | null;
   items: ItemDePedido[];
