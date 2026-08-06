@@ -163,6 +163,12 @@ enum TipoTicket {
   ANULACION
 }
 
+// Dónde está físicamente cada comandera del local. Producción no tiene.
+enum DestinoComandera {
+  COCINA
+  MOSTRADOR
+}
+
 // ─────────────────────────────────────────────
 // TRANSVERSALES
 // ─────────────────────────────────────────────
@@ -185,6 +191,7 @@ model Sucursal {
   atenciones                 Atencion[]
   eventosMarcadoPollo        EventoMarcadoPollo[]
   configuracionesStockMinimo ConfiguracionStockMinimo[]
+  comanderas                 ConfiguracionComandera[]
 
   @@map("sucursales")
 }
@@ -850,18 +857,63 @@ model EventoMarcadoPollo {
   @@map("eventos_marcado_pollo")
 }
 
-// Snapshot de lo enviado a la comandera (mock ahora, ESC/POS real después).
+// Snapshot de lo enviado a la comandera. El resultado de la impresión NO vive
+// acá: cada local tiene DOS comanderas (cocina y mostrador) y cada una necesita
+// su propio resultado, así que un solo par impreso/errorImpresion no alcanzaba.
+// Ver ImpresionComandera (CLAUDE.md §5 Flujo 4 y §6).
+//
+// `contenido` NUNCA incluye montos de dinero: el ticket de mostrador lo ve el
+// cajero, que por el Control Ciego (§2) no puede ver importes.
 model TicketCocina {
-  id             Int        @id @default(autoincrement())
-  pedido         Pedido     @relation(fields: [pedidoId], references: [id])
-  pedidoId       Int
-  tipo           TipoTicket
-  contenido      Json
-  fechaHora      DateTime   @default(now())
-  impreso        Boolean    @default(false)
-  errorImpresion String?
+  id        Int        @id @default(autoincrement())
+  pedido    Pedido     @relation(fields: [pedidoId], references: [id])
+  pedidoId  Int
+  tipo      TipoTicket
+  contenido Json
+  fechaHora DateTime   @default(now())
 
+  impresiones ImpresionComandera[]
+
+  @@index([pedidoId])
   @@map("tickets_cocina")
+}
+
+// Una comandera física por sucursal y destino. La IP la carga el ADMINISTRADOR
+// desde el panel — nunca hardcodeada, para poder reasignarla si la red del
+// local cambia sin tocar código ni redeployar.
+// Hardware: XPRINTER XP-V320N, ESC/POS por socket TCP crudo al puerto 9100.
+model ConfiguracionComandera {
+  id         Int              @id @default(autoincrement())
+  sucursal   Sucursal         @relation(fields: [sucursalId], references: [id])
+  sucursalId Int
+  destino    DestinoComandera
+  nombre     String
+  ip         String
+  puerto     Int              @default(9100)
+  activa     Boolean          @default(true)
+
+  impresiones ImpresionComandera[]
+
+  @@unique([sucursalId, destino])
+  @@map("configuraciones_comandera")
+}
+
+// Un registro por cada intento de impresión de un ticket en una comandera
+// concreta. Si falla la de cocina pero funciona la de mostrador, queda
+// asentado con precisión cuál falló — no es todo o nada.
+// Un fallo acá NUNCA revierte ni bloquea el pedido (CLAUDE.md §11 regla 14).
+model ImpresionComandera {
+  id                       Int                    @id @default(autoincrement())
+  ticketCocina             TicketCocina           @relation(fields: [ticketCocinaId], references: [id])
+  ticketCocinaId           Int
+  configuracionComandera   ConfiguracionComandera @relation(fields: [configuracionComanderaId], references: [id])
+  configuracionComanderaId Int
+  impreso                  Boolean                @default(false)
+  errorImpresion           String?
+  fechaHoraIntento         DateTime               @default(now())
+
+  @@index([ticketCocinaId])
+  @@map("impresiones_comandera")
 }
 
 model ConfiguracionStockMinimo {

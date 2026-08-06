@@ -25,7 +25,8 @@ import {
 } from './pedidos.calculos';
 import { admiteRecargo } from '../recargos/recargos.service';
 import * as configuracionService from '../configuracion/configuracion.service';
-import { emitirTicket } from './comandera';
+import { registrarTicket, despacharEnSegundoPlano } from '../comanderas/comanderas.service';
+import { calcularCambios, type ItemTicket } from '../comanderas/escpos';
 import * as stockMinimoService from '../stock-minimo/stock-minimo.service';
 import * as alertasService from '../alertas/alertas.service';
 
@@ -187,6 +188,19 @@ function snapshotPedido(pedido: {
   };
 }
 
+// Lo que va al papel de cocina: producto, cantidad y aclaración. Nada de
+// precios ni totales — el ticket de mostrador lo ve el cajero, que por el
+// Control Ciego (CLAUDE.md §2) no puede ver importes.
+function itemsDeTicket(
+  items: { producto: { nombre: string }; cantidad: Prisma.Decimal; aclaraciones?: string | null }[],
+): ItemTicket[] {
+  return items.map((i) => ({
+    producto: i.producto.nombre,
+    cantidad: i.cantidad.toString(),
+    aclaraciones: i.aclaraciones ?? null,
+  }));
+}
+
 // ── FLUJO 4.4/4.5 — Confirmar pedido ──
 // El pedido nace confirmado (EN_PREPARACION): el "carrito" vive en el
 // frontend. Acá se congela el precio, SE DESCUENTA EL STOCK (no al cobrar —
@@ -300,15 +314,14 @@ export async function confirmarPedido(params: {
     // avisos repetidos en cada venta + alerta al admin solo al cruzar el umbral
     const stockMinimo = await stockMinimoService.evaluarTrasDescuento(tx, { sucursalId, descontado: reqs });
 
-    await emitirTicket(tx, {
+    const ticket = await registrarTicket(tx, {
       pedidoId: pedido.id,
       tipo: 'NUEVO',
       sucursalId,
-      items: pedido.items.map((i) => ({
-        producto: i.producto.nombre,
-        cantidad: i.cantidad.toString(),
-        aclaraciones: i.aclaraciones,
-      })),
+      sucursal: pedido.sucursal.nombre,
+      tipoPedido: pedido.tipo,
+      fechaHora: pedido.fechaCreacion.toISOString(),
+      items: itemsDeTicket(pedido.items),
     });
 
     await registrarAuditoria(tx, {
@@ -319,7 +332,7 @@ export async function confirmarPedido(params: {
       datosNuevos: snapshotPedido(pedido),
     });
 
-    return { pedido, stockMinimo };
+    return { pedido, stockMinimo, ticketId: ticket.id };
   }, OPCIONES_TX).catch(async (e) => {
     // Carrera pura de idempotencia: dos requests con el MISMO token pasaron
     // el check inicial en paralelo; la que pierde revienta contra el unique
@@ -334,13 +347,18 @@ export async function confirmarPedido(params: {
         where: { tokenIdempotencia: params.tokenIdempotencia },
         include: INCLUDE_PEDIDO,
       });
-      if (previo) return { pedido: previo, stockMinimo: { avisos: [], alertas: [] } };
+      // Retry de un pedido ya creado: no se reimprime (la comanda salió con
+      // el pedido original) ni se devuelve ticketId nuevo.
+      if (previo) return { pedido: previo, stockMinimo: { avisos: [], alertas: [] }, ticketId: null };
     }
     throw e;
   });
 
   stockMinimoService.emitirAlertasStockMinimo(resultado.stockMinimo.alertas);
   alertasService.emitirAAdmins('ticket:nuevo', { pedidoId: resultado.pedido.id });
+  // Recién acá, con la transacción ya commiteada: el pedido está a salvo pase
+  // lo que pase con las impresoras (ver comanderas.service.ts::registrarTicket).
+  if (resultado.ticketId) despacharEnSegundoPlano(resultado.ticketId);
 
   return { ...resultado.pedido, avisosStockMinimo: resultado.stockMinimo.avisos };
 }
@@ -444,15 +462,18 @@ export async function modificarPedido(params: { pedidoId: number; items: ItemInp
       descontado: extra,
     });
 
-    await emitirTicket(tx, {
+    const ticket = await registrarTicket(tx, {
       pedidoId: existente.id,
       tipo: 'ACTUALIZACION',
       sucursalId: existente.sucursalId,
-      items: actualizado.items.map((i) => ({
-        producto: i.producto.nombre,
-        cantidad: i.cantidad.toString(),
-        aclaraciones: i.aclaraciones,
-      })),
+      sucursal: actualizado.sucursal.nombre,
+      tipoPedido: actualizado.tipo,
+      fechaHora: new Date().toISOString(),
+      items: itemsDeTicket(actualizado.items),
+      // CLAUDE.md §5: un ACTUALIZACION tiene que dejar ver QUÉ cambió, no
+      // repetir el pedido entero — si no, el cocinero compara dos tickets a
+      // mano en plena cocina y se le pasa algo.
+      cambios: calcularCambios(itemsDeTicket(existente.items), itemsDeTicket(actualizado.items)),
     });
 
     await registrarAuditoria(tx, {
@@ -464,11 +485,12 @@ export async function modificarPedido(params: { pedidoId: number; items: ItemInp
       datosNuevos: snapshotPedido(actualizado),
     });
 
-    return { pedido: actualizado, stockMinimo };
+    return { pedido: actualizado, stockMinimo, ticketId: ticket.id };
   }, OPCIONES_TX);
 
   stockMinimoService.emitirAlertasStockMinimo(resultado.stockMinimo.alertas);
   alertasService.emitirAAdmins('ticket:actualizacion', { pedidoId: existente.id });
+  despacharEnSegundoPlano(resultado.ticketId);
 
   return { ...resultado.pedido, avisosStockMinimo: resultado.stockMinimo.avisos };
 }
@@ -794,15 +816,17 @@ export async function anularPedido(params: { pedidoId: number; usuarioId: number
       tipo: 'ANULACION_REPOSICION',
     });
 
-    await emitirTicket(tx, {
+    // El cliente pidió explícitamente que la anulación salga EN PAPEL: la
+    // alerta en pantalla del POS no alcanza, cocina tiene que enterarse de
+    // que deje de preparar algo que ya está en la parrilla (CLAUDE.md §5).
+    const ticket = await registrarTicket(tx, {
       pedidoId: pedido.id,
       tipo: 'ANULACION',
       sucursalId: pedido.sucursalId,
-      items: pedido.items.map((i) => ({
-        producto: i.producto.nombre,
-        cantidad: i.cantidad.toString(),
-        aclaraciones: i.aclaraciones,
-      })),
+      sucursal: pedido.sucursal.nombre,
+      tipoPedido: pedido.tipo,
+      fechaHora: new Date().toISOString(),
+      items: itemsDeTicket(pedido.items),
     });
 
     await registrarAuditoria(tx, {
@@ -815,11 +839,12 @@ export async function anularPedido(params: { pedidoId: number; usuarioId: number
       datosNuevos: { estado: 'ANULADO' },
     });
 
-    return actualizado;
+    return { actualizado, ticketId: ticket.id };
   }, OPCIONES_TX);
 
   alertasService.emitirAAdmins('ticket:anulacion', { pedidoId: pedido.id });
-  return anulado;
+  despacharEnSegundoPlano(anulado.ticketId);
+  return anulado.actualizado;
 }
 
 // ── Consultas ──
