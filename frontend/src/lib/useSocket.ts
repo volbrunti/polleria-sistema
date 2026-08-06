@@ -26,9 +26,17 @@ export function useAlertasSocket(onAlertaNueva: (alerta: unknown) => void) {
 // operativos NO ciegos: turno:desbloqueado (para salir del bloqueo al
 // instante, sin esperar el polling) y alerta:stock_minimo (pop-up §6.6).
 // Best-effort: si el socket falla, el polling de CajaTab sigue de respaldo.
+export interface FalloComandera {
+  pedidoId: number;
+  ticketId: number;
+  tipo: 'NUEVO' | 'ACTUALIZACION' | 'ANULACION';
+  destinos: string[]; // COCINA | MOSTRADOR — cuáles NO imprimieron
+}
+
 export function usePosSocket(handlers: {
   onTurnoDesbloqueado?: (payload: unknown) => void;
   onStockMinimo?: (payload: unknown) => void;
+  onFalloComandera?: (payload: FalloComandera) => void;
 }) {
   const { usuario, accessToken } = useAuth();
   const esOperativo = usuario?.rol === 'CAJERO' || usuario?.rol === 'ENCARGADO';
@@ -40,6 +48,9 @@ export function usePosSocket(handlers: {
     const socket = io(baseUrl, { auth: { token: accessToken }, transports: ['websocket', 'polling'] });
     if (handlers.onTurnoDesbloqueado) socket.on('turno:desbloqueado', handlers.onTurnoDesbloqueado);
     if (handlers.onStockMinimo) socket.on('alerta:stock_minimo', handlers.onStockMinimo);
+    // El pedido ya se tomó; esto avisa que el papel no salió, para que el
+    // cajero pueda cantar la comanda a viva voz en vez de darla por impresa.
+    if (handlers.onFalloComandera) socket.on('comandera:fallo', handlers.onFalloComandera);
 
     return () => {
       socket.disconnect();

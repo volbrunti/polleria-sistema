@@ -19,6 +19,14 @@ import {
 import { listarSucursales } from '../../api/sucursales';
 import { listarRecargos, crearRecargo, actualizarRecargo } from '../../api/recargos';
 import {
+  listarComanderas,
+  crearComandera,
+  actualizarComandera,
+  probarComandera,
+  type Comandera,
+  type DestinoComandera,
+} from '../../api/comanderas';
+import {
   listarConfiguracion,
   actualizarConfiguracion,
   CLAVE_DESCUENTO_EMPLEADO,
@@ -44,26 +52,33 @@ interface Props {
   puedeEscribir: boolean;
 }
 
-type Tab = 'productos' | 'combos' | 'precios' | 'recargos' | 'proveedores' | 'sucursales';
+type Tab = 'productos' | 'combos' | 'precios' | 'recargos' | 'proveedores' | 'sucursales' | 'comanderas';
 
-const TABS: { id: Tab; label: string }[] = [
+// `soloAdmin`: el resto del Catálogo lo puede LEER un SOCIO; la configuración
+// de comanderas no. Es infraestructura de red del local y el backend responde
+// 403 a cualquiera que no sea ADMINISTRADOR, así que la pestaña ni aparece.
+const TABS: { id: Tab; label: string; soloAdmin?: boolean }[] = [
   { id: 'productos', label: 'Productos' },
   { id: 'combos', label: 'Combos' },
   { id: 'precios', label: 'Precios' },
   { id: 'recargos', label: 'Recargos y descuentos' },
   { id: 'proveedores', label: 'Proveedores' },
   { id: 'sucursales', label: 'Sucursales' },
+  { id: 'comanderas', label: 'Comanderas', soloAdmin: true },
 ];
 
 export function Catalogo({ puedeEscribir }: Props) {
   const [tab, setTab] = useState<Tab>('productos');
+  // En este panel `puedeEscribir` equivale a "es ADMINISTRADOR" (ShellAdmin lo
+  // deriva de ahí): el SOCIO entra en modo lectura y no debe ver esta pestaña.
+  const tabsVisibles = TABS.filter((t) => !t.soloAdmin || puedeEscribir);
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3.5">
         <h1 className="m-0 flex-1 text-2xl font-extrabold">Catálogo</h1>
         <div className="flex gap-1.5 rounded-xl bg-[#e6e9e2] p-1.5">
-          {TABS.map((t) => (
+          {tabsVisibles.map((t) => (
             <button
               key={t.id}
               type="button"
@@ -84,6 +99,7 @@ export function Catalogo({ puedeEscribir }: Props) {
       {tab === 'recargos' && <TabRecargos puedeEscribir={puedeEscribir} />}
       {tab === 'proveedores' && <TabProveedores puedeEscribir={puedeEscribir} />}
       {tab === 'sucursales' && <TabSucursales />}
+      {tab === 'comanderas' && puedeEscribir && <TabComanderas />}
     </div>
   );
 }
@@ -937,6 +953,298 @@ function ModalProductosHabituales({ proveedor, onCerrar }: { proveedor: Proveedo
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Comanderas: las impresoras térmicas de cada local (una en cocina, otra en
+// mostrador). Solo ADMINISTRADOR — es la configuración de red del local, no un
+// dato de negocio. La IP se carga acá y no en el código para poder cambiarla
+// cuando el router del local reasigne direcciones, sin redeployar.
+const DESTINOS: { id: DestinoComandera; label: string; ayuda: string }[] = [
+  { id: 'COCINA', label: 'Cocina', ayuda: 'La comanda para preparar el pedido' },
+  { id: 'MOSTRADOR', label: 'Mostrador / Caja', ayuda: 'La copia que queda en la caja' },
+];
+
+function TabComanderas() {
+  const queryClient = useQueryClient();
+  const comanderas = useQuery({ queryKey: ['comanderas'], queryFn: () => listarComanderas() });
+  const sucursales = useQuery({ queryKey: ['sucursales'], queryFn: listarSucursales });
+
+  const [abierto, setAbierto] = useState(false);
+  const [editando, setEditando] = useState<Comandera | null>(null);
+  const [sucursalId, setSucursalId] = useState<number | null>(null);
+  const [destino, setDestino] = useState<DestinoComandera>('COCINA');
+  const [nombre, setNombre] = useState('');
+  const [ip, setIp] = useState('');
+  const [puerto, setPuerto] = useState('9100');
+  const [error, setError] = useState<string | null>(null);
+  // Resultado de la última prueba, por comandera.
+  const [pruebas, setPruebas] = useState<Record<number, { ok: boolean; error?: string }>>({});
+  const [probando, setProbando] = useState<number | null>(null);
+
+  // Producción no vende, así que no imprime comandas.
+  const locales = sucursales.data?.filter((s) => s.tipo === 'VENTA') ?? [];
+
+  function limpiar() {
+    setAbierto(false);
+    setEditando(null);
+    setSucursalId(null);
+    setDestino('COCINA');
+    setNombre('');
+    setIp('');
+    setPuerto('9100');
+    setError(null);
+  }
+
+  const mutGuardar = useMutation({
+    mutationFn: () =>
+      editando
+        ? actualizarComandera(editando.id, { nombre, ip, puerto: Number(puerto) })
+        : crearComandera({ sucursalId: sucursalId!, destino, nombre, ip, puerto: Number(puerto) }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['comanderas'] });
+      limpiar();
+    },
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'No se pudo guardar.'),
+  });
+
+  const mutActiva = useMutation({
+    mutationFn: (c: Comandera) => actualizarComandera(c.id, { activa: !c.activa }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['comanderas'] }),
+  });
+
+  async function probar(c: Comandera) {
+    setProbando(c.id);
+    try {
+      const resultado = await probarComandera(c.id);
+      setPruebas((p) => ({ ...p, [c.id]: resultado }));
+    } catch (e) {
+      setPruebas((p) => ({
+        ...p,
+        [c.id]: { ok: false, error: e instanceof ApiError ? e.message : 'No se pudo probar.' },
+      }));
+    } finally {
+      setProbando(null);
+    }
+  }
+
+  function abrirEdicion(c: Comandera) {
+    setEditando(c);
+    setNombre(c.nombre);
+    setIp(c.ip);
+    setPuerto(String(c.puerto));
+    setError(null);
+    setAbierto(true);
+  }
+
+  const invalido =
+    nombre.trim() === '' || ip.trim() === '' || (!editando && sucursalId == null) || puerto.trim() === '';
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="m-0 flex-1 text-sm text-texto-suave">
+          Cada local tiene dos impresoras: una en cocina y una en mostrador. Si una falla, el pedido
+          se toma igual — el sistema avisa en la caja cuál no imprimió.
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            limpiar();
+            setAbierto(true);
+          }}
+          className="min-h-11 cursor-pointer rounded-[10px] bg-primario px-4.5 text-sm font-extrabold text-white hover:bg-primario-hover"
+        >
+          AGREGAR COMANDERA
+        </button>
+      </div>
+
+      {comanderas.data?.length === 0 && (
+        <div className="rounded-2xl border border-borde bg-white p-6 text-center text-sm text-texto-suave">
+          Todavía no hay comanderas cargadas. Sin esto, los pedidos se registran igual pero no sale
+          ningún ticket impreso.
+        </div>
+      )}
+
+      <div className="flex flex-col gap-2.5">
+        {comanderas.data?.map((c) => {
+          const prueba = pruebas[c.id];
+          return (
+            <div
+              key={c.id}
+              className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-borde bg-white px-4.5 py-3.5"
+              style={{ opacity: c.activa ? 1 : 0.6 }}
+            >
+              <div className="min-w-45 flex-1">
+                <div className="font-bold">{c.nombre}</div>
+                <div className="text-xs text-texto-suave">
+                  {c.sucursal?.nombre} · {c.destino === 'COCINA' ? 'Cocina' : 'Mostrador / Caja'}
+                </div>
+              </div>
+
+              <div className="font-mono text-sm">
+                {c.ip}:{c.puerto}
+              </div>
+
+              <span
+                className="rounded-md px-2 py-0.5 text-xs font-extrabold"
+                style={
+                  c.activa
+                    ? { background: '#e6f4ea', color: '#1a7f3f' }
+                    : { background: '#e6e9e2', color: '#5f6d60' }
+                }
+              >
+                {c.activa ? 'ACTIVA' : 'DESACTIVADA'}
+              </span>
+
+              {prueba && (
+                <span
+                  className="max-w-70 text-xs font-semibold"
+                  style={{ color: prueba.ok ? '#1a7f3f' : '#a02514' }}
+                  title={prueba.error}
+                >
+                  {prueba.ok ? '✓ Imprimió la prueba' : `✕ ${prueba.error ?? 'No respondió'}`}
+                </span>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={probando === c.id}
+                  onClick={() => void probar(c)}
+                  className="min-h-10 cursor-pointer rounded-[10px] border border-borde-fuerte bg-white px-3.5 text-[13px] font-bold text-primario disabled:opacity-50"
+                >
+                  {probando === c.id ? 'Probando…' : 'Imprimir prueba'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => abrirEdicion(c)}
+                  className="min-h-10 cursor-pointer rounded-[10px] border border-borde-fuerte bg-white px-3.5 text-[13px] font-bold text-texto"
+                >
+                  Editar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => mutActiva.mutate(c)}
+                  className="min-h-10 cursor-pointer rounded-[10px] border border-borde-fuerte bg-white px-3.5 text-[13px] font-bold text-texto-suave"
+                >
+                  {c.activa ? 'Desactivar' : 'Activar'}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {abierto && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/45 p-6">
+          <div className="flex w-full max-w-lg flex-col gap-3.5 rounded-3xl bg-white p-6">
+            <div className="text-xl font-extrabold">
+              {editando ? 'Editar comandera' : 'Nueva comandera'}
+            </div>
+
+            {!editando && (
+              <>
+                <label className="flex flex-col gap-1 text-sm font-semibold">
+                  Local
+                  <select
+                    value={sucursalId ?? ''}
+                    onChange={(e) => setSucursalId(e.target.value ? Number(e.target.value) : null)}
+                    className="min-h-11 rounded-[10px] border border-borde-fuerte px-3 text-sm"
+                  >
+                    <option value="">Elegí el local…</option>
+                    {locales.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <div className="flex flex-col gap-1 text-sm font-semibold">
+                  Dónde está
+                  <div className="flex gap-2">
+                    {DESTINOS.map((d) => (
+                      <button
+                        key={d.id}
+                        type="button"
+                        onClick={() => setDestino(d.id)}
+                        title={d.ayuda}
+                        className={`min-h-11 flex-1 cursor-pointer rounded-[10px] border px-3 text-sm font-bold ${
+                          destino === d.id
+                            ? 'border-primario bg-primario text-white'
+                            : 'border-borde-fuerte bg-white text-texto'
+                        }`}
+                      >
+                        {d.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            <label className="flex flex-col gap-1 text-sm font-semibold">
+              Nombre
+              <input
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                placeholder="Comandera cocina - Local 1"
+                className="min-h-11 rounded-[10px] border border-borde-fuerte px-3 text-sm"
+              />
+            </label>
+
+            <div className="flex gap-2">
+              <label className="flex flex-2 flex-col gap-1 text-sm font-semibold">
+                IP de la impresora
+                <input
+                  value={ip}
+                  onChange={(e) => setIp(e.target.value)}
+                  placeholder="192.168.1.50"
+                  className="min-h-11 rounded-[10px] border border-borde-fuerte px-3 font-mono text-sm"
+                />
+              </label>
+              <label className="flex flex-1 flex-col gap-1 text-sm font-semibold">
+                Puerto
+                <input
+                  value={puerto}
+                  onChange={(e) => setPuerto(e.target.value.replace(/\D/g, ''))}
+                  className="min-h-11 rounded-[10px] border border-borde-fuerte px-3 font-mono text-sm"
+                />
+              </label>
+            </div>
+            <div className="-mt-1.5 text-xs text-texto-suave">
+              El puerto 9100 es el que traen de fábrica estas impresoras. La IP la muestra la
+              impresora al encenderla, o se la asigna el router del local.
+            </div>
+
+            {error && (
+              <div className="rounded-xl bg-error-suave px-3.5 py-3 text-sm font-semibold text-error-texto">
+                {error}
+              </div>
+            )}
+
+            <div className="mt-1 flex gap-2">
+              <button
+                type="button"
+                onClick={limpiar}
+                className="min-h-[52px] flex-1 cursor-pointer rounded-2xl border border-borde-fuerte bg-white text-base font-bold text-texto"
+              >
+                CANCELAR
+              </button>
+              <button
+                type="button"
+                disabled={invalido || mutGuardar.isPending}
+                onClick={() => mutGuardar.mutate()}
+                className="min-h-[52px] flex-1 cursor-pointer rounded-2xl bg-primario text-base font-extrabold text-white disabled:opacity-50"
+              >
+                {mutGuardar.isPending ? 'GUARDANDO…' : 'GUARDAR'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
