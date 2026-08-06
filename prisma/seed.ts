@@ -27,12 +27,33 @@ async function main() {
     create: { nombre: 'Local 2', tipo: 'VENTA', direccion: 'Sucursal de venta 2' },
   });
 
-  // ── Usuarios: uno por rol ──
-  // sucursalId: fija de qué local es un CAJERO/ENCARGADO — sin esto no pueden
-  // recepcionar ninguna transferencia (validación agregada tras hallazgo de
-  // auditoría §5.2: sin sucursal asignada, cualquiera podía recibir mercadería
-  // de cualquier local).
+  // ── Usuarios ──
+  //
+  // La base arranca con UN SOLO usuario: el administrador inicial. Desde su
+  // panel (Usuarios) se dan de alta los demás con su propia contraseña. Antes
+  // el seed creaba siete usuarios con claves tipo "admin123" escritas acá —
+  // en una instalación con URL pública eso es una puerta abierta, porque este
+  // archivo está en el repo.
+  //
+  // Su contraseña NO se hardcodea: sale de ADMIN_INICIAL_PASSWORD. En
+  // producción es obligatoria; en desarrollo cae en una por defecto para no
+  // estorbar el día a día.
   const hash = (pw: string) => bcrypt.hash(pw, 10);
+
+  const esProduccion = process.env.NODE_ENV === 'production';
+  const passwordAdmin = process.env.ADMIN_INICIAL_PASSWORD;
+  if (esProduccion && !passwordAdmin) {
+    console.error(
+      'Falta ADMIN_INICIAL_PASSWORD — es la contraseña del único usuario con el que arranca ' +
+        'el sistema. Definila antes de sembrar en producción.',
+    );
+    process.exit(1);
+  }
+
+  // Los usuarios de demo (uno por rol, claves conocidas) solo se siembran
+  // fuera de producción, o si se piden a mano con SEED_DEMO=true.
+  const sembrarDemo = process.env.SEED_DEMO === 'true' || !esProduccion;
+
   const usuarios: {
     nombre: string;
     username: string;
@@ -40,14 +61,24 @@ async function main() {
     rol: Prisma.UsuarioCreateInput['rol'];
     sucursalId?: number;
   }[] = [
-    { nombre: 'Pablo (Admin)', username: 'admin', password: 'admin123', rol: 'ADMINISTRADOR' },
-    { nombre: 'Ariel (Socio)', username: 'ariel', password: 'socio123', rol: 'SOCIO' },
-    { nombre: 'Eliana (Socia)', username: 'eliana', password: 'socio123', rol: 'SOCIO' },
-    { nombre: 'Ema (Socia)', username: 'ema', password: 'socio123', rol: 'SOCIO' },
-    { nombre: 'Encargado Local 1', username: 'encargado', password: 'encargado123', rol: 'ENCARGADO', sucursalId: local1.id },
-    { nombre: 'Cajero Local 1', username: 'cajero', password: 'cajero123', rol: 'CAJERO', sucursalId: local1.id },
-    { nombre: 'Operario Producción', username: 'produccion', password: 'produccion123', rol: 'PRODUCCION' },
+    {
+      nombre: 'Administrador',
+      username: process.env.ADMIN_INICIAL_USUARIO ?? 'admin',
+      password: passwordAdmin ?? 'admin123',
+      rol: 'ADMINISTRADOR',
+    },
   ];
+
+  if (sembrarDemo) {
+    usuarios.push(
+      { nombre: 'Ariel (Socio)', username: 'ariel', password: 'socio123', rol: 'SOCIO' },
+      { nombre: 'Eliana (Socia)', username: 'eliana', password: 'socio123', rol: 'SOCIO' },
+      { nombre: 'Ema (Socia)', username: 'ema', password: 'socio123', rol: 'SOCIO' },
+      { nombre: 'Encargado Local 1', username: 'encargado', password: 'encargado123', rol: 'ENCARGADO', sucursalId: local1.id },
+      { nombre: 'Cajero Local 1', username: 'cajero', password: 'cajero123', rol: 'CAJERO', sucursalId: local1.id },
+      { nombre: 'Operario Producción', username: 'produccion', password: 'produccion123', rol: 'PRODUCCION' },
+    );
+  }
   for (const u of usuarios) {
     await prisma.usuario.upsert({
       where: { username: u.username },
@@ -217,7 +248,9 @@ async function main() {
     { nombre: 'Gaseosa 500ml', categoria: 'Bebidas', tipo: 'REVENTA', unidad: 'UNIDAD', precio: 1500 },
   ];
 
-  const adminUser = await prisma.usuario.findUniqueOrThrow({ where: { username: 'admin' } });
+  const adminUser = await prisma.usuario.findUniqueOrThrow({
+    where: { username: process.env.ADMIN_INICIAL_USUARIO ?? 'admin' },
+  });
 
   // Corrección puntual: "Empanada de carne" había quedado creada con
   // categoría " Empanadas" (espacio inicial) en una sesión anterior.
@@ -620,7 +653,11 @@ async function main() {
 
   console.log('Seed completado.');
   console.log('Sucursales:', { produccion: produccion.id, local1: local1.id, local2: local2.id });
-  console.log('Usuarios: admin/admin123, produccion/produccion123, cajero/cajero123, ...');
+  console.log(
+    sembrarDemo
+      ? `Usuarios: ${usuarios.map((u) => u.username).join(', ')} (los de demo con sus claves de siempre)`
+      : 'Usuario único: el administrador inicial. Creá el resto desde su panel → Usuarios.',
+  );
 }
 
 main()

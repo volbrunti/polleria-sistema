@@ -2,8 +2,12 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
+import fastifyStatic from '@fastify/static';
+import path from 'node:path';
+import fs from 'node:fs';
 import { ZodError } from 'zod';
 import authPlugin from './plugins/auth';
+import { config } from './config';
 import { AppError } from './lib/errores';
 import { authRoutes } from './modules/auth/auth.routes';
 import { usuariosRoutes } from './modules/usuarios/usuarios.routes';
@@ -31,9 +35,21 @@ export async function buildApp(): Promise<FastifyInstance> {
     logger: process.env.NODE_ENV !== 'test',
   });
 
-  await app.register(cors, { origin: true, credentials: true });
+  // origin sale de config: lista blanca en producción, reflejo libre en dev.
+  // Ver config.ts — con credentials:true, reflejar cualquier origen sería
+  // dejar que cualquier sitio use la cookie de refresh del usuario.
+  await app.register(cors, { origin: config.origenesPermitidos, credentials: true });
   await app.register(cookie);
   await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
+
+  // Las fotos de remito se guardan en disco y se referencian como
+  // /uploads/remitos/<archivo>. Sin esto esa URL da 404: se subían pero no
+  // había forma de verlas.
+  const raizUploads = path.resolve(process.cwd(), config.dirUploads);
+  // @fastify/static explota si el root no existe todavía — en un contenedor
+  // recién creado la carpeta no está hasta la primera foto.
+  fs.mkdirSync(raizUploads, { recursive: true });
+  await app.register(fastifyStatic, { root: raizUploads, prefix: '/uploads/' });
   await app.register(authPlugin);
 
   app.setErrorHandler((error, _req, reply) => {

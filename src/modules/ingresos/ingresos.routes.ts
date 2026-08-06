@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import * as ingresosService from './ingresos.service';
+import { config } from '../../config';
 
 // Validación Flujo 1: proveedor obligatorio, al menos una línea, cantidades > 0
 const registrarSchema = z.object({
@@ -30,7 +31,7 @@ const listarQuery = z.object({
 // Sin productoId devuelve toda la materia prima con saldo (panel de Producción)
 const lineasQuery = z.object({ productoId: z.coerce.number().int().positive().optional() });
 
-const DIR_UPLOADS = path.resolve(process.cwd(), 'uploads', 'remitos');
+const DIR_UPLOADS = path.resolve(process.cwd(), config.dirUploads, 'remitos');
 
 export async function ingresosRoutes(app: FastifyInstance) {
   // Carga de ingresos: PRODUCCION (y ADMIN)

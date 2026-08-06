@@ -16,7 +16,9 @@ async function main() {
   // Socket.io sobre el mismo server HTTP. Solo ADMINISTRADOR entra a la sala
   // de alertas (control ciego: los operarios no reciben eventos de alerta).
   const io = new SocketServer(app.server, {
-    cors: { origin: true, credentials: true },
+    // Misma lista blanca que la API: el socket lleva el token en el handshake,
+    // pero no hay razón para aceptar handshakes de cualquier origen.
+    cors: { origin: config.origenesPermitidos, credentials: true },
   });
 
   io.use((socket, next) => {
