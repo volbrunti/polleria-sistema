@@ -226,6 +226,29 @@ async function main() {
     data: { categoria: 'Empanadas' },
   });
 
+  // Agrupador de primer nivel del POS. Mismo mapeo que la migración
+  // 20260805233000_categoria_madre_producto — provisorio hasta que el cliente
+  // pase su agrupación definitiva; el admin lo edita producto por producto.
+  const MADRE_POR_CATEGORIA: Record<string, string> = {
+    Pollos: 'Pollos',
+    'Combos Pollo': 'Pollos',
+    Hamburguesas: 'Sándwiches',
+    Lomitos: 'Sándwiches',
+    Milanesas: 'Sándwiches',
+    Empanadas: 'Empanadas',
+    Sorrentinos: 'Platos',
+    Tartas: 'Platos',
+    'Porciones de carne': 'Platos',
+    Escabeches: 'Platos',
+    Papas: 'Guarniciones',
+    Ensaladas: 'Guarniciones',
+    Panificados: 'Guarniciones',
+    Adicionales: 'Guarniciones',
+    Bebidas: 'Bebidas',
+  };
+  const madreDe = (p: Prod) =>
+    p.tipo === 'MATERIA_PRIMA' ? null : (MADRE_POR_CATEGORIA[p.categoria] ?? 'Otros');
+
   const productosPorNombre = new Map<string, number>();
   for (const p of productos) {
     const creado = await prisma.producto.upsert({
@@ -234,6 +257,7 @@ async function main() {
       create: {
         nombre: p.nombre,
         categoria: p.categoria,
+        categoriaMadre: madreDe(p),
         tipo: p.tipo,
         unidadDeMedida: p.unidad,
         esProductoSistema: p.esSistema ?? false,
@@ -352,6 +376,7 @@ async function main() {
         data: {
           nombre,
           categoria,
+          categoriaMadre: MADRE_POR_CATEGORIA[categoria] ?? 'Otros',
           tipo: 'COMBO',
           unidadDeMedida: 'UNIDAD',
           componentesDelCombo: {

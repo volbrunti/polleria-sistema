@@ -229,6 +229,11 @@ model Producto {
   id             Int            @id @default(autoincrement())
   nombre         String         @unique
   categoria      String
+  /// Agrupador de primer nivel del POS (Pollos, Sándwiches, Empanadas…).
+  /// El cajero elige primero la madre y después la categoría: con 16
+  /// categorías vendibles, una sola fila de chips no entra en la tablet
+  /// (reunión 4/8). Editable desde Catálogo; null = cae en "Otros".
+  categoriaMadre String?
   tipo           TipoProducto
   unidadDeMedida UnidadDeMedida
   activo         Boolean        @default(true)

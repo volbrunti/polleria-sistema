@@ -53,6 +53,7 @@ export function ModificarPedido({ pedido, onCerrar }: Props) {
           id: i.productoId,
           nombre: i.producto?.nombre ?? `Producto ${i.productoId}`,
           categoria: '',
+          categoriaMadre: null,
           tipo: i.producto?.tipo ?? 'ELABORADO',
           unidadDeMedida: 'UNIDAD',
           activo: true,

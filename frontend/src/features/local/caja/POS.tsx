@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { listarProductos, tablasPrecioVigentes } from '../../../api/productos';
 import { confirmarPedido, masVendidos } from '../../../api/pedidos';
@@ -15,6 +15,43 @@ interface Props {
 interface LineaCarrito {
   producto: Producto;
   cantidad: number;
+}
+
+// Productos sin agrupador cargado (los da de alta el admin y puede olvidarse).
+const SIN_MADRE = 'Otros';
+
+// Búsqueda tolerante a tildes: "milanesa napolitana" tiene que salir con
+// "napolitana" y también con "napolitana" escrito sin acento.
+function normalizar(texto: string): string {
+  return texto
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .trim();
+}
+
+function Chip({
+  activo,
+  chico,
+  onClick,
+  children,
+}: {
+  activo: boolean;
+  chico?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`cursor-pointer rounded-xl font-bold ${
+        chico ? 'min-h-[40px] px-3.5 text-sm' : 'min-h-[46px] px-4 text-[15px]'
+      } ${activo ? 'bg-primario text-white' : 'border border-borde-fuerte bg-white text-texto-suave'}`}
+    >
+      {children}
+    </button>
+  );
 }
 
 // POS táctil (CLAUDE-MODULO-2.md §4.1, INNEGOCIABLE): botones grandes por
@@ -57,15 +94,36 @@ export function POS({ sucursalId }: Props) {
     [productosQ.data, tablaPorProducto, rankingPorProducto],
   );
 
-  const categorias = useMemo(() => {
+  // Dos niveles (reunión 4/8): 16 categorías vendibles no entran en una fila
+  // de chips. El cajero elige primero la madre y ahí se abren sus categorías.
+  // Ambos órdenes siguen al ranking — vendibles ya viene ordenado por ventas.
+  const madres = useMemo(() => {
     const vistas = new Set<string>();
-    // El orden de categorías también sigue al ranking: la primera categoría es
-    // la del producto más vendido (vendibles ya viene ordenado)
-    for (const p of vendibles) vistas.add(p.categoria);
+    for (const p of vendibles) vistas.add(p.categoriaMadre ?? SIN_MADRE);
     return [...vistas];
   }, [vendibles]);
 
+  const [madre, setMadre] = useState<string | null>(null);
   const [categoria, setCategoria] = useState<string | null>(null);
+  const [busqueda, setBusqueda] = useState('');
+
+  const deLaMadre = useMemo(
+    () => (madre ? vendibles.filter((p) => (p.categoriaMadre ?? SIN_MADRE) === madre) : vendibles),
+    [vendibles, madre],
+  );
+
+  const categorias = useMemo(() => {
+    const vistas = new Set<string>();
+    for (const p of deLaMadre) vistas.add(p.categoria);
+    return [...vistas];
+  }, [deLaMadre]);
+
+  // Fila fija de lo que más se vende: NO se filtra al cambiar de categoría —
+  // es el atajo del 80% de los pedidos (Ariel: "el pollo y las papas").
+  const destacados = useMemo(
+    () => vendibles.filter((p) => (rankingPorProducto.get(p.id) ?? 0) > 0).slice(0, 8),
+    [vendibles, rankingPorProducto],
+  );
   const [tipo, setTipo] = useState<TipoPedido>('PRESENCIAL');
   const [carrito, setCarrito] = useState<LineaCarrito[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -74,7 +132,14 @@ export function POS({ sucursalId }: Props) {
   const [vueltoFinal, setVueltoFinal] = useState<string | null>(null);
   const [confirmadoSinCobro, setConfirmadoSinCobro] = useState(false);
 
-  const visibles = categoria ? vendibles.filter((p) => p.categoria === categoria) : vendibles;
+  // Buscando: la búsqueda pisa los filtros y busca en TODO el catálogo, para
+  // no obligar al cajero a acordarse en qué categoría está lo que escribió.
+  const buscando = busqueda.trim().length > 0;
+  const visibles = buscando
+    ? vendibles.filter((p) => normalizar(p.nombre).includes(normalizar(busqueda)))
+    : categoria
+      ? deLaMadre.filter((p) => p.categoria === categoria)
+      : deLaMadre;
 
   // Token de idempotencia: uno por pedido armado. Se renueva cuando el
   // carrito arranca de cero — un retry del MISMO carrito reusa el token y el
@@ -140,32 +205,77 @@ export function POS({ sucursalId }: Props) {
     <div className="flex min-h-0 flex-1">
       {/* ── Grilla de productos ── */}
       <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-auto p-4">
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setCategoria(null)}
-            className={`min-h-[46px] cursor-pointer rounded-xl px-4 text-[15px] font-bold ${
-              categoria === null ? 'bg-primario text-white' : 'border border-borde-fuerte bg-white text-texto-suave'
-            }`}
-          >
-            Todos
-          </button>
-          {categorias.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => setCategoria(c)}
-              className={`min-h-[46px] cursor-pointer rounded-xl px-4 text-[15px] font-bold ${
-                categoria === c ? 'bg-primario text-white' : 'border border-borde-fuerte bg-white text-texto-suave'
-              }`}
-            >
-              {c}
-            </button>
-          ))}
+        <div className="relative">
+          <input
+            type="search"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar producto…"
+            className="min-h-[50px] w-full rounded-xl border border-borde-fuerte bg-white pl-11 pr-4 text-base font-semibold"
+          />
+          <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-lg text-texto-suave">
+            🔍
+          </span>
         </div>
+
+        {destacados.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <div className="text-xs font-extrabold tracking-wide text-texto-suave">LO QUE MÁS SE VENDE</div>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {destacados.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => agregar(p)}
+                  className="flex min-h-[62px] w-[152px] shrink-0 cursor-pointer flex-col items-start justify-between rounded-2xl border-2 border-acento bg-advertencia-suave px-3 py-2 text-left active:bg-acento"
+                >
+                  <span className="text-[14px] font-extrabold leading-tight">{p.nombre}</span>
+                  <span className="text-[13px] font-bold text-advertencia-texto">{precioBoton(p)}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!buscando && (
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap gap-2">
+              <Chip activo={madre === null} onClick={() => { setMadre(null); setCategoria(null); }}>
+                Todo
+              </Chip>
+              {madres.map((m) => (
+                <Chip
+                  key={m}
+                  activo={madre === m}
+                  onClick={() => { setMadre(m); setCategoria(null); }}
+                >
+                  {m}
+                </Chip>
+              ))}
+            </div>
+
+            {/* Segundo nivel: solo si la madre tiene más de una categoría */}
+            {madre !== null && categorias.length > 1 && (
+              <div className="flex flex-wrap gap-2 border-l-4 border-chip pl-2.5">
+                <Chip chico activo={categoria === null} onClick={() => setCategoria(null)}>
+                  Todas
+                </Chip>
+                {categorias.map((c) => (
+                  <Chip key={c} chico activo={categoria === c} onClick={() => setCategoria(c)}>
+                    {c}
+                  </Chip>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {cargando ? (
           <div className="p-6 text-center text-texto-suave">Cargando catálogo…</div>
+        ) : visibles.length === 0 ? (
+          <div className="p-6 text-center text-texto-suave">
+            {buscando ? `No hay ningún producto que se llame "${busqueda}".` : 'No hay productos acá.'}
+          </div>
         ) : (
           <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
             {visibles.map((p) => (

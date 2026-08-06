@@ -34,6 +34,8 @@ export interface Producto {
   id: number;
   nombre: string;
   categoria: string;
+  /** Agrupador de primer nivel del POS; null = cae en "Otros". */
+  categoriaMadre: string | null;
   tipo: TipoProducto;
   unidadDeMedida: UnidadDeMedida;
   activo: boolean;

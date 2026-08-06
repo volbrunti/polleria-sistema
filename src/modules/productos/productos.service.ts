@@ -19,7 +19,13 @@ export async function listar(filtros: { tipo?: TipoProducto; activo?: boolean })
 }
 
 export async function crear(
-  datos: { nombre: string; categoria: string; tipo: TipoProducto; unidadDeMedida: UnidadDeMedida },
+  datos: {
+    nombre: string;
+    categoria: string;
+    categoriaMadre?: string;
+    tipo: TipoProducto;
+    unidadDeMedida: UnidadDeMedida;
+  },
   usuarioId: number,
 ) {
   return prisma.$transaction(async (tx) => {
@@ -37,7 +43,7 @@ export async function crear(
 
 export async function actualizar(
   id: number,
-  datos: { nombre?: string; categoria?: string; activo?: boolean },
+  datos: { nombre?: string; categoria?: string; categoriaMadre?: string; activo?: boolean },
   usuarioId: number,
 ) {
   const anterior = await prisma.producto.findUnique({ where: { id } });
@@ -167,7 +173,12 @@ async function validarComponentesCombo(componentes: ComponenteComboInput[]) {
 }
 
 export async function crearCombo(
-  datos: { nombre: string; categoria: string; componentes: ComponenteComboInput[] },
+  datos: {
+    nombre: string;
+    categoria: string;
+    categoriaMadre?: string;
+    componentes: ComponenteComboInput[];
+  },
   usuarioId: number,
 ) {
   await validarComponentesCombo(datos.componentes);
@@ -176,6 +187,7 @@ export async function crearCombo(
       data: {
         nombre: datos.nombre,
         categoria: datos.categoria,
+        categoriaMadre: datos.categoriaMadre,
         tipo: 'COMBO',
         unidadDeMedida: 'UNIDAD',
         componentesDelCombo: {

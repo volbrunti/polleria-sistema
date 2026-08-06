@@ -166,6 +166,7 @@ export function AsistenteProducir({ onVolver, onLoteAbierto }: Props) {
         id: productoInsumoId,
         nombre: nombreFallback,
         categoria: '',
+        categoriaMadre: null,
         tipo: 'MATERIA_PRIMA',
         unidadDeMedida: unidadFallback,
         activo: true,

@@ -87,6 +87,7 @@ function TabProductos({ puedeEscribir }: { puedeEscribir: boolean }) {
   const [abierto, setAbierto] = useState(false);
   const [nombre, setNombre] = useState('');
   const [categoria, setCategoria] = useState('');
+  const [categoriaMadre, setCategoriaMadre] = useState('');
   const [tipo, setTipo] = useState<TipoProducto>('MATERIA_PRIMA');
   const [unidad, setUnidad] = useState<UnidadDeMedida>('KG');
   const [error, setError] = useState<string | null>(null);
@@ -97,6 +98,11 @@ function TabProductos({ puedeEscribir }: { puedeEscribir: boolean }) {
   const [fActivo, setFActivo] = useState<'todos' | 'activos' | 'inactivos'>('activos');
 
   const categoriasDisponibles = [...new Set((productos.data ?? []).map((p) => p.categoria))].sort();
+  // Agrupadores ya en uso: el admin elige de la lista en vez de tipearlos y
+  // que dos productos queden en "Pollos" y "pollos" por una mayúscula.
+  const madresDisponibles = [
+    ...new Set((productos.data ?? []).map((p) => p.categoriaMadre).filter((m): m is string => !!m)),
+  ].sort();
 
   const productosFiltrados = (productos.data ?? []).filter((p) => {
     if (fBusqueda.trim() && !p.nombre.toLowerCase().includes(fBusqueda.trim().toLowerCase())) return false;
@@ -111,6 +117,7 @@ function TabProductos({ puedeEscribir }: { puedeEscribir: boolean }) {
     setEditando(null);
     setNombre('');
     setCategoria('');
+    setCategoriaMadre('');
     setTipo('MATERIA_PRIMA');
     setUnidad('KG');
     setAbierto(true);
@@ -121,6 +128,7 @@ function TabProductos({ puedeEscribir }: { puedeEscribir: boolean }) {
     setEditando(p);
     setNombre(p.nombre);
     setCategoria(p.categoria);
+    setCategoriaMadre(p.categoriaMadre ?? '');
     setAbierto(true);
     setError(null);
   }
@@ -135,8 +143,12 @@ function TabProductos({ puedeEscribir }: { puedeEscribir: boolean }) {
   });
 
   const mutActualizar = useMutation({
-    mutationFn: (vars: { id: number; nombre: string; categoria: string }) =>
-      actualizarProducto(vars.id, { nombre: vars.nombre, categoria: vars.categoria }),
+    mutationFn: (vars: { id: number; nombre: string; categoria: string; categoriaMadre?: string }) =>
+      actualizarProducto(vars.id, {
+        nombre: vars.nombre,
+        categoria: vars.categoria,
+        categoriaMadre: vars.categoriaMadre,
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['productos'] });
       setAbierto(false);
@@ -160,6 +172,19 @@ function TabProductos({ puedeEscribir }: { puedeEscribir: boolean }) {
           <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3">
             <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre" className="h-11.5 rounded-[10px] border border-borde-fuerte px-3 text-sm" />
             <input value={categoria} onChange={(e) => setCategoria(e.target.value)} placeholder="Categoría" className="h-11.5 rounded-[10px] border border-borde-fuerte px-3 text-sm" />
+            {/* Agrupador del POS: con qué otras categorías comparte botón en la caja */}
+            <input
+              value={categoriaMadre}
+              onChange={(e) => setCategoriaMadre(e.target.value)}
+              list="madres-catalogo"
+              placeholder="Grupo en el POS (ej: Pollos)"
+              className="h-11.5 rounded-[10px] border border-borde-fuerte px-3 text-sm"
+            />
+            <datalist id="madres-catalogo">
+              {madresDisponibles.map((m) => (
+                <option key={m} value={m} />
+              ))}
+            </datalist>
             {!editando && (
               <>
                 <select value={tipo} onChange={(e) => setTipo(e.target.value as TipoProducto)} className="h-11.5 rounded-[10px] border border-borde-fuerte bg-white px-2.5 text-sm">
@@ -184,8 +209,9 @@ function TabProductos({ puedeEscribir }: { puedeEscribir: boolean }) {
               disabled={!nombre.trim() || !categoria.trim() || mutCrear.isPending || mutActualizar.isPending}
               onClick={() => {
                 setError(null);
-                if (editando) mutActualizar.mutate({ id: editando.id, nombre, categoria });
-                else mutCrear.mutate({ nombre, categoria, tipo, unidadDeMedida: unidad });
+                const madre = categoriaMadre.trim() || undefined;
+                if (editando) mutActualizar.mutate({ id: editando.id, nombre, categoria, categoriaMadre: madre });
+                else mutCrear.mutate({ nombre, categoria, categoriaMadre: madre, tipo, unidadDeMedida: unidad });
               }}
               className="min-h-11.5 cursor-pointer rounded-xl bg-primario px-5 text-sm font-extrabold text-white disabled:opacity-50"
             >
@@ -235,9 +261,10 @@ function TabProductos({ puedeEscribir }: { puedeEscribir: boolean }) {
         </select>
       </div>
       <div className="overflow-x-auto rounded-2xl border border-borde bg-white">
-        <div className="grid grid-cols-[1fr_160px_170px_110px_110px] bg-chip px-5 py-3 text-xs font-extrabold tracking-wide text-texto-suave">
+        <div className="grid grid-cols-[1fr_150px_140px_150px_100px_110px] bg-chip px-5 py-3 text-xs font-extrabold tracking-wide text-texto-suave">
           <span>NOMBRE</span>
           <span>CATEGORÍA</span>
+          <span>GRUPO EN EL POS</span>
           <span>TIPO</span>
           <span>UNIDAD</span>
           <span />
@@ -246,9 +273,12 @@ function TabProductos({ puedeEscribir }: { puedeEscribir: boolean }) {
           <div className="px-5 py-6 text-center text-sm text-texto-suave">Sin resultados con estos filtros.</div>
         )}
         {productosFiltrados.map((p) => (
-          <div key={p.id} className="grid grid-cols-[1fr_160px_170px_110px_110px] items-center border-t border-[#eef1ea] px-5 py-3.5 text-sm">
+          <div key={p.id} className="grid grid-cols-[1fr_150px_140px_150px_100px_110px] items-center border-t border-[#eef1ea] px-5 py-3.5 text-sm">
             <span className={`font-semibold ${p.activo ? '' : 'text-texto-suave line-through'}`}>{p.nombre}</span>
             <span className="text-texto-suave">{p.categoria}</span>
+            <span className="text-texto-suave">
+              {p.tipo === 'MATERIA_PRIMA' ? '—' : (p.categoriaMadre ?? 'Otros')}
+            </span>
             <span className="font-mono text-xs text-texto-suave">{p.tipo}</span>
             <span className="text-texto-suave">{p.unidadDeMedida}</span>
             {puedeEscribir && (
@@ -275,12 +305,14 @@ function TabCombos({ puedeEscribir }: { puedeEscribir: boolean }) {
   const [abierto, setAbierto] = useState(false);
   const [nombre, setNombre] = useState('');
   const [categoria, setCategoria] = useState('');
+  const [categoriaMadre, setCategoriaMadre] = useState('');
   const [componentes, setComponentes] = useState<{ productoComponenteId: number; cantidad: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   function abrirNuevo() {
     setNombre('');
     setCategoria('');
+    setCategoriaMadre('');
     setComponentes([]);
     setAbierto(true);
     setError(null);
@@ -331,6 +363,12 @@ function TabCombos({ puedeEscribir }: { puedeEscribir: boolean }) {
               value={categoria}
               onChange={(e) => setCategoria(e.target.value)}
               placeholder="Categoría"
+              className="h-11.5 rounded-[10px] border border-borde-fuerte px-3 text-sm"
+            />
+            <input
+              value={categoriaMadre}
+              onChange={(e) => setCategoriaMadre(e.target.value)}
+              placeholder="Grupo en el POS (ej: Pollos)"
               className="h-11.5 rounded-[10px] border border-borde-fuerte px-3 text-sm"
             />
           </div>
@@ -399,6 +437,7 @@ function TabCombos({ puedeEscribir }: { puedeEscribir: boolean }) {
                 mutCrear.mutate({
                   nombre,
                   categoria,
+                  categoriaMadre: categoriaMadre.trim() || undefined,
                   componentes: componentes.map((c) => ({
                     productoComponenteId: c.productoComponenteId,
                     cantidad: Number(c.cantidad),

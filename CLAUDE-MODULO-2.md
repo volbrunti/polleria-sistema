@@ -110,7 +110,9 @@ Producto nuevo en el seed: **"Pollo a la leña (entero) — MARCADO"** (ver corr
 
 ### 4.1 Pantalla del POS — reglas de UX críticas (INNEGOCIABLE)
 
-- Interfaz táctil con **botones grandes** agrupados por categoría.
+- Interfaz táctil con **botones grandes** agrupados por categoría, en **dos niveles** (reunión 4/8): el cajero toca primero el grupo (`Producto.categoriaMadre` — Pollos, Sándwiches, Empanadas, Platos, Guarniciones, Bebidas, Otros) y recién ahí se abren sus categorías. Con 16 categorías vendibles, una sola fila de chips no entraba en la tablet. El agrupador es texto libre editable desde Catálogo (columna "GRUPO EN EL POS"); vacío = "Otros". El mapeo inicial es provisorio hasta que el cliente pase su agrupación definitiva.
+- **Fila fija "LO QUE MÁS SE VENDE"** arriba de todo, con los 8 productos con más ventas de esa sucursal. **No se filtra** al cambiar de grupo ni de categoría — es el atajo del pedido típico.
+- **Buscador**: mientras hay texto pisa los filtros y busca en todo el catálogo (insensible a mayúsculas y tildes), para no obligar al cajero a acordarse de en qué categoría está lo que escribió.
 - Los productos se ordenan por **más vendidos primero** — el sistema calcula esto automáticamente desde el historial de `ItemDePedido` por sucursal. No es un orden manual. Si un producto nunca se vendió, va al final. Pedido explícito del cliente: "que lo que más se pide aparezca primero para no perder tiempo".
 - El total del pedido se actualiza en tiempo real a cada cambio.
 - El carrito del pedido está siempre visible junto a los productos.
