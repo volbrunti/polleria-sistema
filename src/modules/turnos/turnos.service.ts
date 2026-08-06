@@ -458,10 +458,13 @@ export async function resumenDeTurno(turnoId: number) {
   });
   if (!turno) throw Errores.noEncontrado('Turno');
 
+  // `monto` es lo imputable al pedido; `montoRecargo` es el extra de tarjeta
+  // que el cliente pagó encima (reunión 4/8). Van separados para que el admin
+  // no confunda recargo con venta.
   const ventasPorMedio = await prisma.pago.groupBy({
     by: ['medio'],
     where: { pedido: { turnoId, estado: { not: 'ANULADO' } } },
-    _sum: { monto: true },
+    _sum: { monto: true, montoRecargo: true },
   });
 
   const unidadesVendidas = await prisma.itemDePedido.groupBy({
@@ -480,7 +483,11 @@ export async function resumenDeTurno(turnoId: number) {
     ventasPorMedio: ventasPorMedio.map((v) => ({
       medio: v.medio,
       total: (v._sum.monto ?? CERO).toString(),
+      recargo: (v._sum.montoRecargo ?? CERO).toString(),
     })),
+    totalRecargosTarjeta: ventasPorMedio
+      .reduce((acc, v) => acc.plus(v._sum.montoRecargo ?? CERO), CERO)
+      .toString(),
     unidadesVendidas: unidadesVendidas.map((i) => ({
       productoId: i.productoId,
       producto: nombrePorId.get(i.productoId) ?? '',

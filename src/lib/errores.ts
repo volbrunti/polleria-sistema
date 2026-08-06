@@ -74,4 +74,6 @@ export const Errores = {
     new AppError('PAGO_INSUFICIENTE', 'Los pagos no cubren el total del pedido', 400),
   vueltoSinEfectivo: () =>
     new AppError('VUELTO_SIN_EFECTIVO', 'El vuelto no puede superar el efectivo recibido', 400),
+  medioSinRecargo: (medio: string) =>
+    new AppError('MEDIO_SIN_RECARGO', `${medio} no lleva recargo — solo débito y crédito`, 400),
 };

@@ -174,6 +174,11 @@ Validado con Ariel textualmente: *"Si se mandó a preparar, se consumió, se ret
 - Si hay pago en efectivo, el sistema calcula el vuelto automáticamente.
 - El pedido pasa a ENTREGADO cuando se registra el pago.
 - Medios: `EFECTIVO`, `DEBITO`, `CREDITO`, `MERCADO_PAGO`, `TRANSFERENCIA`.
+- **Recargo de tarjeta** (reunión 4/8, pedido de Pablo): al elegir `DEBITO` o `CREDITO` el POS abre primero un selector con los porcentajes que el admin dejó cargados (`RecargoTarjeta`, editable en **Catálogo → Recargos de tarjeta**), con "SIN RECARGO" siempre primero. Después se carga el monto **sin** el recargo: el sistema lo suma.
+  - `Pago.monto` sigue siendo **la parte que cubre el pedido** — el total del pedido cierra contra la suma de los `monto`, sin excepción. El extra va en `Pago.recargoPct` + `Pago.montoRecargo`.
+  - El recargo **solo** se acepta en `DEBITO`/`CREDITO` (`MEDIO_SIN_RECARGO`, 400). Como el efectivo nunca lleva recargo, el arqueo ciego de caja no se ve afectado.
+  - En el resumen del turno y en Reportes → Ventas por medio, el recargo aparece **separado de la venta** (`recargo` por medio + `totalRecargosTarjeta`): es plata que el cliente pagó de más por el plástico, no facturación.
+  - Los porcentajes se **desactivan**, no se borran: cada pago guarda el suyo, así que cambiar la lista no altera el histórico.
 
 ### 4.8 Atenciones / Regalías
 

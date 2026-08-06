@@ -25,6 +25,8 @@ const cobrarSchema = z.object({
       z.object({
         medio: z.enum(['EFECTIVO', 'DEBITO', 'CREDITO', 'MERCADO_PAGO', 'TRANSFERENCIA']),
         monto: z.number().positive(),
+        // Recargo de tarjeta: extra por encima de `monto`, solo DEBITO/CREDITO
+        recargoPct: z.number().min(0).max(100).optional(),
       }),
     )
     .min(1),

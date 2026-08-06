@@ -21,6 +21,7 @@ import { turnosRoutes, clavesEmergenciaRoutes } from './modules/turnos/turnos.ro
 import { pedidosRoutes } from './modules/pedidos/pedidos.routes';
 import { cajaRoutes } from './modules/caja/caja.routes';
 import { stockMinimoRoutes } from './modules/stock-minimo/stock-minimo.routes';
+import { recargosRoutes } from './modules/recargos/recargos.routes';
 import { reportesRoutes } from './modules/reportes/reportes.routes';
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes';
 
@@ -70,6 +71,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   // atenciones, gastos-caja, retiros-caja, marcado-pollos, costo-cero
   await app.register(cajaRoutes, { prefix: '/api' });
   await app.register(stockMinimoRoutes, { prefix: '/api/config-stock-minimo' });
+  await app.register(recargosRoutes, { prefix: '/api/recargos-tarjeta' });
   // Módulo 3
   await app.register(reportesRoutes, { prefix: '/api/reportes' });
   await app.register(dashboardRoutes, { prefix: '/api/dashboard' });

@@ -34,7 +34,11 @@ export function modificarPedido(pedidoId: number, items: ItemPedidoInput[]) {
   return apiFetch<Pedido>(`/api/pedidos/${pedidoId}`, { method: 'PATCH', body: { items } });
 }
 
-export function cobrarPedido(pedidoId: number, pagos: { medio: MedioPago; monto: number }[]) {
+export function cobrarPedido(
+  pedidoId: number,
+  /** `monto` cubre el pedido; `recargoPct` es el extra de tarjeta (DEBITO/CREDITO). */
+  pagos: { medio: MedioPago; monto: number; recargoPct?: number }[],
+) {
   return apiFetch<CobroResultado>(`/api/pedidos/${pedidoId}/cobrar`, { method: 'POST', body: { pagos } });
 }
 

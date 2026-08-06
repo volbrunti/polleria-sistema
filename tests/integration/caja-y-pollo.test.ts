@@ -273,7 +273,9 @@ describe('Circuito del pollo dentro de un turno', () => {
     });
     expect(res.statusCode).toBe(200);
     const resumen = res.json();
-    expect(resumen.ventasPorMedio).toEqual([{ medio: 'EFECTIVO', total: '54000' }]);
+    // el efectivo nunca lleva recargo de tarjeta
+    expect(resumen.ventasPorMedio).toEqual([{ medio: 'EFECTIVO', total: '54000', recargo: '0' }]);
+    expect(resumen.totalRecargosTarjeta).toBe('0');
     expect(resumen.turno.retiros[0].socio).toBe('ARIEL');
     expect(resumen.turno.gastos).toHaveLength(1);
     expect(resumen.turno.atenciones).toHaveLength(1);

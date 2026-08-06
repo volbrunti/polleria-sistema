@@ -46,6 +46,14 @@ export function precioUnitarioReferencia(montoTotal: Prisma.Decimal, cantidad: n
 
 // ── Cobro ──
 
+// Recargo de tarjeta (reunión 4/8): plata EXTRA que paga el cliente encima de
+// lo que cubre el pedido, para compensar el arancel del plástico. No entra en
+// la comparación contra el total del pedido — por eso se calcula aparte y se
+// guarda en su propia columna.
+export function calcularRecargo(monto: Prisma.Decimal, porcentaje: Prisma.Decimal): Prisma.Decimal {
+  return monto.mul(porcentaje).div(100).toDecimalPlaces(2);
+}
+
 // El vuelto sale SOLO del efectivo: los medios electrónicos se cobran exactos.
 export function calcularCobro(params: {
   totalPedido: Prisma.Decimal;

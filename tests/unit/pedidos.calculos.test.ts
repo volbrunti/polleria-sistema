@@ -4,6 +4,7 @@ import {
   calcularPrecioTotal,
   precioUnitarioReferencia,
   calcularCobro,
+  calcularRecargo,
   transicionValida,
   esModificable,
   type TierPrecio,
@@ -121,5 +122,22 @@ describe('ciclo de vida del pedido', () => {
     expect(esModificable('LISTO')).toBe(true);
     expect(esModificable('ENTREGADO')).toBe(false);
     expect(esModificable('ANULADO')).toBe(false);
+  });
+});
+
+describe('calcularRecargo', () => {
+  const d = (n: string | number) => new Prisma.Decimal(n);
+
+  it('aplica el porcentaje sobre el monto imputado al pedido', () => {
+    expect(calcularRecargo(d(2500), d(10)).toString()).toBe('250');
+    expect(calcularRecargo(d(19000), d(6.5)).toString()).toBe('1235');
+  });
+
+  it('redondea a 2 decimales — el recargo es plata, no una fracción', () => {
+    expect(calcularRecargo(d(1333), d(7.77)).toString()).toBe('103.57');
+  });
+
+  it('0% no cobra nada de más', () => {
+    expect(calcularRecargo(d(9999), d(0)).toString()).toBe('0');
   });
 });

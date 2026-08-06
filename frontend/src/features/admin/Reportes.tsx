@@ -200,7 +200,10 @@ function TabMedios({ filtros }: { filtros: FiltrosFecha }) {
           <div key={m.medio} className="flex items-center gap-3">
             <div className="flex-1">
               <div className="font-semibold">{LABEL_MEDIO[m.medio] ?? m.medio}</div>
-              <div className="text-xs text-texto-suave">{m.cantidadOperaciones} operaciones</div>
+              <div className="text-xs text-texto-suave">
+                {m.cantidadOperaciones} operaciones
+                {Number(m.recargo) > 0 && ` · ${fmtMoneda(m.recargo)} de recargo`}
+              </div>
             </div>
             <div className="text-right">
               <div className="font-bold">{fmtMoneda(m.total)}</div>
@@ -212,6 +215,13 @@ function TabMedios({ filtros }: { filtros: FiltrosFecha }) {
           <span>Total</span>
           <span>{fmtMoneda(q.data.total)}</span>
         </div>
+        {/* El recargo lo paga el cliente encima del precio: no es venta */}
+        {Number(q.data.totalRecargos) > 0 && (
+          <div className="flex items-center justify-between text-sm text-advertencia-texto">
+            <span>Recargos de tarjeta (aparte)</span>
+            <span className="font-bold">{fmtMoneda(q.data.totalRecargos)}</span>
+          </div>
+        )}
       </div>
     </div>
   );

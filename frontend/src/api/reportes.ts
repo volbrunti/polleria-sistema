@@ -27,8 +27,16 @@ export interface VentaProducto {
 }
 
 export interface VentasPorMedio {
-  porMedio: { medio: string; total: string; cantidadOperaciones: number; porcentaje: string }[];
+  porMedio: {
+    medio: string;
+    total: string;
+    /** Recargo de tarjeta cobrado aparte — no suma a `total`. */
+    recargo: string;
+    cantidadOperaciones: number;
+    porcentaje: string;
+  }[];
   total: string;
+  totalRecargos: string;
 }
 
 export interface CierreCaja {

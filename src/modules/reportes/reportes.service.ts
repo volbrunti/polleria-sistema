@@ -56,7 +56,7 @@ export async function ventasPorMedioDePago(filtros: FiltroFecha) {
   const pagos = await prisma.pago.groupBy({
     by: ['medio'],
     where: { pedido: where },
-    _sum: { monto: true },
+    _sum: { monto: true, montoRecargo: true },
     _count: true,
   });
 
@@ -67,6 +67,8 @@ export async function ventasPorMedioDePago(filtros: FiltroFecha) {
       .map((p) => ({
         medio: p.medio,
         total: (p._sum.monto ?? CERO).toString(),
+        // Extra de tarjeta que pagó el cliente: no es venta, va aparte
+        recargo: (p._sum.montoRecargo ?? CERO).toString(),
         cantidadOperaciones: p._count,
         porcentaje: totalGeneral.isZero()
           ? '0'
@@ -74,6 +76,7 @@ export async function ventasPorMedioDePago(filtros: FiltroFecha) {
       }))
       .sort((a, b) => Number(b.total) - Number(a.total)),
     total: totalGeneral.toString(),
+    totalRecargos: pagos.reduce((acc, p) => acc.plus(p._sum.montoRecargo ?? CERO), CERO).toString(),
   };
 }
 

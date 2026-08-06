@@ -737,10 +737,32 @@ model Pago {
   pedido    Pedido    @relation(fields: [pedidoId], references: [id])
   pedidoId  Int
   medio     MedioPago
+  /// Parte que cubre el pedido. NO incluye el recargo de tarjeta: el total
+  /// del pedido tiene que seguir cerrando contra la suma de los `monto`.
   monto     Decimal   @db.Decimal(12, 2)
+  /// Recargo de tarjeta aplicado a este pago (reunión 4/8). Solo DEBITO y
+  /// CREDITO. El cliente terminó pagando monto + montoRecargo.
+  recargoPct   Decimal? @db.Decimal(5, 2)
+  montoRecargo Decimal? @db.Decimal(12, 2)
   fechaHora DateTime  @default(now())
 
   @@map("pagos")
+}
+
+/// Porcentajes de recargo que el admin deja cargados para que el cajero los
+/// elija de una lista al cobrar con tarjeta, en vez de tipearlos (reunión
+/// 4/8: "que aparezca un campo desplegable con el porcentaje que tiene esa
+/// tarjeta"). No es dato ciego: el cliente ve el recargo en el ticket.
+model RecargoTarjeta {
+  id         Int       @id @default(autoincrement())
+  nombre     String // "Visa crédito 3 cuotas", "Naranja 1 pago"…
+  medio      MedioPago // Solo DEBITO o CREDITO (validado en el servicio)
+  porcentaje Decimal   @db.Decimal(5, 2)
+  activo     Boolean   @default(true)
+  creadoEn   DateTime  @default(now())
+
+  @@unique([medio, nombre])
+  @@map("recargos_tarjeta")
 }
 
 // Regalías / productos sin cargo. Descuenta stock igual que una venta

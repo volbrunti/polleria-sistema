@@ -17,6 +17,7 @@ import {
   guardarProductosHabituales,
 } from '../../api/proveedores';
 import { listarSucursales } from '../../api/sucursales';
+import { listarRecargos, crearRecargo, actualizarRecargo } from '../../api/recargos';
 import { TecladoNumerico } from '../../components/ui/TecladoNumerico';
 import { ApiError } from '../../api/client';
 import { fmtFecha, fmtMoneda, fmtNumero } from '../../lib/formato';
@@ -38,12 +39,13 @@ interface Props {
   puedeEscribir: boolean;
 }
 
-type Tab = 'productos' | 'combos' | 'precios' | 'proveedores' | 'sucursales';
+type Tab = 'productos' | 'combos' | 'precios' | 'recargos' | 'proveedores' | 'sucursales';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'productos', label: 'Productos' },
   { id: 'combos', label: 'Combos' },
   { id: 'precios', label: 'Precios' },
+  { id: 'recargos', label: 'Recargos de tarjeta' },
   { id: 'proveedores', label: 'Proveedores' },
   { id: 'sucursales', label: 'Sucursales' },
 ];
@@ -74,6 +76,7 @@ export function Catalogo({ puedeEscribir }: Props) {
       {tab === 'productos' && <TabProductos puedeEscribir={puedeEscribir} />}
       {tab === 'combos' && <TabCombos puedeEscribir={puedeEscribir} />}
       {tab === 'precios' && <TabPrecios puedeEscribir={puedeEscribir} />}
+      {tab === 'recargos' && <TabRecargos puedeEscribir={puedeEscribir} />}
       {tab === 'proveedores' && <TabProveedores puedeEscribir={puedeEscribir} />}
       {tab === 'sucursales' && <TabSucursales />}
     </div>
@@ -949,6 +952,161 @@ function TabSucursales() {
           <span className="font-mono text-xs text-texto-suave">{s.tipo}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+// Recargos de tarjeta (reunión 4/8): la lista de porcentajes que el cajero ve
+// desplegada al cobrar con débito o crédito. Se desactivan en vez de
+// borrarse — los pagos viejos guardan su propio porcentaje, así que el
+// histórico no se toca.
+function TabRecargos({ puedeEscribir }: { puedeEscribir: boolean }) {
+  const queryClient = useQueryClient();
+  const recargos = useQuery({ queryKey: ['recargos-tarjeta', 'todos'], queryFn: () => listarRecargos() });
+
+  const [abierto, setAbierto] = useState(false);
+  const [nombre, setNombre] = useState('');
+  const [medio, setMedio] = useState<'DEBITO' | 'CREDITO'>('CREDITO');
+  const [porcentaje, setPorcentaje] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const invalidar = () => {
+    void queryClient.invalidateQueries({ queryKey: ['recargos-tarjeta'] });
+  };
+
+  const mutCrear = useMutation({
+    mutationFn: crearRecargo,
+    onSuccess: () => {
+      invalidar();
+      setAbierto(false);
+      setNombre('');
+      setPorcentaje('');
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : 'No se pudo crear el recargo.'),
+  });
+
+  const mutActivo = useMutation({
+    mutationFn: (vars: { id: number; activo: boolean }) => actualizarRecargo(vars.id, { activo: vars.activo }),
+    onSuccess: invalidar,
+    onError: (err) => setError(err instanceof ApiError ? err.message : 'No se pudo actualizar.'),
+  });
+
+  const pctValido = Number(porcentaje) > 0 && Number(porcentaje) <= 100;
+
+  return (
+    <div className="flex flex-col gap-3.5">
+      <div className="w-fit rounded-xl bg-[#fff7d9] px-3.5 py-3 text-sm font-semibold text-advertencia-texto">
+        Lo que cargues acá es lo que el cajero ve al cobrar con tarjeta. El recargo se suma al total
+        del pedido y queda desglosado en el turno y en los reportes.
+      </div>
+
+      {puedeEscribir && !abierto && (
+        <button
+          type="button"
+          onClick={() => {
+            setAbierto(true);
+            setError(null);
+          }}
+          className="w-fit min-h-12 cursor-pointer rounded-xl bg-primario px-5 text-[15px] font-extrabold text-white hover:bg-primario-hover"
+        >
+          ＋ NUEVO RECARGO
+        </button>
+      )}
+
+      {abierto && (
+        <div className="flex flex-col gap-3 rounded-2xl border-2 border-primario bg-white p-4.5">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3">
+            <input
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              placeholder="Nombre (ej: Visa 3 cuotas)"
+              className="h-11.5 rounded-[10px] border border-borde-fuerte px-3 text-sm"
+            />
+            <select
+              value={medio}
+              onChange={(e) => setMedio(e.target.value as 'DEBITO' | 'CREDITO')}
+              className="h-11.5 rounded-[10px] border border-borde-fuerte bg-white px-2.5 text-sm"
+            >
+              <option value="CREDITO">Crédito</option>
+              <option value="DEBITO">Débito</option>
+            </select>
+            <input
+              value={porcentaje}
+              onChange={(e) => setPorcentaje(e.target.value)}
+              type="number"
+              min={0}
+              max={100}
+              step="0.01"
+              placeholder="% de recargo"
+              className="h-11.5 rounded-[10px] border border-borde-fuerte px-3 text-sm"
+            />
+          </div>
+          {error && (
+            <div className="rounded-xl bg-error-suave px-3.5 py-2.5 text-sm font-semibold text-error-texto">
+              {error}
+            </div>
+          )}
+          <div className="flex gap-2.5">
+            <button
+              type="button"
+              onClick={() => setAbierto(false)}
+              className="min-h-11.5 cursor-pointer rounded-xl border-2 border-borde-fuerte bg-white px-4 text-sm font-bold text-texto-suave"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={!nombre.trim() || !pctValido || mutCrear.isPending}
+              onClick={() => {
+                setError(null);
+                mutCrear.mutate({ nombre: nombre.trim(), medio, porcentaje: Number(porcentaje) });
+              }}
+              className="min-h-11.5 cursor-pointer rounded-xl bg-primario px-5 text-sm font-extrabold text-white disabled:opacity-50"
+            >
+              GUARDAR
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="overflow-x-auto rounded-2xl border border-borde bg-white">
+        <div className="grid grid-cols-[1fr_140px_120px_120px_130px] bg-chip px-5 py-3 text-xs font-extrabold tracking-wide text-texto-suave">
+          <span>NOMBRE</span>
+          <span>MEDIO</span>
+          <span className="text-right">RECARGO</span>
+          <span>ESTADO</span>
+          <span />
+        </div>
+        {recargos.isLoading && <div className="px-5 py-4 text-sm text-texto-suave">Cargando…</div>}
+        {recargos.data?.length === 0 && (
+          <div className="px-5 py-6 text-center text-sm text-texto-suave">
+            Todavía no hay recargos cargados — el cajero solo va a poder cobrar sin adicional.
+          </div>
+        )}
+        {recargos.data?.map((r) => (
+          <div
+            key={r.id}
+            className="grid grid-cols-[1fr_140px_120px_120px_130px] items-center border-t border-[#eef1ea] px-5 py-3.5 text-sm"
+          >
+            <span className={`font-semibold ${r.activo ? '' : 'text-texto-suave line-through'}`}>{r.nombre}</span>
+            <span className="text-texto-suave">{r.medio === 'CREDITO' ? 'Crédito' : 'Débito'}</span>
+            <span className="text-right font-extrabold">+{Number(r.porcentaje)}%</span>
+            <span className={`text-[13px] font-bold ${r.activo ? 'text-primario' : 'text-texto-suave'}`}>
+              {r.activo ? 'Activo' : 'Inactivo'}
+            </span>
+            {puedeEscribir && (
+              <button
+                type="button"
+                disabled={mutActivo.isPending}
+                onClick={() => mutActivo.mutate({ id: r.id, activo: !r.activo })}
+                className="min-h-9 w-fit cursor-pointer rounded-lg border border-borde-fuerte bg-white px-3.5 text-[13px] font-bold text-primario disabled:opacity-50"
+              >
+                {r.activo ? 'Desactivar' : 'Activar'}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

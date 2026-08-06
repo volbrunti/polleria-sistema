@@ -334,8 +334,21 @@ export interface ItemDePedido {
 export interface Pago {
   id: number;
   medio: MedioPago;
+  /** Parte que cubre el pedido — NO incluye el recargo de tarjeta. */
   monto: string;
+  recargoPct: string | null;
+  montoRecargo: string | null;
   fechaHora: string;
+}
+
+/** Porcentaje de recargo que el admin deja cargado para una tarjeta. */
+export interface RecargoTarjeta {
+  id: number;
+  nombre: string;
+  medio: 'DEBITO' | 'CREDITO';
+  porcentaje: string;
+  activo: boolean;
+  creadoEn: string;
 }
 
 export interface AvisoStockMinimo {
@@ -431,7 +444,8 @@ export interface ResumenTurno {
     atenciones?: Atencion[];
     eventosMarcado?: EventoMarcadoPollo[];
   };
-  ventasPorMedio: { medio: MedioPago; total: string }[];
+  ventasPorMedio: { medio: MedioPago; total: string; recargo: string }[];
+  totalRecargosTarjeta: string;
   unidadesVendidas: { productoId: number; producto: string; unidades: string }[];
 }
 

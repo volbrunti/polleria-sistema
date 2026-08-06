@@ -604,3 +604,122 @@ describe('Timer de pedido no retirado (CLAUDE-MODULO-2.md §9)', () => {
     expect(actualizado.avisoNoRetiradoEmitido).toBe(true);
   });
 });
+
+// Recargo de tarjeta (reunión 4/8): plata EXTRA que paga el cliente por usar
+// el plástico. El pedido tiene que seguir cerrando contra la suma de `monto`.
+describe('Recargo de tarjeta', () => {
+  async function crearPedidoDeUnaMilanesa(): Promise<number> {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/pedidos',
+      headers: auth(f.usuarios.cajero.token),
+      payload: { tipo: 'PRESENCIAL', items: [{ productoId: f.productos.milanesa, cantidad: 1 }] },
+    });
+    expect(res.statusCode).toBe(201);
+    return res.json().id;
+  }
+
+  it('solo el ADMIN puede cargar recargos; el cajero solo los lee', async () => {
+    const prohibido = await app.inject({
+      method: 'POST',
+      url: '/api/recargos-tarjeta',
+      headers: auth(f.usuarios.cajero.token),
+      payload: { nombre: 'Visa 3 cuotas', medio: 'CREDITO', porcentaje: 10 },
+    });
+    expect(prohibido.statusCode).toBe(403);
+
+    const creado = await app.inject({
+      method: 'POST',
+      url: '/api/recargos-tarjeta',
+      headers: auth(f.usuarios.admin.token),
+      payload: { nombre: 'Visa 3 cuotas', medio: 'CREDITO', porcentaje: 10 },
+    });
+    expect(creado.statusCode).toBe(201);
+
+    const lista = await app.inject({
+      method: 'GET',
+      url: '/api/recargos-tarjeta',
+      headers: auth(f.usuarios.cajero.token),
+    });
+    expect(lista.statusCode).toBe(200);
+    expect(lista.json().map((r: { nombre: string }) => r.nombre)).toContain('Visa 3 cuotas');
+  });
+
+  it('no se puede configurar recargo para un medio que no es tarjeta', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/recargos-tarjeta',
+      headers: auth(f.usuarios.admin.token),
+      payload: { nombre: 'Efectivo recargado', medio: 'EFECTIVO', porcentaje: 5 },
+    });
+    expect(res.statusCode).toBe(400); // el enum de Zod ni lo acepta
+  });
+
+  it('cobra con crédito al 10%: el pedido cierra por 2500 y el recargo queda aparte', async () => {
+    const pedidoId = await crearPedidoDeUnaMilanesa();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/pedidos/${pedidoId}/cobrar`,
+      headers: auth(f.usuarios.cajero.token),
+      payload: { pagos: [{ medio: 'CREDITO', monto: 2500, recargoPct: 10 }] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().vuelto).toBe('0');
+
+    const prisma = await getPrisma();
+    const pago = await prisma.pago.findFirstOrThrow({ where: { pedidoId } });
+    expect(pago.monto.toString()).toBe('2500');
+    expect(pago.recargoPct?.toString()).toBe('10');
+    expect(pago.montoRecargo?.toString()).toBe('250'); // el cliente pagó 2750
+  });
+
+  it('el recargo no se puede aplicar a efectivo', async () => {
+    const pedidoId = await crearPedidoDeUnaMilanesa();
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/pedidos/${pedidoId}/cobrar`,
+      headers: auth(f.usuarios.cajero.token),
+      payload: { pagos: [{ medio: 'EFECTIVO', monto: 2500, recargoPct: 10 }] },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().codigo).toBe('MEDIO_SIN_RECARGO');
+
+    // y el pedido sigue sin cobrar
+    const prisma = await getPrisma();
+    expect(await prisma.pago.count({ where: { pedidoId } })).toBe(0);
+  });
+
+  it('sin recargo, las columnas quedan nulas (no en cero)', async () => {
+    const pedidoId = await crearPedidoDeUnaMilanesa();
+    await app.inject({
+      method: 'POST',
+      url: `/api/pedidos/${pedidoId}/cobrar`,
+      headers: auth(f.usuarios.cajero.token),
+      payload: { pagos: [{ medio: 'DEBITO', monto: 2500 }] },
+    });
+    const prisma = await getPrisma();
+    const pago = await prisma.pago.findFirstOrThrow({ where: { pedidoId } });
+    expect(pago.recargoPct).toBeNull();
+    expect(pago.montoRecargo).toBeNull();
+  });
+
+  it('el resumen del turno separa venta de recargo', async () => {
+    const prisma = await getPrisma();
+    const turno = await prisma.turno.findFirstOrThrow({
+      where: { sucursalId: f.sucursales.local1, estado: 'ABIERTO' },
+    });
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/turnos/${turno.id}/resumen`,
+      headers: auth(f.usuarios.admin.token),
+    });
+    expect(res.statusCode).toBe(200);
+    const credito = res
+      .json()
+      .ventasPorMedio.find((v: { medio: string }) => v.medio === 'CREDITO');
+    expect(credito.total).toBe('2500');
+    expect(credito.recargo).toBe('250');
+    expect(res.json().totalRecargosTarjeta).toBe('250');
+  });
+});

@@ -263,7 +263,14 @@ function DetalleTurno({ turnoId }: { turnoId: number }) {
           {r.ventasPorMedio.length === 0 && <div className="text-sm text-texto-suave">Sin ventas cobradas.</div>}
           {r.ventasPorMedio.map((v) => (
             <div key={v.medio} className="flex justify-between py-1 text-sm">
-              <span>{LABEL_MEDIO[v.medio] ?? v.medio}</span>
+              <span>
+                {LABEL_MEDIO[v.medio] ?? v.medio}
+                {Number(v.recargo) > 0 && (
+                  <span className="ml-1.5 text-[13px] text-advertencia-texto">
+                    + {fmtMoneda(v.recargo)} de recargo
+                  </span>
+                )}
+              </span>
               <span className="font-bold">{fmtMoneda(v.total)}</span>
             </div>
           ))}
@@ -271,6 +278,13 @@ function DetalleTurno({ turnoId }: { turnoId: number }) {
             <span>Total</span>
             <span>{fmtMoneda(totalVentas)}</span>
           </div>
+          {/* El recargo de tarjeta NO es venta: lo cobró el cliente aparte */}
+          {Number(r.totalRecargosTarjeta) > 0 && (
+            <div className="flex justify-between py-1 text-sm text-advertencia-texto">
+              <span>Recargos de tarjeta (aparte)</span>
+              <span className="font-bold">{fmtMoneda(r.totalRecargosTarjeta)}</span>
+            </div>
+          )}
         </div>
 
         {/* Unidades vendidas */}

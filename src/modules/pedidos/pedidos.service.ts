@@ -10,9 +10,11 @@ import {
   calcularPrecioTotal,
   precioUnitarioReferencia,
   calcularCobro,
+  calcularRecargo,
   transicionValida,
   esModificable,
 } from './pedidos.calculos';
+import { admiteRecargo } from '../recargos/recargos.service';
 import { emitirTicket } from './comandera';
 import * as stockMinimoService from '../stock-minimo/stock-minimo.service';
 import * as alertasService from '../alertas/alertas.service';
@@ -430,7 +432,12 @@ export async function modificarPedido(params: { pedidoId: number; items: ItemInp
 // vuelto (lo que efectivamente queda en la caja — así el arqueo cuadra).
 export async function cobrarPedido(params: {
   pedidoId: number;
-  pagos: { medio: MedioPago; monto: number }[];
+  /**
+   * `monto` es lo que cubre el pedido; `recargoPct` (solo DEBITO/CREDITO) es
+   * el extra que el cliente paga por usar la tarjeta y se guarda aparte para
+   * que el total del pedido siga cerrando (reunión 4/8).
+   */
+  pagos: { medio: MedioPago; monto: number; recargoPct?: number }[];
   usuarioId: number;
 }) {
   const pedido = await prisma.pedido.findUnique({ where: { id: params.pedidoId }, include: INCLUDE_PEDIDO });
@@ -453,13 +460,26 @@ export async function cobrarPedido(params: {
     throw e;
   }
 
+  for (const p of params.pagos) {
+    if (p.recargoPct != null && p.recargoPct > 0 && !admiteRecargo(p.medio)) {
+      throw Errores.medioSinRecargo(p.medio);
+    }
+  }
+
   const actualizado = await prisma.$transaction(async (tx) => {
     const pagosAPersistir = params.pagos
-      .map((p) =>
-        p.medio === 'EFECTIVO'
-          ? { medio: p.medio, monto: cobro.efectivoNeto }
-          : { medio: p.medio, monto: new Prisma.Decimal(p.monto) },
-      )
+      .map((p) => {
+        // El vuelto se descuenta del efectivo, así que ese pago se persiste
+        // neteado; los electrónicos entran exactos.
+        const monto = p.medio === 'EFECTIVO' ? cobro.efectivoNeto : new Prisma.Decimal(p.monto);
+        const pct = p.recargoPct != null && p.recargoPct > 0 ? new Prisma.Decimal(p.recargoPct) : null;
+        return {
+          medio: p.medio,
+          monto,
+          recargoPct: pct,
+          montoRecargo: pct ? calcularRecargo(monto, pct) : null,
+        };
+      })
       .filter((p) => p.monto.greaterThan(0));
 
     await transicionarAtomico(tx, pedido.id, pedido.estado, {
@@ -479,7 +499,12 @@ export async function cobrarPedido(params: {
       usuarioId: params.usuarioId,
       datosNuevos: {
         total: total.toString(),
-        pagos: pagosAPersistir.map((p) => ({ medio: p.medio, monto: p.monto.toString() })),
+        pagos: pagosAPersistir.map((p) => ({
+          medio: p.medio,
+          monto: p.monto.toString(),
+          recargoPct: p.recargoPct?.toString() ?? null,
+          montoRecargo: p.montoRecargo?.toString() ?? null,
+        })),
         vuelto: cobro.vuelto.toString(),
       },
     });
