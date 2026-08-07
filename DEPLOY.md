@@ -103,16 +103,19 @@ Queda en `frontend/dist/`.
 
 > **No** definas `VITE_MOSTRAR_DEMO`. Los botones de "entrar directo como Admin" llevan las contraseñas dentro del bundle: en una URL pública son un acceso de administrador para cualquiera. Solo activalo si vas a mostrar la demo y sabés que la URL no circula.
 
-### 3.2 Publicar
+### 3.2 Publicar (Cloudflare Workers — reemplazó a Pages)
 
-Cloudflare Pages (o Vercel): *Create project* → conectá el repo →
+Cloudflare unificó Pages dentro de Workers: *Compute → Create application → Workers → Connect to Git* → elegí el repo y la rama.
 
-- **Root directory**: `frontend`
-- **Build command**: `npm run build`
-- **Output directory**: `dist`
-- **Variable de entorno**: `VITE_API_URL` = la URL del backend
+En "Set up your application":
+- **Build command**: `npm run build` (ya viene precargado)
+- **Deploy command**: `npx wrangler deploy` (ya viene precargado — lee `frontend/wrangler.jsonc`, agregado al repo)
+- **Advanced settings** → **Root directory**: `frontend` (el repo es un monorepo; sin esto busca el build en la raíz y no lo encuentra)
+- **Advanced settings** → **Environment variables** (de build, no runtime): `VITE_API_URL` = la URL del backend
 
-Cuando tengas la URL del frontend, volvé a Railway y ponela en `ORIGENES_PERMITIDOS`. Sin eso, el navegador bloquea todas las llamadas por CORS.
+`frontend/wrangler.jsonc` ya define `assets.directory: "./dist"` y `not_found_handling: "single-page-application"` (necesario: es una SPA de React Router — sin eso, recargar en `/admin/dashboard` da 404).
+
+Cuando tengas la URL del frontend (`*.workers.dev` o el dominio que elijas), volvé a Railway y ponela en `ORIGENES_PERMITIDOS`. Sin eso, el navegador bloquea todas las llamadas por CORS.
 
 ---
 
