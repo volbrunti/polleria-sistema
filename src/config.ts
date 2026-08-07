@@ -39,13 +39,57 @@ function origenesPermitidos(): string[] | true {
     .filter(Boolean);
 }
 
+// Fotos de remito: en producción van a Cloudflare R2 (bucket público, mismo
+// nivel de protección que hoy tiene el disco local servido sin auth por
+// /uploads/ — el nombre de archivo lleva bytes aleatorios, no es adivinable).
+// Si falta alguna variable en producción, aborta: es preferible que el
+// server no levante a que levante perdiendo fotos en cada redeploy (el
+// disco del contenedor es efímero, ver DEPLOY.md).
+function configuracionR2() {
+  const accountId = process.env.R2_ACCOUNT_ID;
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+  const bucket = process.env.R2_BUCKET;
+  const urlPublicaCruda = process.env.R2_URL_PUBLICA;
+  const completo = accountId && accessKeyId && secretAccessKey && bucket && urlPublicaCruda;
+
+  if (!completo) {
+    if (esProduccion) {
+      // eslint-disable-next-line no-console
+      console.error(
+        'Faltan variables de R2 (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, ' +
+          'R2_URL_PUBLICA) — son obligatorias en producción. Abortando arranque.',
+      );
+      process.exit(1);
+    }
+    return {
+      configurado: false as const,
+      accountId: '',
+      accessKeyId: '',
+      secretAccessKey: '',
+      bucket: '',
+      urlPublica: '',
+    };
+  }
+
+  return {
+    configurado: true as const,
+    accountId,
+    accessKeyId,
+    secretAccessKey,
+    bucket,
+    urlPublica: urlPublicaCruda.replace(/\/+$/, ''), // sin barra final
+  };
+}
+
 export const config = {
   puerto: Number(process.env.PORT ?? 3000),
   origenesPermitidos: origenesPermitidos(),
-  // Dónde viven las fotos de remito. En la nube el disco del contenedor es
-  // efímero (se borra en cada deploy), así que esto tiene que apuntar a un
-  // volumen montado. Ver DEPLOY.md.
+  // Fallback de desarrollo cuando R2 no está configurado (ver r2 abajo). En
+  // la nube el disco del contenedor es efímero, así que en producción R2 es
+  // obligatorio y esto no se usa.
   dirUploads: process.env.DIR_UPLOADS ?? 'uploads',
+  r2: configuracionR2(),
   jwtSecret: requerido(process.env.JWT_SECRET, 'JWT_SECRET', 'dev-secret'),
   jwtRefreshSecret: requerido(process.env.JWT_REFRESH_SECRET, 'JWT_REFRESH_SECRET', 'dev-refresh-secret'),
   jwtAccessExpires: process.env.JWT_ACCESS_EXPIRES ?? '15m',

@@ -50,7 +50,11 @@ En *Variables*, cargá:
 | `JWT_REFRESH_SECRET` | **Otro distinto** del anterior |
 | `NODE_ENV` | `production` |
 | `ORIGENES_PERMITIDOS` | La URL del frontend, sin barra final (la completás en el paso 3.2) |
-| `DIR_UPLOADS` | `/data/uploads` |
+| `R2_ACCOUNT_ID` | El Account ID de Cloudflare (paso 2.3) |
+| `R2_ACCESS_KEY_ID` | Del token de API R2 que generás en el paso 2.3 |
+| `R2_SECRET_ACCESS_KEY` | Ídem |
+| `R2_BUCKET` | Nombre del bucket (paso 2.3) |
+| `R2_URL_PUBLICA` | La URL pública del bucket, sin barra final (paso 2.3) |
 | `ADMIN_INICIAL_PASSWORD` | La contraseña del **único** usuario con el que arranca el sistema |
 | `ADMIN_INICIAL_USUARIO` | Opcional, por defecto `admin` |
 
@@ -62,13 +66,18 @@ node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 
 `PORT` la inyecta Railway sola — no la cargues.
 
-> Con `NODE_ENV=production` el server **no arranca** si falta `JWT_SECRET`, `JWT_REFRESH_SECRET` u `ORIGENES_PERMITIDOS`. Es a propósito: es preferible que no levante a que levante inseguro.
+> Con `NODE_ENV=production` el server **no arranca** si falta `JWT_SECRET`, `JWT_REFRESH_SECRET`, `ORIGENES_PERMITIDOS` o cualquiera de las 5 variables de R2. Es a propósito: es preferible que no levante a que levante perdiendo datos o insegura.
 
-### 2.3 Volumen para las fotos de remito
+### 2.3 Fotos de remito (Cloudflare R2)
 
-El disco del contenedor se borra en cada deploy. En *Settings* → *Volumes*, montá uno en `/data`. Eso es lo que hace que `DIR_UPLOADS=/data/uploads` tenga sentido.
+El disco del contenedor de Railway se borra en cada deploy, así que las fotos van directo a un bucket de R2 (API S3-compatible) en vez de a un volumen — ya queda hecho así de una vez, en vez de resolverlo después para producción.
 
-Si no lo hacés, las fotos de remito se pierden cada vez que redeployás. Para producción esto va a S3/R2 de todas formas.
+1. En el dashboard de Cloudflare → **R2 Object Storage** → *Create bucket*. Nombralo (ej: `polleria-remitos`). Anotá el **Account ID** que aparece en la URL del dashboard (`dash.cloudflare.com/<account-id>/r2`) — es `R2_ACCOUNT_ID`.
+2. Adentro del bucket → *Settings* → **Public access** → habilitalo (vía subdominio `r2.dev` que te da Cloudflare, o un dominio propio). Copiá esa URL pública — es `R2_URL_PUBLICA`. El bucket queda público a propósito: el nombre de cada foto lleva bytes aleatorios (no es adivinable), mismo nivel de protección que tenía el disco local servido sin auth.
+3. R2 → *Manage API tokens* → *Create API token* → permisos **Object Read & Write**, alcance limitado a ese bucket. Te da un **Access Key ID** y un **Secret Access Key** — son `R2_ACCESS_KEY_ID` y `R2_SECRET_ACCESS_KEY`. El secreto se muestra **una sola vez**: copialo antes de cerrar la ventana.
+4. Cargá las 5 variables en Railway (tabla de arriba).
+
+No hace falta ningún volumen ni `DIR_UPLOADS` en este esquema — esa variable solo se usa como fallback si corrés el backend en local sin credenciales de R2.
 
 ### 2.4 Sembrar la base
 
@@ -137,8 +146,6 @@ En este orden:
 
 La solución de fondo es poner los dos bajo el mismo dominio (`api.midominio.com` y `app.midominio.com`), y ahí la cookie deja de ser de terceros. Para la prueba, avisá de probar en Chrome/Android.
 
-**El volumen de Railway es de un solo nodo.** Si algún día escalás a más de una instancia, las fotos dejan de verse desde la otra. Es otra razón para mover los archivos a R2/S3 antes de producción.
-
 **El plan gratis de Railway duerme el servicio.** Si el backend se suspende por inactividad, la primera request después tarda. Para una prueba está bien; para una caja abierta 12 horas, no.
 
 ---
@@ -149,8 +156,7 @@ Lo único que cambia:
 
 1. Borrar `railway.json`, agregar `render.yaml` con los mismos comandos (`npm run build` / `npm run deploy:start`, healthcheck en `/api/salud`).
 2. Crear el servicio en **Virginia**, la misma región que Neon.
-3. Mover las fotos de remito a R2 (reemplaza el volumen y `DIR_UPLOADS`).
-4. Dominio propio con subdominios para backend y frontend, que además resuelve el problema de las cookies.
-5. Backups: PITR de 7 días + `pg_dump` semanal fuera de la plataforma.
+3. Dominio propio con subdominios para backend y frontend, que además resuelve el problema de las cookies.
+4. Backups: PITR de 7 días + `pg_dump` semanal fuera de la plataforma.
 
 Las variables de entorno son exactamente las mismas.

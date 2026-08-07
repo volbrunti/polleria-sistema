@@ -43,14 +43,17 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cookie);
   await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
 
-  // Las fotos de remito se guardan en disco y se referencian como
-  // /uploads/remitos/<archivo>. Sin esto esa URL da 404: se subían pero no
-  // había forma de verlas.
-  const raizUploads = path.resolve(process.cwd(), config.dirUploads);
-  // @fastify/static explota si el root no existe todavía — en un contenedor
-  // recién creado la carpeta no está hasta la primera foto.
-  fs.mkdirSync(raizUploads, { recursive: true });
-  await app.register(fastifyStatic, { root: raizUploads, prefix: '/uploads/' });
+  // Fotos de remito: si R2 está configurado (obligatorio en producción, ver
+  // config.ts) las URLs apuntan directo al bucket público y esto no hace
+  // falta. Si no, es el fallback de disco local para desarrollar sin
+  // credenciales — se sirven como /uploads/remitos/<archivo>.
+  if (!config.r2.configurado) {
+    const raizUploads = path.resolve(process.cwd(), config.dirUploads);
+    // @fastify/static explota si el root no existe todavía — en un
+    // contenedor recién creado la carpeta no está hasta la primera foto.
+    fs.mkdirSync(raizUploads, { recursive: true });
+    await app.register(fastifyStatic, { root: raizUploads, prefix: '/uploads/' });
+  }
   await app.register(authPlugin);
 
   app.setErrorHandler((error, _req, reply) => {

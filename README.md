@@ -21,14 +21,14 @@ Instrucciones completas paso a paso en [DEPLOY.md](DEPLOY.md). Resumen del estad
 - **Base de datos**: Neon, proyecto en **US East (Virginia, `us-east-1`)** — misma región que Railway para minimizar latencia.
 - **Frontend**: Cloudflare Pages, conectado al mismo repo/rama, root directory `frontend/`, build `npm run build`, output `dist/`.
 - **Variables de entorno**: viven únicamente en el panel de cada plataforma (Railway → Variables, Cloudflare Pages → Environment variables), **nunca en el repo**. La lista completa de qué cargar está en DEPLOY.md §2.2 y §3.2.
-- **Volumen de `/data`**: pendiente de confirmar que esté montado en Railway — sin eso las fotos de remito se pierden en cada redeploy (ver DEPLOY.md §2.3).
+- **Fotos de remito**: van directo a **Cloudflare R2** (bucket público, API S3-compatible) — no a un volumen de Railway. El backend firma la subida a mano (`src/lib/almacenamiento.ts`, AWS Signature V4, sin SDK de por medio). Es obligatorio en producción: si faltan las 5 variables de R2, el server no arranca (ver DEPLOY.md §2.3).
 
 > Este es el despliegue de **prueba**, no el de producción — ver la nota al principio de DEPLOY.md sobre la decisión Render + Neon para producción.
 
 ### Pendiente para terminar este despliegue (2026-08-07)
 
-- [ ] Confirmar que las variables de Railway están cargadas (`DATABASE_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `NODE_ENV=production`, `DIR_UPLOADS=/data/uploads`, `ADMIN_INICIAL_USUARIO`, `ADMIN_INICIAL_PASSWORD`).
-- [ ] Montar el volumen en `/data` en Railway (canvas del proyecto → click derecho en el servicio → Attach Volume).
+- [x] Variables base de Railway cargadas (`DATABASE_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `NODE_ENV=production`, `ADMIN_INICIAL_USUARIO`, `ADMIN_INICIAL_PASSWORD`).
+- [ ] Crear el bucket de R2 y cargar `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_URL_PUBLICA` en Railway (ver DEPLOY.md §2.3) — **obligatorias, el backend no arranca sin las 5**. Reemplaza al volumen/`DIR_UPLOADS` que se había planeado antes.
 - [ ] Completar a mano el **Healthcheck Path** (`/api/salud`) en Railway → Settings → Deploy — el builder mostraba "Railpack" en vez de "Nixpacks", así que no está confirmado que esté leyendo `railway.json` solo.
 - [ ] Terminar de conectar y deployar el frontend en Cloudflare Pages (root `frontend/`, build `npm run build`, output `dist/`, variable `VITE_API_URL` = URL del backend de Railway).
 - [ ] Una vez tengas la URL de Cloudflare Pages, cargar `ORIGENES_PERMITIDOS` en Railway con esa URL (sin barra final) — **el backend no arranca en producción sin esto**, es el único paso que le falta para levantar.
