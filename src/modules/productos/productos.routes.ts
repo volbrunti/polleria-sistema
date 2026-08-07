@@ -5,6 +5,8 @@ import * as productosService from './productos.service';
 const crearSchema = z.object({
   nombre: z.string().min(1),
   categoria: z.string().min(1),
+  // Agrupador de primer nivel del POS; si no viene, el producto cae en "Otros"
+  categoriaMadre: z.string().min(1).optional(),
   tipo: z.enum(['MATERIA_PRIMA', 'ELABORADO', 'REVENTA']),
   unidadDeMedida: z.enum(['KG', 'UNIDAD']),
 });
@@ -12,6 +14,7 @@ const crearSchema = z.object({
 const actualizarSchema = z.object({
   nombre: z.string().min(1).optional(),
   categoria: z.string().min(1).optional(),
+  categoriaMadre: z.string().min(1).optional(),
   activo: z.boolean().optional(),
 });
 
@@ -31,6 +34,7 @@ const componenteSchema = z.object({
 const crearComboSchema = z.object({
   nombre: z.string().min(1),
   categoria: z.string().min(1),
+  categoriaMadre: z.string().min(1).optional(),
   componentes: z.array(componenteSchema).min(1, 'El combo debe tener al menos un componente'),
 });
 
@@ -86,6 +90,16 @@ export async function productosRoutes(app: FastifyInstance) {
       const { id } = paramsId.parse(req.params);
       return productosService.historialPrecios(id);
     },
+  );
+
+  // Tablas vigentes de TODOS los productos en una sola respuesta — la usa el
+  // POS (módulo 2) para mostrar precios y totales en vivo. El precio de VENTA
+  // no es dato ciego: el cajero se lo cobra al cliente. El historial y el
+  // resto de datos financieros siguen gateados a ADMIN/SOCIO.
+  app.get(
+    '/precios-vigentes',
+    { preHandler: [app.autenticar, app.requerirRoles('ADMINISTRADOR', 'SOCIO', 'ENCARGADO', 'CAJERO')] },
+    async () => productosService.tablasPrecioVigentes(),
   );
 
   // Precio vigente por cada cantidad cargada (para productos normales, una

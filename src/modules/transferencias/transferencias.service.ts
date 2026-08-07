@@ -8,6 +8,13 @@ import * as alertasService from '../alertas/alertas.service';
 export interface LineaTransferenciaInput {
   productoId: number;
   cantidadEnviada: number;
+  /**
+   * De qué lote de producción salen estas unidades. Opcional: hay stock sin
+   * lote (reventa, ajustes, retornos, y todo lo producido antes de que el lote
+   * llevara saldo). Pablo lo pidió para poder mandar "las de ayer, no las que
+   * produjeron hoy a la mañana" (reunión 4/8).
+   */
+  loteOrigenId?: number;
 }
 
 export interface LineaRecepcionInput {
@@ -40,14 +47,40 @@ export async function generarTransferencia(params: {
   }
 
   return prisma.$transaction(async (tx) => {
-    // validación bloqueante de stock dentro de la transacción
+    // validación bloqueante de stock dentro de la transacción. Se agrupa por
+    // producto porque un mismo envío puede llevarlo desde varios lotes.
+    const totalPorProducto = new Map<number, Prisma.Decimal>();
     for (const linea of params.lineas) {
-      const stock = await obtenerStock(linea.productoId, sucursalOrigen.id, tx);
-      const enviada = new Prisma.Decimal(linea.cantidadEnviada);
-      if (stock.lessThan(enviada)) {
-        const producto = await tx.producto.findUnique({ where: { id: linea.productoId } });
+      const acumulado = totalPorProducto.get(linea.productoId) ?? new Prisma.Decimal(0);
+      totalPorProducto.set(linea.productoId, acumulado.plus(linea.cantidadEnviada));
+    }
+    for (const [productoId, total] of totalPorProducto) {
+      const stock = await obtenerStock(productoId, sucursalOrigen.id, tx);
+      if (stock.lessThan(total)) {
+        const producto = await tx.producto.findUnique({ where: { id: productoId } });
         throw Errores.stockInsuficiente(
-          `"${producto?.nombre ?? linea.productoId}" — disponible ${stock.toString()}, a enviar ${enviada.toString()}`,
+          `"${producto?.nombre ?? productoId}" — disponible ${stock.toString()}, a enviar ${total.toString()}`,
+        );
+      }
+    }
+
+    // Saldo por lote: mismo control que las partidas de materia prima, para
+    // que dos envíos no vacíen dos veces el mismo lote.
+    for (const linea of params.lineas) {
+      if (linea.loteOrigenId == null) continue;
+      const lote = await tx.loteDeProduccion.findUnique({
+        where: { id: linea.loteOrigenId },
+        include: { productoElaborado: { select: { nombre: true } } },
+      });
+      if (!lote) throw Errores.noEncontrado(`Lote ${linea.loteOrigenId}`);
+      if (lote.productoElaboradoId !== linea.productoId) {
+        throw Errores.validacion(`El lote ${lote.id} no corresponde al producto ${linea.productoId}`);
+      }
+      const restante = lote.cantidadRestanteDisponible ?? new Prisma.Decimal(0);
+      const enviada = new Prisma.Decimal(linea.cantidadEnviada);
+      if (restante.lessThan(enviada)) {
+        throw Errores.stockInsuficiente(
+          `"${lote.productoElaborado.nombre}" lote ${lote.id} — quedan ${restante.toString()}, a enviar ${enviada.toString()}`,
         );
       }
     }
@@ -62,11 +95,21 @@ export async function generarTransferencia(params: {
           create: params.lineas.map((l) => ({
             productoId: l.productoId,
             cantidadEnviada: new Prisma.Decimal(l.cantidadEnviada),
+            loteOrigenId: l.loteOrigenId,
           })),
         },
       },
       include: INCLUDE_TRANSFERENCIA,
     });
+
+    // Se descuenta el saldo del lote: deja de estar disponible para enviar.
+    for (const linea of params.lineas) {
+      if (linea.loteOrigenId == null) continue;
+      await tx.loteDeProduccion.update({
+        where: { id: linea.loteOrigenId },
+        data: { cantidadRestanteDisponible: { decrement: new Prisma.Decimal(linea.cantidadEnviada) } },
+      });
+    }
 
     for (const linea of params.lineas) {
       await tx.movimientoStock.create({
@@ -124,7 +167,16 @@ function validarLineasRecepcion(
 // FLUJO 3 paso 3-4: RECEPCIÓN CIEGA. El receptor carga su conteo; el sistema
 // compara internamente. Si todo coincide → CONFIRMADA + entrada de stock.
 // Si no → responde SOLO "no coincide" (sin diferencia, sin lado del error) y
-// NO persiste nada: el receptor puede recontar sin límite o confirmar igual.
+// el receptor puede recontar sin límite. Ya NO puede "confirmar igual": eso
+// pasó a ser exclusivo del administrador (reunión 4/8, Pablo: "el confirmar
+// igual no existiría; en todo caso lo usaría el administrador, pero el cajero
+// no"). Deroga lo que decía CLAUDE.md §7.
+//
+// Como el cajero ya no puede cerrar el circuito, el admin tiene que enterarse
+// solo: el primer conteo que no cierra dispara la alerta con ambos números.
+// Los intentos siguientes se registran en auditoría pero no duplican la
+// alerta, y cuando finalmente coincide también queda asentado — así el admin
+// ve la secuencia completa y sabe si se resolvió sin intervenir.
 export async function intentarRecepcion(params: {
   transferenciaId: number;
   lineasRecibidas: LineaRecepcionInput[];
@@ -148,10 +200,66 @@ export async function intentarRecepcion(params: {
     linea.cantidadEnviada.equals(recibidasPorProducto.get(linea.productoId) ?? new Prisma.Decimal(-1)),
   );
 
+  // Snapshot del intento: ambos números, para auditoría y alerta. Nunca sale
+  // hacia el receptor — la respuesta sigue siendo un simple "no coincide".
+  const detalleIntento = {
+    transferenciaId: transferencia.id,
+    sucursalDestinoId: transferencia.sucursalDestinoId,
+    usuarioEmisorId: transferencia.usuarioEmisorId,
+    usuarioReceptorId: params.usuarioId,
+    lineas: transferencia.lineas.map((l) => {
+      const contada = recibidasPorProducto.get(l.productoId) ?? new Prisma.Decimal(0);
+      return {
+        productoId: l.productoId,
+        cantidadEnviada: l.cantidadEnviada.toString(),
+        cantidadContada: contada.toString(),
+        diferencia: contada.minus(l.cantidadEnviada).toString(),
+      };
+    }),
+  };
+
   if (!coincide) {
-    // comparación ciega: nada se persiste, nada se revela
+    const alerta = await prisma.$transaction(async (tx) => {
+      await registrarAuditoria(tx, {
+        accion: 'CONTEO_RECEPCION_NO_COINCIDE',
+        entidad: 'Transferencia',
+        entidadId: transferencia.id,
+        usuarioId: params.usuarioId,
+        datosNuevos: detalleIntento,
+      });
+      // Una sola alerta por transferencia, por más veces que recuente
+      const yaAlertada = await tx.alerta.findFirst({
+        where: {
+          tipo: 'DISCREPANCIA_TRANSFERENCIA',
+          tipoOrigen: 'Transferencia',
+          origenId: transferencia.id,
+        },
+      });
+      if (yaAlertada) return null;
+      return alertasService.crearAlerta(tx, {
+        tipo: 'DISCREPANCIA_TRANSFERENCIA',
+        tipoOrigen: 'Transferencia',
+        origenId: transferencia.id,
+        detalle: detalleIntento,
+      });
+    }, OPCIONES_TX);
+
+    if (alerta) {
+      alertasService.emitirAlerta({ id: alerta.id, tipo: alerta.tipo, detalle: alerta.detalle });
+    }
+    // comparación ciega: la respuesta no revela diferencia ni lado del error
     return { coincide: false as const };
   }
+
+  // Coincidió. Si antes hubo intentos fallidos, se deja asentado para que el
+  // admin vea que se resolvió recontando y no tenga que investigar la alerta.
+  const intentosPrevios = await prisma.registroAuditoria.count({
+    where: {
+      accion: 'CONTEO_RECEPCION_NO_COINCIDE',
+      entidad: 'Transferencia',
+      entidadId: transferencia.id,
+    },
+  });
 
   const confirmada = await confirmarEnTransaccion({
     transferencia,
@@ -159,6 +267,17 @@ export async function intentarRecepcion(params: {
     usuarioId: params.usuarioId,
     conDiscrepancia: false,
   });
+
+  if (intentosPrevios > 0) {
+    await registrarAuditoria(prisma, {
+      accion: 'RECEPCION_RESUELTA_RECONTANDO',
+      entidad: 'Transferencia',
+      entidadId: transferencia.id,
+      usuarioId: params.usuarioId,
+      datosNuevos: { intentosQueNoCoincidieron: intentosPrevios, ...detalleIntento },
+    });
+  }
+
   return { coincide: true as const, transferencia: confirmada };
 }
 
@@ -313,4 +432,53 @@ export async function obtener(id: number) {
   });
   if (!transferencia) throw Errores.noEncontrado('Transferencia');
   return transferencia;
+}
+
+interface LineaIntento {
+  productoId: number;
+  cantidadEnviada: string;
+  cantidadContada: string;
+  diferencia: string;
+}
+
+/**
+ * Historial de conteos de una recepción trabada, para que el admin la resuelva
+ * sabiendo qué pasó: cuántas veces se contó, qué cargó el cajero cada vez y
+ * cuánto difiere del remito. SOLO ADMIN — es justamente lo que el control
+ * ciego le esconde al receptor.
+ */
+export async function intentosDeRecepcion(transferenciaId: number) {
+  const registros = await prisma.registroAuditoria.findMany({
+    where: {
+      accion: { in: ['CONTEO_RECEPCION_NO_COINCIDE', 'RECEPCION_RESUELTA_RECONTANDO'] },
+      entidad: 'Transferencia',
+      entidadId: transferenciaId,
+    },
+    include: { usuario: { select: { username: true } } },
+    orderBy: { fechaHora: 'asc' },
+  });
+
+  const productos = await prisma.producto.findMany({
+    where: { lineasTransferencia: { some: { transferenciaId } } },
+    select: { id: true, nombre: true, unidadDeMedida: true },
+  });
+  const nombrePorProducto = new Map(productos.map((p) => [p.id, p]));
+
+  return registros.map((r, i) => {
+    const datos = (r.datosNuevos ?? {}) as { lineas?: LineaIntento[] };
+    return {
+      numero: i + 1,
+      fechaHora: r.fechaHora,
+      usuario: r.usuario?.username ?? null,
+      coincidio: r.accion === 'RECEPCION_RESUELTA_RECONTANDO',
+      lineas: (datos.lineas ?? []).map((l) => ({
+        productoId: l.productoId,
+        producto: nombrePorProducto.get(l.productoId)?.nombre ?? `#${l.productoId}`,
+        unidadDeMedida: nombrePorProducto.get(l.productoId)?.unidadDeMedida ?? null,
+        cantidadEnviada: l.cantidadEnviada,
+        cantidadContada: l.cantidadContada,
+        diferencia: l.diferencia,
+      })),
+    };
+  });
 }

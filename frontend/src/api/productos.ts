@@ -12,6 +12,7 @@ export function listarProductos(filtros?: { tipo?: TipoProducto; activo?: boolea
 export function crearProducto(datos: {
   nombre: string;
   categoria: string;
+  categoriaMadre?: string;
   tipo: TipoProducto;
   unidadDeMedida: 'KG' | 'UNIDAD';
 }) {
@@ -20,7 +21,7 @@ export function crearProducto(datos: {
 
 export function actualizarProducto(
   id: number,
-  datos: Partial<{ nombre: string; categoria: string; activo: boolean }>,
+  datos: Partial<{ nombre: string; categoria: string; categoriaMadre: string; activo: boolean }>,
 ) {
   return apiFetch<Producto>(`/api/productos/${id}`, { method: 'PATCH', body: datos });
 }
@@ -37,9 +38,15 @@ export function tablaPrecioVigente(productoId: number) {
   return apiFetch<Precio[]>(`/api/productos/${productoId}/precios/vigente`);
 }
 
+// Bulk para el POS: tabla vigente de todos los productos en una sola request.
+export function tablasPrecioVigentes() {
+  return apiFetch<{ productoId: number; precios: Precio[] }[]>('/api/productos/precios-vigentes');
+}
+
 export function crearCombo(datos: {
   nombre: string;
   categoria: string;
+  categoriaMadre?: string;
   componentes: { productoComponenteId: number; cantidad: number }[];
 }) {
   return apiFetch<Producto>('/api/productos/combos', { method: 'POST', body: datos });

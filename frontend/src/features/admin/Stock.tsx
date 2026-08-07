@@ -41,13 +41,13 @@ export function Stock() {
       <div className="flex flex-wrap items-center gap-3.5">
         <h1 className="m-0 flex-1 text-2xl font-extrabold">Stock</h1>
         {vista === 'tabla' && (
-          <div className="flex gap-1.5 rounded-xl bg-[#e6e9e2] p-1.5">
+          <div className="flex w-full gap-1.5 overflow-x-auto rounded-xl bg-[#e6e9e2] p-1.5 md:w-auto">
             {sucursales.data?.map((s) => (
               <button
                 key={s.id}
                 type="button"
                 onClick={() => setSucursalId(s.id)}
-                className={`min-h-11 cursor-pointer rounded-lg px-4 text-sm font-bold ${
+                className={`min-h-11 shrink-0 cursor-pointer rounded-lg px-4 text-sm font-bold ${
                   sucursalActiva === s.id ? 'bg-primario text-white' : 'text-texto-suave'
                 }`}
               >
@@ -66,18 +66,18 @@ export function Stock() {
       </div>
 
       {vista === 'tabla' && (
-        <div className="overflow-x-auto rounded-2xl border border-borde bg-white">
-          <div className="grid grid-cols-[1fr_160px_120px] bg-chip px-5 py-3 text-xs font-extrabold tracking-wide text-texto-suave">
+        <div className="tabla-cards overflow-x-auto rounded-2xl border border-borde bg-white">
+          <div className="tabla-encabezado grid grid-cols-[1fr_160px_120px] bg-chip px-5 py-3 text-xs font-extrabold tracking-wide text-texto-suave">
             <span>PRODUCTO</span>
             <span className="text-right">CANTIDAD</span>
             <span className="text-right">UNIDAD</span>
           </div>
           {stock.isLoading && <div className="px-5 py-4 text-texto-suave">Cargando…</div>}
           {stock.data?.map((r) => (
-            <div key={r.productoId} className="grid grid-cols-[1fr_160px_120px] border-t border-[#eef1ea] px-5 py-3.5 text-[15px]">
+            <div key={r.productoId} className="tabla-fila grid grid-cols-[1fr_160px_120px] border-t border-[#eef1ea] px-5 py-3.5 text-[15px]">
               <span className="font-semibold">{r.nombre}</span>
-              <span className="text-right font-bold">{fmtNumero(r.cantidad)}</span>
-              <span className="text-right text-texto-suave">{r.unidadDeMedida?.toLowerCase()}</span>
+              <span data-col="CANTIDAD" className="text-right font-bold">{fmtNumero(r.cantidad)}</span>
+              <span data-col="UNIDAD" className="text-right text-texto-suave">{r.unidadDeMedida?.toLowerCase()}</span>
             </div>
           ))}
         </div>
@@ -113,8 +113,8 @@ export function Stock() {
             <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className="h-11 rounded-[10px] border border-borde-fuerte px-2.5 text-sm" />
             <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className="h-11 rounded-[10px] border border-borde-fuerte px-2.5 text-sm" />
           </div>
-          <div className="overflow-x-auto rounded-2xl border border-borde bg-white">
-            <div className="grid min-w-[720px] grid-cols-[120px_180px_1fr_130px_110px_130px] gap-x-3 bg-chip px-5 py-3 text-xs font-extrabold tracking-wide text-texto-suave">
+          <div className="tabla-cards overflow-x-auto rounded-2xl border border-borde bg-white">
+            <div className="tabla-encabezado grid min-w-[720px] grid-cols-[120px_180px_1fr_130px_110px_130px] gap-x-3 bg-chip px-5 py-3 text-xs font-extrabold tracking-wide text-texto-suave">
               <span>FECHA</span>
               <span>TIPO</span>
               <span>PRODUCTO</span>
@@ -124,13 +124,13 @@ export function Stock() {
             </div>
             {movimientos.isLoading && <div className="px-5 py-4 text-texto-suave">Cargando…</div>}
             {movimientos.data?.map((m) => (
-              <div key={m.id} className="grid min-w-[720px] grid-cols-[120px_180px_1fr_130px_110px_130px] gap-x-3 border-t border-[#eef1ea] px-5 py-3 text-sm">
-                <span className="text-texto-suave">{fmtFechaHora(m.fechaHora)}</span>
+              <div key={m.id} className="tabla-fila grid min-w-[720px] grid-cols-[120px_180px_1fr_130px_110px_130px] gap-x-3 border-t border-[#eef1ea] px-5 py-3 text-sm">
+                <span data-col="FECHA" className="text-texto-suave">{fmtFechaHora(m.fechaHora)}</span>
                 <span className="font-semibold">{m.tipo}</span>
-                <span>{m.producto?.nombre}</span>
-                <span className="text-texto-suave">{sucursales.data?.find((s) => s.id === m.sucursalId)?.nombre}</span>
-                <span className="text-right font-bold">{fmtNumero(m.cantidad)}</span>
-                <span className="text-texto-suave">{m.usuario?.username}</span>
+                <span data-col="PRODUCTO">{m.producto?.nombre}</span>
+                <span data-col="SUCURSAL" className="text-texto-suave">{sucursales.data?.find((s) => s.id === m.sucursalId)?.nombre}</span>
+                <span data-col="CANT." className="text-right font-bold">{fmtNumero(m.cantidad)}</span>
+                <span data-col="USUARIO" className="text-texto-suave">{m.usuario?.username}</span>
               </div>
             ))}
           </div>

@@ -1,5 +1,5 @@
 import { apiFetch } from './client';
-import type { Producto, Proveedor } from './types';
+import type { DatosContactoProveedor, Producto, Proveedor } from './types';
 
 export function listarProveedores() {
   return apiFetch<Proveedor[]>('/api/proveedores');
@@ -24,7 +24,7 @@ export function crearProveedor(datos: { nombre: string; contacto?: string }) {
 
 export function actualizarProveedor(
   id: number,
-  datos: Partial<{ nombre: string; contacto: string | null; activo: boolean }>,
+  datos: Partial<{ nombre: string; contacto: string | null; activo: boolean } & DatosContactoProveedor>,
 ) {
   return apiFetch<Proveedor>(`/api/proveedores/${id}`, { method: 'PATCH', body: datos });
 }

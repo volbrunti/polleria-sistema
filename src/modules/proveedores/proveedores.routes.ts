@@ -4,15 +4,26 @@ import { prisma } from '../../lib/prisma';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { Errores } from '../../lib/errores';
 
+// Datos de contacto: todos opcionales, se completan con el tiempo.
+const datosContacto = {
+  direccion: z.string().nullable().optional(),
+  urlMaps: z.string().nullable().optional(),
+  telefono: z.string().nullable().optional(),
+  personaContacto: z.string().nullable().optional(),
+  horarios: z.string().nullable().optional(),
+};
+
 const crearSchema = z.object({
   nombre: z.string().min(1),
   contacto: z.string().optional(),
+  ...datosContacto,
 });
 
 const actualizarSchema = z.object({
   nombre: z.string().min(1).optional(),
   contacto: z.string().nullable().optional(),
   activo: z.boolean().optional(),
+  ...datosContacto,
 });
 
 const paramsId = z.object({ id: z.coerce.number().int().positive() });
@@ -24,7 +35,7 @@ export async function proveedoresRoutes(app: FastifyInstance) {
   app.get(
     '/',
     { preHandler: [app.autenticar, app.requerirRoles('ADMINISTRADOR', 'SOCIO', 'PRODUCCION', 'ENCARGADO')] },
-    async () => prisma.proveedor.findMany({ where: { activo: true }, orderBy: [{ esOtro: 'asc' }, { nombre: 'asc' }] }),
+    async () => prisma.proveedor.findMany({ where: { activo: true, esProveedorSistema: false }, orderBy: [{ esOtro: 'asc' }, { nombre: 'asc' }] }),
   );
 
   app.post(
@@ -55,6 +66,13 @@ export async function proveedoresRoutes(app: FastifyInstance) {
       const datos = actualizarSchema.parse(req.body);
       const anterior = await prisma.proveedor.findUnique({ where: { id } });
       if (!anterior) throw Errores.noEncontrado('Proveedor');
+      if (anterior.esProveedorSistema) {
+        const tocaNombre = datos.nombre !== undefined && datos.nombre !== anterior.nombre;
+        const tocaActivo = datos.activo === false;
+        if (tocaNombre || tocaActivo) {
+          throw Errores.proveedorReservadoSistema(anterior.nombre);
+        }
+      }
       return prisma.$transaction(async (tx) => {
         const proveedor = await tx.proveedor.update({ where: { id }, data: datos });
         await registrarAuditoria(tx, {

@@ -34,6 +34,8 @@ export interface Producto {
   id: number;
   nombre: string;
   categoria: string;
+  /** Agrupador de primer nivel del POS; null = cae en "Otros". */
+  categoriaMadre: string | null;
   tipo: TipoProducto;
   unidadDeMedida: UnidadDeMedida;
   activo: boolean;
@@ -58,7 +60,29 @@ export interface Proveedor {
   contacto: string | null;
   activo: boolean;
   esOtro: boolean;
+  direccion?: string | null;
+  urlMaps?: string | null;
+  telefono?: string | null;
+  personaContacto?: string | null;
+  horarios?: string | null;
 }
+
+/** Lote cerrado con saldo sin enviar — la "partida" del producto terminado. */
+export interface LoteDisponible {
+  id: number;
+  productoElaboradoId: number;
+  producto: string;
+  unidadDeMedida: UnidadDeMedida;
+  fechaHora: string;
+  operario: string;
+  cantidadRestanteDisponible: string;
+}
+
+/** Campos de contacto editables desde el catálogo. */
+export type DatosContactoProveedor = Pick<
+  Proveedor,
+  'direccion' | 'urlMaps' | 'telefono' | 'personaContacto' | 'horarios'
+>;
 
 export interface Sucursal {
   id: number;
@@ -232,4 +256,219 @@ export interface RegistroAuditoria {
   fechaHora: string;
   datosAnteriores: unknown;
   datosNuevos: unknown;
+}
+
+// ── Módulo 2: turnos, POS, caja ──
+
+export type EstadoTurno = 'ABIERTO' | 'BLOQUEADO' | 'CERRADO';
+export type MomentoArqueo = 'APERTURA' | 'CIERRE';
+export type TipoArqueo = 'EFECTIVO' | 'POLLOS_MARCADOS';
+export type MedioPago = 'EFECTIVO' | 'DEBITO' | 'CREDITO' | 'MERCADO_PAGO' | 'TRANSFERENCIA';
+export type SocioRetiro = 'ARIEL' | 'ELIANA' | 'EMA';
+export type TipoPedido = 'PRESENCIAL' | 'A_RETIRAR';
+export type EstadoPedido =
+  | 'EN_PREPARACION'
+  | 'LISTO'
+  | 'ENTREGADO'
+  | 'LISTO_NO_RETIRADO'
+  | 'REASIGNADO'
+  | 'PERDIDO'
+  | 'ANULADO';
+
+// DTO ciego para CAJERO/ENCARGADO: solo valorContado. Los campos de esperado/
+// diferencia/resultado llegan únicamente a ADMINISTRADOR/SOCIO.
+export interface Arqueo {
+  id: number;
+  momento: MomentoArqueo;
+  tipo: TipoArqueo;
+  valorContado: string | null;
+  fechaHora: string;
+  // presentes solo para ADMINISTRADOR/SOCIO
+  valorEsperado?: string | null;
+  diferencia?: string | null;
+  resultado?: 'COINCIDE' | 'FALTANTE' | 'SOBRANTE' | null;
+}
+
+export interface Turno {
+  id: number;
+  sucursalId: number;
+  sucursal?: string;
+  usuarioCajeroId: number;
+  usuarioCajero?: string;
+  fechaApertura: string;
+  fechaCierre: string | null;
+  estado: EstadoTurno;
+  arqueos?: Arqueo[];
+  /**
+   * Qué conceptos no cerraron ('EFECTIVO' | 'POLLOS_MARCADOS'). Solo viene en
+   * el DTO ciego: dice DÓNDE está la diferencia, nunca cuánto ni para qué lado.
+   */
+  conceptosConDiferencia?: string[];
+}
+
+export interface AperturaResultado {
+  turno: Turno;
+  bloqueado: boolean;
+  mensaje?: string;
+}
+
+export interface CierreResultado {
+  turno: Turno;
+  // Resumen por unidades SIN plata — lo único financiero que ve el cajero es nada
+  ventasPorUnidad: { productoId: number; producto: string; unidades: string }[];
+  pollosMarcadosContados: number;
+}
+
+export interface ItemDePedido {
+  id: number;
+  productoId: number;
+  producto?: { nombre: string; tipo: TipoProducto };
+  cantidad: string;
+  precioUnitario: string;
+  montoTotal: string;
+  aclaraciones: string | null;
+  esVentaCostoCero?: boolean;
+  tipoCostoCero?: 'DESPERDICIO_QUEMADO' | 'RETORNO_A_PRODUCCION' | null;
+}
+
+export interface Pago {
+  id: number;
+  medio: MedioPago;
+  /** Parte que cubre el pedido — NO incluye el recargo de tarjeta. */
+  monto: string;
+  recargoPct: string | null;
+  montoRecargo: string | null;
+  fechaHora: string;
+}
+
+/** Porcentaje de recargo que el admin deja cargado para una tarjeta. */
+export interface RecargoTarjeta {
+  id: number;
+  nombre: string;
+  medio: 'DEBITO' | 'CREDITO';
+  porcentaje: string;
+  activo: boolean;
+  creadoEn: string;
+}
+
+export interface AvisoStockMinimo {
+  productoId: number;
+  producto: string;
+  stockRestante: string;
+  minimo: string;
+}
+
+/** Quién se lleva el pedido cuando no es un cliente (ver SocioRetiro arriba). */
+export type BeneficiarioPedido = 'SOCIO' | 'EMPLEADO';
+
+export interface ConfiguracionGeneral {
+  clave: string;
+  valor: string;
+  descripcion: string;
+  actualizado: string;
+}
+
+export interface Pedido {
+  id: number;
+  turnoId: number;
+  sucursalId: number;
+  sucursal?: { nombre: string };
+  tipo: TipoPedido;
+  estado: EstadoPedido;
+  beneficiario: BeneficiarioPedido | null;
+  socioBeneficiario: SocioRetiro | null;
+  /** % de descuento congelado al confirmar (solo EMPLEADO). */
+  descuentoPct: string | null;
+  usuarioCajero?: { username: string };
+  pedidoOrigenId: number | null;
+  items: ItemDePedido[];
+  pagos: Pago[];
+  fechaCreacion: string;
+  fechaCierre: string | null;
+  // adjunto solo en la respuesta de confirmar/modificar
+  avisosStockMinimo?: AvisoStockMinimo[];
+}
+
+export interface CobroResultado {
+  pedido: Pedido;
+  vuelto: string;
+}
+
+export interface MasVendido {
+  productoId: number;
+  unidades: string;
+}
+
+export interface ClaveEmergencia {
+  id: number;
+  codigo: string; // visible UNA sola vez, al generarla
+  expiraEn: string;
+  turnoId: number | null;
+}
+
+export interface GastoDeCaja {
+  id: number;
+  monto: string;
+  medio: MedioPago;
+  categoria: string;
+  descripcion: string | null;
+  fechaHora: string;
+  usuario?: { username: string };
+}
+
+export interface RetiroDeCaja {
+  id: number;
+  monto: string;
+  medio: MedioPago;
+  socio: SocioRetiro;
+  fechaHora: string;
+  usuarioCajero?: { username: string };
+}
+
+export interface Atencion {
+  id: number;
+  productoId: number;
+  producto?: { nombre: string };
+  cantidad: string;
+  motivoCodigo: string;
+  motivoDetalle: string | null;
+  fechaHora: string;
+  usuario?: { username: string };
+}
+
+export interface EventoMarcadoPollo {
+  id: number;
+  cantidad: number;
+  fechaHora: string;
+}
+
+export interface ResumenTurno {
+  turno: Turno & {
+    bloqueo?: {
+      id: number;
+      estado: 'BLOQUEADO' | 'DESBLOQUEADO';
+      tipoDesbloqueo: 'REMOTO' | 'CLAVE_EMERGENCIA' | null;
+      usuarioCajeroAnteriorId: number | null;
+      usuarioAutorizanteId: number | null;
+      fechaDesbloqueo: string | null;
+      claveEmergenciaId: number | null;
+    } | null;
+    gastos?: GastoDeCaja[];
+    retiros?: RetiroDeCaja[];
+    atenciones?: Atencion[];
+    eventosMarcado?: EventoMarcadoPollo[];
+  };
+  ventasPorMedio: { medio: MedioPago; total: string; recargo: string }[];
+  totalRecargosTarjeta: string;
+  unidadesVendidas: { productoId: number; producto: string; unidades: string }[];
+}
+
+export interface ConfigStockMinimo {
+  id: number;
+  productoId: number;
+  producto?: { nombre: string };
+  sucursalId: number;
+  sucursal?: { nombre: string };
+  minimo: string;
+  activa: boolean;
 }

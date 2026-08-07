@@ -19,6 +19,15 @@ const abrirSchema = z.object({
 const cerrarSchema = z.object({
   unidadesProducidasReales: z.number().positive(),
   desperdicioRealKg: z.number().min(0),
+  // Corrección opcional de lo realmente usado (ver cerrarLote en el service)
+  insumosReales: z
+    .array(
+      z.object({
+        insumoUsadoId: z.number().int().positive(),
+        cantidadUsada: z.number().min(0),
+      }),
+    )
+    .optional(),
 });
 
 const listarQuery = z.object({
@@ -52,6 +61,7 @@ export async function produccionRoutes(app: FastifyInstance) {
         loteId: id,
         unidadesProducidasReales: datos.unidadesProducidasReales,
         desperdicioRealKg: datos.desperdicioRealKg,
+        insumosReales: datos.insumosReales,
         usuarioId: req.usuario.id,
       });
       return serializarLote(lote, req.usuario.rol);
@@ -65,6 +75,29 @@ export async function produccionRoutes(app: FastifyInstance) {
       const filtros = listarQuery.parse(req.query);
       const lotes = await produccionService.listarLotes(filtros);
       return lotes.map((l) => serializarLote(l, req.usuario.rol));
+    },
+  );
+
+  // Lotes cerrados con saldo sin enviar — para elegir de qué partida sale un
+  // envío. Devuelve solo identidad, fecha y saldo: nada de rendimiento ni
+  // desvío, así que PRODUCCION lo puede leer sin romper el control ciego.
+  app.get(
+    '/lotes-disponibles',
+    { preHandler: [app.autenticar, app.requerirRoles('PRODUCCION', 'ADMINISTRADOR')] },
+    async (req) => {
+      const { productoId } = z
+        .object({ productoId: z.coerce.number().int().positive().optional() })
+        .parse(req.query);
+      const lotes = await produccionService.lotesDisponibles(productoId);
+      return lotes.map((l) => ({
+        id: l.id,
+        productoElaboradoId: l.productoElaboradoId,
+        producto: l.productoElaborado.nombre,
+        unidadDeMedida: l.productoElaborado.unidadDeMedida,
+        fechaHora: l.fechaHora,
+        operario: l.usuarioOperario.username,
+        cantidadRestanteDisponible: l.cantidadRestanteDisponible?.toString() ?? '0',
+      }));
     },
   );
 

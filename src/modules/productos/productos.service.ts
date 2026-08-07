@@ -19,7 +19,13 @@ export async function listar(filtros: { tipo?: TipoProducto; activo?: boolean })
 }
 
 export async function crear(
-  datos: { nombre: string; categoria: string; tipo: TipoProducto; unidadDeMedida: UnidadDeMedida },
+  datos: {
+    nombre: string;
+    categoria: string;
+    categoriaMadre?: string;
+    tipo: TipoProducto;
+    unidadDeMedida: UnidadDeMedida;
+  },
   usuarioId: number,
 ) {
   return prisma.$transaction(async (tx) => {
@@ -37,11 +43,19 @@ export async function crear(
 
 export async function actualizar(
   id: number,
-  datos: { nombre?: string; categoria?: string; activo?: boolean },
+  datos: { nombre?: string; categoria?: string; categoriaMadre?: string; activo?: boolean },
   usuarioId: number,
 ) {
   const anterior = await prisma.producto.findUnique({ where: { id } });
   if (!anterior) throw Errores.noEncontrado('Producto');
+  // Productos de sistema (ej. "Pollo a la leña (entero) — MARCADO") sostienen
+  // un mecanismo interno por nombre/actividad — renombrarlos o desactivarlos
+  // rompe ese mecanismo en silencio. Cambiar la categoría sigue permitido.
+  if (anterior.esProductoSistema) {
+    const tocaNombre = datos.nombre !== undefined && datos.nombre !== anterior.nombre;
+    const tocaActivo = datos.activo === false;
+    if (tocaNombre || tocaActivo) throw Errores.productoReservadoSistema(anterior.nombre);
+  }
   return prisma.$transaction(async (tx) => {
     const producto = await tx.producto.update({ where: { id }, data: datos });
     await registrarAuditoria(tx, {
@@ -102,6 +116,27 @@ export async function tablaPrecioVigente(productoId: number) {
   return [...vigentePorCantidad.values()].sort((a, b) => a.cantidad - b.cantidad);
 }
 
+// Versión bulk para el POS (una sola request en vez de una por producto):
+// tabla vigente de TODOS los productos que tengan algún precio cargado.
+export async function tablasPrecioVigentes() {
+  const historial = await prisma.precio.findMany({ orderBy: { fechaDesde: 'desc' } });
+  const vigentePorProductoYCantidad = new Map<string, (typeof historial)[number]>();
+  for (const p of historial) {
+    const clave = `${p.productoId}:${p.cantidad}`;
+    if (!vigentePorProductoYCantidad.has(clave)) vigentePorProductoYCantidad.set(clave, p);
+  }
+  const porProducto = new Map<number, (typeof historial)[number][]>();
+  for (const p of vigentePorProductoYCantidad.values()) {
+    const lista = porProducto.get(p.productoId) ?? [];
+    lista.push(p);
+    porProducto.set(p.productoId, lista);
+  }
+  return [...porProducto.entries()].map(([productoId, precios]) => ({
+    productoId,
+    precios: precios.sort((a, b) => a.cantidad - b.cantidad),
+  }));
+}
+
 export async function historialPrecios(productoId: number) {
   return prisma.precio.findMany({
     where: { productoId },
@@ -138,7 +173,12 @@ async function validarComponentesCombo(componentes: ComponenteComboInput[]) {
 }
 
 export async function crearCombo(
-  datos: { nombre: string; categoria: string; componentes: ComponenteComboInput[] },
+  datos: {
+    nombre: string;
+    categoria: string;
+    categoriaMadre?: string;
+    componentes: ComponenteComboInput[];
+  },
   usuarioId: number,
 ) {
   await validarComponentesCombo(datos.componentes);
@@ -147,6 +187,7 @@ export async function crearCombo(
       data: {
         nombre: datos.nombre,
         categoria: datos.categoria,
+        categoriaMadre: datos.categoriaMadre,
         tipo: 'COMBO',
         unidadDeMedida: 'UNIDAD',
         componentesDelCombo: {

@@ -12,17 +12,31 @@ interface Props {
   onCerrado: () => void;
 }
 
-type Overlay = { tipo: 'unidades' } | { tipo: 'desperdicio'; unidades: number } | null;
+type Overlay =
+  | { tipo: 'unidades' }
+  | { tipo: 'desperdicio'; unidades: number }
+  | { tipo: 'editarInsumo'; insumoUsadoId: number; nombre: string; unidad: string; actual: number }
+  | null;
 
 export function LoteAbierto({ loteId, onVolverMenu, onCerrado }: Props) {
   const [overlay, setOverlay] = useState<Overlay>(null);
   const [errorEnvio, setErrorEnvio] = useState<string | null>(null);
   const [resultado, setResultado] = useState<number | null>(null);
+  // Correcciones de lo REALMENTE usado, por id de InsumoUsado. Vacío = se usó
+  // exactamente lo estimado al abrir el lote.
+  const [reales, setReales] = useState<Record<number, number>>({});
 
   const lote = useQuery({ queryKey: ['lote', loteId], queryFn: () => obtenerLote(loteId) });
 
   const mutCerrar = useMutation({
-    mutationFn: (datos: { unidadesProducidasReales: number; desperdicioRealKg: number }) => cerrarLote(loteId, datos),
+    mutationFn: (datos: { unidadesProducidasReales: number; desperdicioRealKg: number }) =>
+      cerrarLote(loteId, {
+        ...datos,
+        insumosReales: Object.entries(reales).map(([id, cantidadUsada]) => ({
+          insumoUsadoId: Number(id),
+          cantidadUsada,
+        })),
+      }),
     onSuccess: (_, variables) => {
       setResultado(variables.unidadesProducidasReales);
       setOverlay(null);
@@ -66,12 +80,45 @@ export function LoteAbierto({ loteId, onVolverMenu, onCerrado }: Props) {
           </div>
           <div className="flex flex-col gap-2 border-t border-borde pt-3">
             <div className="text-sm font-bold text-texto-suave">INSUMOS DEL LOTE</div>
-            {lote.data.insumosUsados?.map((i) => (
-              <div key={i.id} className="text-base">
-                {i.productoInsumo?.nombre} — {fmtNumero(i.cantidadUsada)}{' '}
-                {i.productoInsumo?.unidadDeMedida.toLowerCase()}
-              </div>
-            ))}
+            <div className="-mt-1 text-sm text-texto-suave">
+              Si usaste más o menos de lo que habías cargado, corregilo con ✎ antes de terminar.
+            </div>
+            {lote.data.insumosUsados?.map((i) => {
+              const unidad = i.productoInsumo?.unidadDeMedida.toLowerCase() ?? '';
+              const estimado = Number(i.cantidadUsada);
+              const corregido = reales[i.id];
+              const valor = corregido ?? estimado;
+              return (
+                <div key={i.id} className="flex items-center gap-2.5">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-base">
+                      {i.productoInsumo?.nombre} — {fmtNumero(valor)} {unidad}
+                    </div>
+                    {corregido != null && corregido !== estimado && (
+                      <div className="text-sm font-semibold text-advertencia-texto">
+                        habías cargado {fmtNumero(estimado)} {unidad}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    aria-label={`Corregir ${i.productoInsumo?.nombre}`}
+                    onClick={() =>
+                      setOverlay({
+                        tipo: 'editarInsumo',
+                        insumoUsadoId: i.id,
+                        nombre: i.productoInsumo?.nombre ?? 'Insumo',
+                        unidad,
+                        actual: valor,
+                      })
+                    }
+                    className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-[10px] border border-borde-fuerte bg-white text-base hover:bg-chip"
+                  >
+                    ✎
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -91,6 +138,24 @@ export function LoteAbierto({ loteId, onVolverMenu, onCerrado }: Props) {
       >
         TERMINÉ — CARGAR RESULTADO
       </button>
+
+      {overlay?.tipo === 'editarInsumo' && (
+        <TecladoNumerico
+          titulo={`¿Cuánto usaste realmente de ${overlay.nombre}?`}
+          subtitulo="Pesá lo que quedó y cargá lo que gastaste de verdad."
+          icono="⚖️"
+          variante="contraste"
+          unidad={overlay.unidad === 'kg' ? 'kg' : 'u'}
+          permiteDecimal={overlay.unidad === 'kg'}
+          permiteCero
+          valorInicial={overlay.actual}
+          onCancelar={() => setOverlay(null)}
+          onConfirmar={(cantidad) => {
+            setReales((r) => ({ ...r, [overlay.insumoUsadoId]: cantidad }));
+            setOverlay(null);
+          }}
+        />
+      )}
 
       {overlay?.tipo === 'unidades' && (
         <TecladoNumerico

@@ -13,6 +13,29 @@ Producción + Stock + Transferencias. Ver [CLAUDE.md](CLAUDE.md) para contexto c
 
 **Módulo 1 completo, auditado y con los 3 hallazgos de la auditoría corregidos.** Ver CLAUDE.md §4.1, §11 y §12 para el detalle.
 
+## Despliegue en la nube (prueba)
+
+Instrucciones completas paso a paso en [DEPLOY.md](DEPLOY.md). Resumen del estado actual:
+
+- **Backend**: Railway, servicio conectado a `volbrunti/polleria-sistema` rama `feature/modulo-2`, auto-deploy en cada push. Región **US East (Virginia)**. `deploy:start` corre `prisma migrate deploy` antes de levantar el server, así que las migraciones se aplican solas en cada deploy.
+- **Base de datos**: Neon, proyecto en **US East (Virginia, `us-east-1`)** — misma región que Railway para minimizar latencia.
+- **Frontend**: Cloudflare Pages, conectado al mismo repo/rama, root directory `frontend/`, build `npm run build`, output `dist/`.
+- **Variables de entorno**: viven únicamente en el panel de cada plataforma (Railway → Variables, Cloudflare Pages → Environment variables), **nunca en el repo**. La lista completa de qué cargar está en DEPLOY.md §2.2 y §3.2.
+- **Fotos de remito**: van directo a **Cloudflare R2** (bucket público, API S3-compatible) — no a un volumen de Railway. El backend firma la subida a mano (`src/lib/almacenamiento.ts`, AWS Signature V4, sin SDK de por medio). Es obligatorio en producción: si faltan las 5 variables de R2, el server no arranca (ver DEPLOY.md §2.3).
+
+> Este es el despliegue de **prueba**, no el de producción — ver la nota al principio de DEPLOY.md sobre la decisión Render + Neon para producción.
+
+### Pendiente para terminar este despliegue (2026-08-07)
+
+- [x] Variables base de Railway cargadas (`DATABASE_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `NODE_ENV=production`, `ADMIN_INICIAL_USUARIO`, `ADMIN_INICIAL_PASSWORD`).
+- [x] `NPM_CONFIG_PRODUCTION=false` — sin esto el build rompe (`TS7016` en `@types/jsonwebtoken`): con `NODE_ENV=production`, el builder instala con `--omit=dev` y ahí vive `typescript`. Ver DEPLOY.md §2.2.
+- [ ] Crear el bucket de R2 y cargar `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_URL_PUBLICA` en Railway (ver DEPLOY.md §2.3) — **obligatorias, el backend no arranca sin las 5**. Reemplaza al volumen/`DIR_UPLOADS` que se había planeado antes.
+- [ ] Completar a mano el **Healthcheck Path** (`/api/salud`) en Railway → Settings → Deploy — el builder mostraba "Railpack" en vez de "Nixpacks", así que no está confirmado que esté leyendo `railway.json` solo.
+- [ ] Terminar de conectar y deployar el frontend en Cloudflare Pages (root `frontend/`, build `npm run build`, output `dist/`, variable `VITE_API_URL` = URL del backend de Railway).
+- [ ] Una vez tengas la URL de Cloudflare Pages, cargar `ORIGENES_PERMITIDOS` en Railway con esa URL (sin barra final) — **el backend no arranca en producción sin esto**, es el único paso que le falta para levantar.
+- [ ] Sembrar el admin inicial contra la Neon de Virginia (`npm run seed` con `DATABASE_URL`, `NODE_ENV=production` y `ADMIN_INICIAL_PASSWORD`, ver DEPLOY.md §2.4). Usuario/contraseña generados en esta sesión: guardados en tu gestor de contraseñas, no están en el repo.
+- [ ] Verificar el checklist de DEPLOY.md §4: `/api/salud`, login, refresh de sesión, abrir turno + cargar pedido, alerta en vivo por WebSocket.
+
 ## Base de datos
 
 Neon Postgres (free tier), proyecto `polleria` (org Volbrunti). Dos bases: `polleria` (dev, seedeada) y `polleria_test` (integración, la limpian y siembran los propios tests en cada corrida). Credenciales en `.env` (no versionado — pedir a quien tenga acceso a la cuenta Neon si hace falta).

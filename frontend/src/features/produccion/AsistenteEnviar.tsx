@@ -8,9 +8,10 @@ import { listarSucursales } from '../../api/sucursales';
 import { listarProductos } from '../../api/productos';
 import { consultarStock } from '../../api/stock';
 import { generarTransferencia } from '../../api/transferencias';
+import { lotesDisponibles } from '../../api/produccion';
 import { ApiError } from '../../api/client';
-import { fmtNumero } from '../../lib/formato';
-import type { Producto, Sucursal } from '../../api/types';
+import { fmtFecha, fmtNumero } from '../../lib/formato';
+import type { LoteDisponible, Producto, Sucursal } from '../../api/types';
 
 interface Props {
   onVolver: () => void;
@@ -20,9 +21,16 @@ interface Props {
 interface LineaEnvioUI {
   producto: Producto;
   cantidad: number;
+  /** Partida de la que sale. Ausente = stock sin lote (reventa, ajustes). */
+  lote?: LoteDisponible;
 }
 
-type Overlay = { tipo: 'selectorProducto' } | { tipo: 'tecladoCantidad'; producto: Producto } | null;
+type Overlay =
+  | { tipo: 'selectorProducto' }
+  | { tipo: 'cargandoLotes'; producto: Producto }
+  | { tipo: 'selectorLote'; producto: Producto; lotes: LoteDisponible[]; sinLote: number }
+  | { tipo: 'tecladoCantidad'; producto: Producto; lote?: LoteDisponible; maximo?: number }
+  | null;
 
 export function AsistenteEnviar({ onVolver, onFinalizado }: Props) {
   const [paso, setPaso] = useState(1);
@@ -74,6 +82,35 @@ export function AsistenteEnviar({ onVolver, onFinalizado }: Props) {
     return fila ? Number(fila.cantidad) : undefined;
   }
 
+  // Cuánto de ese producto ya está comprometido en el envío que se está armando
+  function yaEnElEnvio(productoId: number, loteId?: number): number {
+    return lineas
+      .filter((l) => l.producto.id === productoId && l.lote?.id === loteId)
+      .reduce((acc, l) => acc + l.cantidad, 0);
+  }
+
+  // Al elegir producto se buscan sus partidas. Si no hay ninguna con saldo
+  // (reventa, ajustes, o stock producido antes de que el lote llevara saldo),
+  // se envía sin lote como siempre.
+  async function elegirProducto(producto: Producto) {
+    setOverlay({ tipo: 'cargandoLotes', producto });
+    try {
+      const lotes = await lotesDisponibles(producto.id);
+      const conSaldo = lotes.filter(
+        (l) => Number(l.cantidadRestanteDisponible) - yaEnElEnvio(producto.id, l.id) > 0,
+      );
+      const enLotes = lotes.reduce((acc, l) => acc + Number(l.cantidadRestanteDisponible), 0);
+      const sinLote = Math.max(0, (stockDe(producto.id) ?? 0) - enLotes);
+      if (conSaldo.length === 0) {
+        setOverlay({ tipo: 'tecladoCantidad', producto, maximo: stockDe(producto.id) });
+        return;
+      }
+      setOverlay({ tipo: 'selectorLote', producto, lotes: conSaldo, sinLote });
+    } catch {
+      setOverlay({ tipo: 'tecladoCantidad', producto, maximo: stockDe(producto.id) });
+    }
+  }
+
   return (
     <div className="flex flex-1 flex-col">
       <EncabezadoWizard titulo="Enviar a local" paso={paso} totalPasos={3} onVolver={volver} />
@@ -105,7 +142,10 @@ export function AsistenteEnviar({ onVolver, onFinalizado }: Props) {
             <div key={i} className="flex items-center gap-3 rounded-2xl border border-borde bg-white px-4 py-3.5">
               <div className="min-w-0 flex-1">
                 <div className="text-[17px] font-bold">{l.producto.nombre}</div>
-                <div className="text-sm text-texto-suave">{fmtNumero(l.cantidad, 0)} unidades</div>
+                <div className="text-sm text-texto-suave">
+                  {fmtNumero(l.cantidad, 0)} unidades
+                  {l.lote ? ` · partida del ${fmtFecha(l.lote.fechaHora)}` : ' · sin partida'}
+                </div>
               </div>
               <button
                 type="button"
@@ -146,7 +186,10 @@ export function AsistenteEnviar({ onVolver, onFinalizado }: Props) {
           {lineas.map((l, i) => (
             <div key={i} className="rounded-2xl border border-borde bg-white px-4 py-3.5">
               <div className="text-[17px] font-bold">{l.producto.nombre}</div>
-              <div className="text-sm text-texto-suave">{fmtNumero(l.cantidad, 0)} unidades</div>
+              <div className="text-sm text-texto-suave">
+                {fmtNumero(l.cantidad, 0)} unidades
+                {l.lote ? ` · partida del ${fmtFecha(l.lote.fechaHora)} (lote ${l.lote.id})` : ' · sin partida'}
+              </div>
             </div>
           ))}
           {errorEnvio && (
@@ -162,7 +205,11 @@ export function AsistenteEnviar({ onVolver, onFinalizado }: Props) {
               setErrorEnvio(null);
               mutConfirmar.mutate({
                 sucursalDestinoId: destino!.id,
-                lineas: lineas.map((l) => ({ productoId: l.producto.id, cantidadEnviada: l.cantidad })),
+                lineas: lineas.map((l) => ({
+                  productoId: l.producto.id,
+                  cantidadEnviada: l.cantidad,
+                  loteOrigenId: l.lote?.id,
+                })),
               });
             }}
             className="min-h-16 w-full cursor-pointer rounded-2xl bg-primario text-xl font-extrabold text-white hover:bg-primario-hover disabled:opacity-50"
@@ -180,7 +227,58 @@ export function AsistenteEnviar({ onVolver, onFinalizado }: Props) {
           onCancelar={() => setOverlay(null)}
           onSeleccionar={(item) => {
             const producto = productos.data!.find((p) => p.id === item.id)!;
-            setOverlay({ tipo: 'tecladoCantidad', producto });
+            void elegirProducto(producto);
+          }}
+        />
+      )}
+
+      {overlay?.tipo === 'cargandoLotes' && (
+        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/45">
+          <div className="rounded-2xl bg-white px-6 py-5 text-base font-bold text-texto-suave">
+            Buscando partidas…
+          </div>
+        </div>
+      )}
+
+      {/* Elegir de qué partida sale. Van de la más vieja a la más nueva —
+          Pablo lo pidió así: "no le mandé las que produjeron hoy a la mañana,
+          sino las de ayer". */}
+      {overlay?.tipo === 'selectorLote' && (
+        <Selector
+          titulo={`¿De qué partida? — ${overlay.producto.nombre}`}
+          items={[
+            ...overlay.lotes.map((l) => ({
+              id: l.id,
+              label: `Producido el ${fmtFecha(l.fechaHora)}`,
+              sub: `Quedan ${fmtNumero(
+                Number(l.cantidadRestanteDisponible) - yaEnElEnvio(overlay.producto.id, l.id),
+                0,
+              )} u · lote ${l.id} · ${l.operario}`,
+            })),
+            ...(overlay.sinLote > 0
+              ? [
+                  {
+                    id: 'sinLote',
+                    label: 'Stock sin partida',
+                    sub: `${fmtNumero(overlay.sinLote, 0)} u — anterior al registro por lote`,
+                  },
+                ]
+              : []),
+          ]}
+          onCancelar={() => setOverlay(null)}
+          onSeleccionar={(item) => {
+            if (item.id === 'sinLote') {
+              setOverlay({ tipo: 'tecladoCantidad', producto: overlay.producto, maximo: overlay.sinLote });
+              return;
+            }
+            const lote = overlay.lotes.find((l) => l.id === item.id)!;
+            setOverlay({
+              tipo: 'tecladoCantidad',
+              producto: overlay.producto,
+              lote,
+              maximo:
+                Number(lote.cantidadRestanteDisponible) - yaEnElEnvio(overlay.producto.id, lote.id),
+            });
           }}
         />
       )}
@@ -188,14 +286,22 @@ export function AsistenteEnviar({ onVolver, onFinalizado }: Props) {
       {overlay?.tipo === 'tecladoCantidad' && (
         <TecladoNumerico
           titulo="¿Cuántas unidades mandás?"
-          subtitulo={overlay.producto.nombre}
+          subtitulo={
+            overlay.lote
+              ? `${overlay.producto.nombre} — partida del ${fmtFecha(overlay.lote.fechaHora)}`
+              : overlay.producto.nombre
+          }
           unidad="u"
           permiteDecimal={false}
-          maximo={stockDe(overlay.producto.id)}
-          mensajeMaximo={`No alcanza. En producción quedan ${fmtNumero(stockDe(overlay.producto.id) ?? 0, 0)} unidades.`}
+          maximo={overlay.maximo}
+          mensajeMaximo={
+            overlay.lote
+              ? `En esa partida quedan ${fmtNumero(overlay.maximo ?? 0, 0)} unidades.`
+              : `No alcanza. En producción quedan ${fmtNumero(overlay.maximo ?? 0, 0)} unidades.`
+          }
           onCancelar={() => setOverlay(null)}
           onConfirmar={(cantidad) => {
-            setLineas((ls) => [...ls, { producto: overlay.producto, cantidad }]);
+            setLineas((ls) => [...ls, { producto: overlay.producto, cantidad, lote: overlay.lote }]);
             setOverlay(null);
           }}
         />

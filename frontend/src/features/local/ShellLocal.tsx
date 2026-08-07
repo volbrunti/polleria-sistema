@@ -2,15 +2,20 @@ import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../auth/AuthContext';
 import { listarSucursales } from '../../api/sucursales';
+import { listarTransferencias } from '../../api/transferencias';
 import type { Sucursal, Transferencia } from '../../api/types';
 import { EntregasPendientes } from './EntregasPendientes';
 import { ConteoCiego } from './ConteoCiego';
 import { ResultadoRecepcion } from './ResultadoRecepcion';
 import { MisRecepciones } from './MisRecepciones';
 import { StockLocal } from './StockLocal';
+import { CajaTab } from './caja/CajaTab';
 
-type Pantalla = 'lista' | 'conteo' | 'ok' | 'diff' | 'registrado' | 'historial';
-type Tab = 'recibir' | 'stock';
+type Pantalla = 'lista' | 'conteo' | 'ok' | 'diff' | 'historial';
+// "caja" (POS + turnos, módulo 2) es la tab por defecto; "recibir" mantiene
+// intacto el flujo de recepción ciega del módulo 1 — recibir mercadería no
+// requiere turno abierto (la caja y la mercadería son circuitos distintos).
+type Tab = 'caja' | 'recibir' | 'stock';
 
 const CLAVE_SUCURSAL = 'polleria.sucursalLocal';
 
@@ -50,7 +55,18 @@ export function ShellLocal() {
 
   const sucursal: Sucursal | undefined = locales.find((s) => s.id === sucursalId);
 
-  const [tab, setTab] = useState<Tab>('recibir');
+  // Contador en la pestaña Recibir: el caso que planteó Pablo es que la
+  // mercadería ya llegó al local y el cajero, ocupado vendiendo, nunca entró a
+  // confirmarla — la transferencia queda colgada sin que nadie lo note.
+  const pendientesQ = useQuery({
+    queryKey: ['transferencias', 'pendientes', sucursalId],
+    queryFn: () => listarTransferencias({ estado: 'PENDIENTE_RECEPCION', sucursalDestinoId: sucursalId! }),
+    enabled: sucursalId != null,
+    refetchInterval: 15000,
+  });
+  const cantidadPendientes = pendientesQ.data?.length ?? 0;
+
+  const [tab, setTab] = useState<Tab>('caja');
   const [pantalla, setPantalla] = useState<Pantalla>('lista');
   const [transferenciaActual, setTransferenciaActual] = useState<Transferencia | null>(null);
   const [valoresConteo, setValoresConteo] = useState<Record<number, number>>({});
@@ -89,17 +105,38 @@ export function ShellLocal() {
               )}
             </div>
           </div>
-          {esEncargado && (
-            <div className="flex gap-2 rounded-xl bg-chip p-1.5">
-              <button
-                type="button"
-                onClick={() => setTab('recibir')}
-                className={`min-h-[46px] cursor-pointer rounded-lg px-4.5 text-base font-bold ${
-                  tab === 'recibir' ? 'bg-primario text-white' : 'bg-transparent text-texto-suave'
-                }`}
-              >
-                Recibir
-              </button>
+          <div className="flex gap-2 rounded-xl bg-chip p-1.5">
+            <button
+              type="button"
+              onClick={() => setTab('caja')}
+              className={`min-h-[46px] cursor-pointer rounded-lg px-4.5 text-base font-bold ${
+                tab === 'caja' ? 'bg-primario text-white' : 'bg-transparent text-texto-suave'
+              }`}
+            >
+              Caja
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab('recibir')}
+              className={`relative min-h-[46px] cursor-pointer rounded-lg px-4.5 text-base font-bold ${
+                tab === 'recibir'
+                  ? 'bg-primario text-white'
+                  : cantidadPendientes > 0
+                    ? 'bg-error text-white'
+                    : 'bg-transparent text-texto-suave'
+              }`}
+            >
+              Recibir
+              {cantidadPendientes > 0 && (
+                <span
+                  aria-label={`${cantidadPendientes} recepciones pendientes`}
+                  className="ml-1.5 inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-white px-1.5 text-sm font-extrabold text-error"
+                >
+                  {cantidadPendientes}
+                </span>
+              )}
+            </button>
+            {esEncargado && (
               <button
                 type="button"
                 onClick={() => setTab('stock')}
@@ -109,8 +146,8 @@ export function ShellLocal() {
               >
                 Stock
               </button>
-            </div>
-          )}
+            )}
+          </div>
           <button
             type="button"
             onClick={() => void salir()}
@@ -120,7 +157,9 @@ export function ShellLocal() {
           </button>
         </div>
 
-        {tab === 'stock' ? (
+        {tab === 'caja' ? (
+          sucursalId != null && <CajaTab sucursalId={sucursalId} />
+        ) : tab === 'stock' ? (
           sucursalId != null && <StockLocal sucursalId={sucursalId} sucursalNombre={sucursal?.nombre ?? ''} />
         ) : (
           <>
@@ -154,14 +193,10 @@ export function ShellLocal() {
             {pantalla === 'diff' && transferenciaActual && (
               <ResultadoRecepcion
                 variante="diff"
-                transferenciaId={transferenciaActual.id}
-                valores={valoresConteo}
                 onRecontar={() => setPantalla('conteo')}
-                onConfirmado={() => setPantalla('registrado')}
+                onSalir={irALista}
               />
             )}
-
-            {pantalla === 'registrado' && <ResultadoRecepcion variante="registrado" onListo={irALista} />}
 
             {pantalla === 'historial' && sucursalId != null && (
               <MisRecepciones sucursalId={sucursalId} onVolver={irALista} />

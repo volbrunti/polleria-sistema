@@ -10,6 +10,8 @@ const generarSchema = z.object({
       z.object({
         productoId: z.number().int().positive(),
         cantidadEnviada: z.number().positive(),
+        // De qué lote sale. Opcional: hay stock sin lote (reventa, ajustes).
+        loteOrigenId: z.number().int().positive().optional(),
       }),
     )
     .min(1, 'La transferencia debe tener al menos una línea'),
@@ -33,9 +35,9 @@ const listarQuery = z.object({
 
 const paramsId = z.object({ id: z.coerce.number().int().positive() });
 
-// Mensaje EXACTO de la comparación ciega: no revela diferencia ni lado del error
-const MENSAJE_NO_COINCIDE =
-  'Los números no coinciden. Puede recontar y volver a cargar, o confirmar igual.';
+// Mensaje de la comparación ciega: no revela diferencia ni lado del error.
+// Ya no ofrece "confirmar igual" — el cajero solo puede recontar (reunión 4/8).
+const MENSAJE_NO_COINCIDE = 'Los números no coinciden. Puede recontar y volver a cargar.';
 
 export async function transferenciasRoutes(app: FastifyInstance) {
   // Generar: PRODUCCION (emisor) y ADMIN
@@ -76,8 +78,11 @@ export async function transferenciasRoutes(app: FastifyInstance) {
   );
 
   app.post(
+    // SOLO ADMINISTRADOR. El cajero ya no puede cerrar una recepción que no
+    // cuadra — solo recontar. Resolver la diferencia es decisión del admin
+    // (reunión 4/8, deroga CLAUDE.md §7).
     '/:id/confirmar-con-discrepancia',
-    { preHandler: [app.autenticar, app.requerirRoles('CAJERO', 'ENCARGADO', 'ADMINISTRADOR')] },
+    { preHandler: [app.autenticar, app.requerirRoles('ADMINISTRADOR')] },
     async (req) => {
       const { id } = paramsId.parse(req.params);
       const { lineas } = recepcionSchema.parse(req.body);
@@ -87,6 +92,18 @@ export async function transferenciasRoutes(app: FastifyInstance) {
         usuarioId: req.usuario.id,
       });
       return serializarTransferencia(transferencia, req.usuario.rol, req.usuario.id);
+    },
+  );
+
+  // Historial de conteos de una recepción trabada. SOLO ADMINISTRADOR: expone
+  // los dos números, que es exactamente lo que el control ciego le esconde al
+  // cajero.
+  app.get(
+    '/:id/intentos',
+    { preHandler: [app.autenticar, app.requerirRoles('ADMINISTRADOR')] },
+    async (req) => {
+      const { id } = paramsId.parse(req.params);
+      return transferenciasService.intentosDeRecepcion(id);
     },
   );
 

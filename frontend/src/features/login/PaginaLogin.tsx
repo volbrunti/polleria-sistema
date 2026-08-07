@@ -3,15 +3,20 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { rutaInicioPorRol } from '../../auth/RutaProtegida';
 
+// Atajos para no tipear credenciales mientras se desarrolla. Las claves
+// quedan EN EL BUNDLE, así que en una URL pública esto es un botón de "entrar
+// como administrador" para cualquiera que la encuentre. Por eso solo se
+// muestran en dev, o si se pide explícitamente con VITE_MOSTRAR_DEMO=true
+// (para una demo con el cliente, sabiendo lo que implica).
 const ACCESOS_DEMO = [
   { username: 'admin', password: 'admin123', label: 'Admin' },
   { username: 'ariel', password: 'socio123', label: 'Socio (Ariel)' },
-  { username: 'eliana', password: 'socio123', label: 'Socia (Eliana)' },
-  { username: 'ema', password: 'socio123', label: 'Socia (Ema)' },
   { username: 'encargado', password: 'encargado123', label: 'Encargado' },
   { username: 'cajero', password: 'cajero123', label: 'Cajero' },
   { username: 'produccion', password: 'produccion123', label: 'Producción' },
 ];
+
+const MOSTRAR_DEMO = import.meta.env.DEV || import.meta.env.VITE_MOSTRAR_DEMO === 'true';
 
 export function PaginaLogin() {
   const { ingresar, usuario } = useAuth();
@@ -91,6 +96,7 @@ export function PaginaLogin() {
           </button>
         </form>
 
+        {MOSTRAR_DEMO && (
         <div className="flex flex-col gap-2.5 rounded-2xl border border-dashed border-borde-fuerte bg-white p-4">
           <div className="text-sm font-semibold text-texto-suave">DEMO — entrar directo como:</div>
           <div className="flex flex-wrap gap-2">
@@ -110,6 +116,7 @@ export function PaginaLogin() {
             ))}
           </div>
         </div>
+        )}
       </div>
     </div>
   );

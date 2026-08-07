@@ -1,41 +1,16 @@
-import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { confirmarConDiscrepancia } from '../../api/transferencias';
-
 type Props =
   | { variante: 'ok'; onListo: () => void }
-  | { variante: 'registrado'; onListo: () => void }
-  | {
-      variante: 'diff';
-      transferenciaId: number;
-      valores: Record<number, number>;
-      onRecontar: () => void;
-      onConfirmado: () => void;
-    };
+  | { variante: 'diff'; onRecontar: () => void; onSalir: () => void };
 
-// Réplica de las 3 pantallas de resultado del conteo: "coincide" (verde,
-// celebratoria) vs. "no coincide"/"registrado" (neutrales — nunca se
-// culpabiliza al cajero ni se revela de qué lado está el error).
+// Las 2 pantallas de resultado del conteo: "coincide" (verde, celebratoria)
+// vs. "no coincide" (neutral — nunca se culpabiliza al cajero ni se revela de
+// qué lado está el error).
+//
+// El cajero YA NO puede cerrar una recepción que no cuadra: la única salida es
+// recontar (reunión 4/8 — "al inicio seamos bien estrictos"). El backend ya
+// avisó al encargado en el primer intento fallido; resolver la diferencia es
+// decisión del admin.
 export function ResultadoRecepcion(props: Props) {
-  const queryClient = useQueryClient();
-  const [error, setError] = useState<string | null>(null);
-
-  const mutConfirmarIgual = useMutation({
-    mutationFn: () => {
-      if (props.variante !== 'diff') throw new Error('no aplica');
-      const lineas = Object.entries(props.valores).map(([productoId, cantidadRecibida]) => ({
-        productoId: Number(productoId),
-        cantidadRecibida,
-      }));
-      return confirmarConDiscrepancia(props.transferenciaId, lineas);
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['transferencias'] });
-      if (props.variante === 'diff') props.onConfirmado();
-    },
-    onError: () => setError('No se pudo registrar. Probá de nuevo.'),
-  });
-
   if (props.variante === 'ok') {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-4.5 bg-primario px-7 py-7 text-center">
@@ -55,32 +30,20 @@ export function ResultadoRecepcion(props: Props) {
     );
   }
 
-  if (props.variante === 'registrado') {
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-4.5 px-7 py-7 text-center">
-        <div className="animate-pop flex h-26 w-26 items-center justify-center rounded-full bg-[#e6e9e2] text-[48px] font-extrabold text-texto">
-          ✓
-        </div>
-        <div className="text-2xl font-extrabold">Listo. Tu conteo quedó registrado.</div>
-        <button
-          type="button"
-          onClick={props.onListo}
-          className="mt-2.5 min-h-15 min-w-[220px] cursor-pointer rounded-2xl bg-primario text-lg font-extrabold text-white hover:bg-primario-hover"
-        >
-          VOLVER AL INICIO
-        </button>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4.5 px-7 py-7 text-center">
       <div className="flex h-26 w-26 items-center justify-center rounded-full bg-[#e6e9e2] text-[44px] font-bold text-texto-suave">
         ≠
       </div>
       <div className="max-w-[420px] text-[28px] font-extrabold">Los números no coinciden.</div>
-      <div className="max-w-[420px] text-lg text-texto-suave">Podés volver a contar las veces que necesites.</div>
-      {error && <div className="rounded-xl bg-error-suave px-3.5 py-3 text-base font-semibold text-error-texto">{error}</div>}
+      <div className="max-w-[420px] text-lg text-texto-suave">
+        Volvé a contar con calma, las veces que necesites. Fijate que no haya quedado algo en la caja o
+        en el auto.
+      </div>
+      <div className="max-w-[420px] rounded-xl bg-advertencia-suave px-4 py-3 text-base font-semibold text-advertencia-texto">
+        Ya le avisamos al encargado. Si después de recontar sigue sin dar, dejalo así y avisale — él lo
+        resuelve desde el panel.
+      </div>
       <div className="mt-2 flex w-full max-w-[380px] flex-col gap-3">
         <button
           type="button"
@@ -91,15 +54,10 @@ export function ResultadoRecepcion(props: Props) {
         </button>
         <button
           type="button"
-          disabled={mutConfirmarIgual.isPending}
-          onClick={() => {
-            setError(null);
-            mutConfirmarIgual.mutate();
-          }}
-          className="flex min-h-16 w-full cursor-pointer flex-col items-center justify-center gap-0.5 rounded-2xl border-2 border-borde-fuerte bg-white text-texto hover:border-texto-suave disabled:opacity-50"
+          onClick={props.onSalir}
+          className="min-h-14 w-full cursor-pointer rounded-2xl border-2 border-borde-fuerte bg-white text-base font-bold text-texto-suave hover:border-texto-suave hover:text-texto"
         >
-          <span className="text-lg font-extrabold">CONFIRMAR IGUAL</span>
-          <span className="text-[13px] font-semibold text-texto-suave">Se registrará tu conteo</span>
+          DEJARLO PARA DESPUÉS
         </button>
       </div>
     </div>

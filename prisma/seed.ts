@@ -27,12 +27,33 @@ async function main() {
     create: { nombre: 'Local 2', tipo: 'VENTA', direccion: 'Sucursal de venta 2' },
   });
 
-  // ── Usuarios: uno por rol ──
-  // sucursalId: fija de qué local es un CAJERO/ENCARGADO — sin esto no pueden
-  // recepcionar ninguna transferencia (validación agregada tras hallazgo de
-  // auditoría §5.2: sin sucursal asignada, cualquiera podía recibir mercadería
-  // de cualquier local).
+  // ── Usuarios ──
+  //
+  // La base arranca con UN SOLO usuario: el administrador inicial. Desde su
+  // panel (Usuarios) se dan de alta los demás con su propia contraseña. Antes
+  // el seed creaba siete usuarios con claves tipo "admin123" escritas acá —
+  // en una instalación con URL pública eso es una puerta abierta, porque este
+  // archivo está en el repo.
+  //
+  // Su contraseña NO se hardcodea: sale de ADMIN_INICIAL_PASSWORD. En
+  // producción es obligatoria; en desarrollo cae en una por defecto para no
+  // estorbar el día a día.
   const hash = (pw: string) => bcrypt.hash(pw, 10);
+
+  const esProduccion = process.env.NODE_ENV === 'production';
+  const passwordAdmin = process.env.ADMIN_INICIAL_PASSWORD;
+  if (esProduccion && !passwordAdmin) {
+    console.error(
+      'Falta ADMIN_INICIAL_PASSWORD — es la contraseña del único usuario con el que arranca ' +
+        'el sistema. Definila antes de sembrar en producción.',
+    );
+    process.exit(1);
+  }
+
+  // Los usuarios de demo (uno por rol, claves conocidas) solo se siembran
+  // fuera de producción, o si se piden a mano con SEED_DEMO=true.
+  const sembrarDemo = process.env.SEED_DEMO === 'true' || !esProduccion;
+
   const usuarios: {
     nombre: string;
     username: string;
@@ -40,14 +61,24 @@ async function main() {
     rol: Prisma.UsuarioCreateInput['rol'];
     sucursalId?: number;
   }[] = [
-    { nombre: 'Pablo (Admin)', username: 'admin', password: 'admin123', rol: 'ADMINISTRADOR' },
-    { nombre: 'Ariel (Socio)', username: 'ariel', password: 'socio123', rol: 'SOCIO' },
-    { nombre: 'Eliana (Socia)', username: 'eliana', password: 'socio123', rol: 'SOCIO' },
-    { nombre: 'Ema (Socia)', username: 'ema', password: 'socio123', rol: 'SOCIO' },
-    { nombre: 'Encargado Local 1', username: 'encargado', password: 'encargado123', rol: 'ENCARGADO', sucursalId: local1.id },
-    { nombre: 'Cajero Local 1', username: 'cajero', password: 'cajero123', rol: 'CAJERO', sucursalId: local1.id },
-    { nombre: 'Operario Producción', username: 'produccion', password: 'produccion123', rol: 'PRODUCCION' },
+    {
+      nombre: 'Administrador',
+      username: process.env.ADMIN_INICIAL_USUARIO ?? 'admin',
+      password: passwordAdmin ?? 'admin123',
+      rol: 'ADMINISTRADOR',
+    },
   ];
+
+  if (sembrarDemo) {
+    usuarios.push(
+      { nombre: 'Ariel (Socio)', username: 'ariel', password: 'socio123', rol: 'SOCIO' },
+      { nombre: 'Eliana (Socia)', username: 'eliana', password: 'socio123', rol: 'SOCIO' },
+      { nombre: 'Ema (Socia)', username: 'ema', password: 'socio123', rol: 'SOCIO' },
+      { nombre: 'Encargado Local 1', username: 'encargado', password: 'encargado123', rol: 'ENCARGADO', sucursalId: local1.id },
+      { nombre: 'Cajero Local 1', username: 'cajero', password: 'cajero123', rol: 'CAJERO', sucursalId: local1.id },
+      { nombre: 'Operario Producción', username: 'produccion', password: 'produccion123', rol: 'PRODUCCION' },
+    );
+  }
   for (const u of usuarios) {
     await prisma.usuario.upsert({
       where: { username: u.username },
@@ -83,6 +114,11 @@ async function main() {
     update: {},
     create: { nombre: 'Otro', esOtro: true },
   });
+  await prisma.proveedor.upsert({
+    where: { nombre: 'Retorno interno' },
+    update: { esProveedorSistema: true },
+    create: { nombre: 'Retorno interno', esProveedorSistema: true },
+  });
 
   // ── Catálogo de productos ──
   type Prod = {
@@ -91,6 +127,10 @@ async function main() {
     tipo: Prisma.ProductoCreateInput['tipo'];
     unidad: Prisma.ProductoCreateInput['unidadDeMedida'];
     precio?: number;
+    // Productos que sostienen un mecanismo interno del sistema (ej. el
+    // circuito del pollo marcado) y no deben poder renombrarse/desactivarse
+    // desde el catálogo de admin — ver productos.service.ts::actualizar().
+    esSistema?: boolean;
   };
   const productos: Prod[] = [
     // Materias primas
@@ -143,6 +183,13 @@ async function main() {
     // cocido es un evento de VENTA (circuito especial del pollo, módulo 2),
     // no de producción. Existe como producto solo para poder facturarlo.
     { nombre: 'Pollo a la leña (medio)', categoria: 'Pollos', tipo: 'ELABORADO', unidad: 'UNIDAD', precio: 12000 },
+    // Bucket de stock interno del circuito del pollo (Módulo 2, CLAUDE.md
+    // módulo 2 §4.10): "Pollo a la leña (entero)" fresco se "marca" (se tira
+    // a la parrilla) vía EventoMarcadoPollo, que genera un MovimientoStock
+    // negativo sobre el fresco y uno positivo acá. La venta (entero o medio)
+    // descuenta de ESTE producto, nunca del fresco. Sin precio propio: nunca
+    // se vende directamente, es un estado intermedio de stock.
+    { nombre: 'Pollo a la leña (entero) — MARCADO', categoria: 'Pollos', tipo: 'ELABORADO', unidad: 'UNIDAD', esSistema: true },
     // Porciones elaboradas en Producción central (Excel de costos, 2026-07-13):
     // unidades listas para cocinar que después el local arma como plato/sandwich
     // (el armado de venta es módulo 2). Sin precio propio: no se venden sueltas.
@@ -201,7 +248,9 @@ async function main() {
     { nombre: 'Gaseosa 500ml', categoria: 'Bebidas', tipo: 'REVENTA', unidad: 'UNIDAD', precio: 1500 },
   ];
 
-  const adminUser = await prisma.usuario.findUniqueOrThrow({ where: { username: 'admin' } });
+  const adminUser = await prisma.usuario.findUniqueOrThrow({
+    where: { username: process.env.ADMIN_INICIAL_USUARIO ?? 'admin' },
+  });
 
   // Corrección puntual: "Empanada de carne" había quedado creada con
   // categoría " Empanadas" (espacio inicial) en una sesión anterior.
@@ -210,12 +259,42 @@ async function main() {
     data: { categoria: 'Empanadas' },
   });
 
+  // Agrupador de primer nivel del POS. Mismo mapeo que la migración
+  // 20260805233000_categoria_madre_producto — provisorio hasta que el cliente
+  // pase su agrupación definitiva; el admin lo edita producto por producto.
+  const MADRE_POR_CATEGORIA: Record<string, string> = {
+    Pollos: 'Pollos',
+    'Combos Pollo': 'Pollos',
+    Hamburguesas: 'Sándwiches',
+    Lomitos: 'Sándwiches',
+    Milanesas: 'Sándwiches',
+    Empanadas: 'Empanadas',
+    Sorrentinos: 'Platos',
+    Tartas: 'Platos',
+    'Porciones de carne': 'Platos',
+    Escabeches: 'Platos',
+    Papas: 'Guarniciones',
+    Ensaladas: 'Guarniciones',
+    Panificados: 'Guarniciones',
+    Adicionales: 'Guarniciones',
+    Bebidas: 'Bebidas',
+  };
+  const madreDe = (p: Prod) =>
+    p.tipo === 'MATERIA_PRIMA' ? null : (MADRE_POR_CATEGORIA[p.categoria] ?? 'Otros');
+
   const productosPorNombre = new Map<string, number>();
   for (const p of productos) {
     const creado = await prisma.producto.upsert({
       where: { nombre: p.nombre },
-      update: {},
-      create: { nombre: p.nombre, categoria: p.categoria, tipo: p.tipo, unidadDeMedida: p.unidad },
+      update: p.esSistema ? { esProductoSistema: true } : {},
+      create: {
+        nombre: p.nombre,
+        categoria: p.categoria,
+        categoriaMadre: madreDe(p),
+        tipo: p.tipo,
+        unidadDeMedida: p.unidad,
+        esProductoSistema: p.esSistema ?? false,
+      },
     });
     productosPorNombre.set(p.nombre, creado.id);
     if (p.precio !== undefined) {
@@ -330,6 +409,7 @@ async function main() {
         data: {
           nombre,
           categoria,
+          categoriaMadre: MADRE_POR_CATEGORIA[categoria] ?? 'Otros',
           tipo: 'COMBO',
           unidadDeMedida: 'UNIDAD',
           componentesDelCombo: {
@@ -573,7 +653,11 @@ async function main() {
 
   console.log('Seed completado.');
   console.log('Sucursales:', { produccion: produccion.id, local1: local1.id, local2: local2.id });
-  console.log('Usuarios: admin/admin123, produccion/produccion123, cajero/cajero123, ...');
+  console.log(
+    sembrarDemo
+      ? `Usuarios: ${usuarios.map((u) => u.username).join(', ')} (los de demo con sus claves de siempre)`
+      : 'Usuario único: el administrador inicial. Creá el resto desde su panel → Usuarios.',
+  );
 }
 
 main()

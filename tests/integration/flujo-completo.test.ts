@@ -247,10 +247,12 @@ describe('Flujo 2 — Producción', () => {
     expect(lote.unidadesEsperadas).toBe('47.5');
     expect(lote.alertaDisparada).toBe(true);
   });
+
 });
 
 describe('Flujo 3 — Transferencias', () => {
   let transferenciaId: number;
+  let transferenciaTrabadaId: number;
 
   it('genera transferencia: valida stock y descuenta producción', async () => {
     // hay 40 milanesas en producción
@@ -321,6 +323,44 @@ describe('Flujo 3 — Transferencias', () => {
     expect(await stockDe(f.productos.milanesa, f.sucursales.local1)).toBe(0);
   });
 
+  // Reunión 4/8: como el cajero ya no puede "confirmar igual", el admin tiene
+  // que enterarse solo — el primer conteo que no cierra dispara la alerta.
+  it('el conteo que no coincide alerta al admin con ambos números, sin duplicar la alerta', async () => {
+    const prisma = await getPrisma();
+    const alerta = await prisma.alerta.findFirst({
+      where: { tipo: 'DISCREPANCIA_TRANSFERENCIA', origenId: transferenciaId },
+    });
+    expect(alerta).not.toBeNull();
+    const detalle = alerta!.detalle as {
+      lineas: { cantidadEnviada: string; cantidadContada: string; diferencia: string }[];
+    };
+    expect(detalle.lineas[0]!.cantidadEnviada).toBe('30');
+    expect(detalle.lineas[0]!.cantidadContada).toBe('28');
+    expect(detalle.lineas[0]!.diferencia).toBe('-2');
+
+    // segundo conteo fallido: se audita, pero NO genera una segunda alerta
+    await app.inject({
+      method: 'POST',
+      url: `/api/transferencias/${transferenciaId}/recepcion`,
+      headers: auth(f.usuarios.cajero.token),
+      payload: { lineas: [{ productoId: f.productos.milanesa, cantidadRecibida: 29 }] },
+    });
+    expect(
+      await prisma.alerta.count({
+        where: { tipo: 'DISCREPANCIA_TRANSFERENCIA', origenId: transferenciaId },
+      }),
+    ).toBe(1);
+    expect(
+      await prisma.registroAuditoria.count({
+        where: {
+          accion: 'CONTEO_RECEPCION_NO_COINCIDE',
+          entidad: 'Transferencia',
+          entidadId: transferenciaId,
+        },
+      }),
+    ).toBe(2);
+  });
+
   it('recontar con número correcto → CONFIRMADA + entrada de stock', async () => {
     const res = await app.inject({
       method: 'POST',
@@ -333,10 +373,24 @@ describe('Flujo 3 — Transferencias', () => {
     expect(res.json().transferencia.estado).toBe('CONFIRMADA');
 
     expect(await stockDe(f.productos.milanesa, f.sucursales.local1)).toBe(30);
+
+    // Queda asentado que se resolvió recontando: el admin ve que la alerta que
+    // le llegó se destrabó sola y no tiene que investigarla.
+    const prisma = await getPrisma();
+    const resuelta = await prisma.registroAuditoria.findFirst({
+      where: {
+        accion: 'RECEPCION_RESUELTA_RECONTANDO',
+        entidad: 'Transferencia',
+        entidadId: transferenciaId,
+      },
+    });
+    expect(resuelta).not.toBeNull();
+    expect((resuelta!.datosNuevos as { intentosQueNoCoincidieron: number }).intentosQueNoCoincidieron).toBe(2);
   });
 
-  it('confirmar con discrepancia: stock según receptor + alerta con ambos números y firmas', async () => {
-    // nueva transferencia de 10
+  // Reunión 4/8 (deroga CLAUDE.md §7): el cajero YA NO puede cerrar una
+  // recepción que no cuadra — solo recontar. Destrabarla es del administrador.
+  it('el cajero NO puede confirmar con discrepancia: solo el administrador', async () => {
     const gen = await app.inject({
       method: 'POST',
       url: '/api/transferencias',
@@ -348,18 +402,34 @@ describe('Flujo 3 — Transferencias', () => {
     });
     const t2 = gen.json().id;
 
-    const res = await app.inject({
+    const prohibido = await app.inject({
       method: 'POST',
       url: `/api/transferencias/${t2}/confirmar-con-discrepancia`,
       headers: auth(f.usuarios.cajero.token),
       payload: { lineas: [{ productoId: f.productos.milanesa, cantidadRecibida: 8 }] },
     });
+    expect(prohibido.statusCode).toBe(403);
+
+    // y sigue pendiente, sin stock en el local
+    const prisma = await getPrisma();
+    expect((await prisma.transferencia.findUniqueOrThrow({ where: { id: t2 } })).estado).toBe(
+      'PENDIENTE_RECEPCION',
+    );
+    expect(await stockDe(f.productos.milanesa, f.sucursales.local1)).toBe(30);
+
+    transferenciaTrabadaId = t2;
+  });
+
+  it('el admin la destraba: stock según lo que él declara + alerta con ambos números y firmas', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/transferencias/${transferenciaTrabadaId}/confirmar-con-discrepancia`,
+      headers: auth(f.usuarios.admin.token),
+      payload: { lineas: [{ productoId: f.productos.milanesa, cantidadRecibida: 8 }] },
+    });
     expect(res.statusCode).toBe(200);
     const t = res.json();
     expect(t.estado).toBe('CONFIRMADA_CON_DISCREPANCIA');
-    // receptor cajero: sin cantidadEnviada ni diferencia aun después de confirmar
-    expect(t.lineas[0]).not.toHaveProperty('cantidadEnviada');
-    expect(t.lineas[0]).not.toHaveProperty('diferencia');
 
     // stock del local por la cantidad DECLARADA (30 + 8 = 38)
     expect(await stockDe(f.productos.milanesa, f.sucursales.local1)).toBe(38);
@@ -367,7 +437,7 @@ describe('Flujo 3 — Transferencias', () => {
     // alerta al admin con todo el detalle
     const prisma = await getPrisma();
     const alerta = await prisma.alerta.findFirst({
-      where: { tipo: 'DISCREPANCIA_TRANSFERENCIA', origenId: t2 },
+      where: { tipo: 'DISCREPANCIA_TRANSFERENCIA', origenId: transferenciaTrabadaId },
     });
     expect(alerta).not.toBeNull();
     const detalle = alerta!.detalle as {
@@ -376,7 +446,7 @@ describe('Flujo 3 — Transferencias', () => {
       lineas: { cantidadEnviada: string; cantidadRecibida: string; diferencia: string }[];
     };
     expect(detalle.usuarioEmisorId).toBe(f.usuarios.produccion.id);
-    expect(detalle.usuarioReceptorId).toBe(f.usuarios.cajero.id);
+    expect(detalle.usuarioReceptorId).toBe(f.usuarios.admin.id);
     expect(detalle.lineas[0]!.cantidadEnviada).toBe('10');
     expect(detalle.lineas[0]!.cantidadRecibida).toBe('8');
     expect(detalle.lineas[0]!.diferencia).toBe('-2');

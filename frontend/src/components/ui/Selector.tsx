@@ -12,11 +12,29 @@ interface Props {
   buscable?: boolean;
   onSeleccionar: (item: ItemSelector) => void;
   onCancelar: () => void;
+  /**
+   * Ids que van arriba, en su propio grupo. El resto queda abajo bajo un
+   * encabezado que avisa que no es lo habitual — no bloquea elegirlos, solo
+   * empuja hacia lo correcto (pedido de Pablo, reunión 4/8: "para limitar el
+   * error del que teclea").
+   */
+  idsDestacados?: (string | number)[];
+  etiquetaDestacados?: string;
+  etiquetaResto?: string;
 }
 
 // Réplica del overlay "picker" del diseño: bottom sheet con lista grande y
 // buscador opcional.
-export function Selector({ titulo, items, buscable = false, onSeleccionar, onCancelar }: Props) {
+export function Selector({
+  titulo,
+  items,
+  buscable = false,
+  onSeleccionar,
+  onCancelar,
+  idsDestacados,
+  etiquetaDestacados = 'Lo habitual de este proveedor',
+  etiquetaResto = 'Otros productos',
+}: Props) {
   const [busqueda, setBusqueda] = useState('');
 
   const filtrados = useMemo(() => {
@@ -24,6 +42,19 @@ export function Selector({ titulo, items, buscable = false, onSeleccionar, onCan
     const q = busqueda.trim().toLowerCase();
     return items.filter((i) => i.label.toLowerCase().includes(q));
   }, [items, busqueda, buscable]);
+
+  // Sin destacados (o buscando), una sola lista plana como siempre.
+  const grupos = useMemo(() => {
+    const hayDestacados = idsDestacados != null && idsDestacados.length > 0;
+    if (!hayDestacados || busqueda.trim()) return [{ etiqueta: null, items: filtrados }];
+    const set = new Set(idsDestacados);
+    const arriba = filtrados.filter((i) => set.has(i.id));
+    const abajo = filtrados.filter((i) => !set.has(i.id));
+    return [
+      { etiqueta: arriba.length > 0 ? etiquetaDestacados : null, items: arriba },
+      { etiqueta: abajo.length > 0 ? etiquetaResto : null, items: abajo },
+    ].filter((g) => g.items.length > 0);
+  }, [filtrados, idsDestacados, busqueda, etiquetaDestacados, etiquetaResto]);
 
   return (
     <div className="fixed inset-0 z-10 flex items-end bg-black/45">
@@ -52,16 +83,23 @@ export function Selector({ titulo, items, buscable = false, onSeleccionar, onCan
         )}
         <div className="flex flex-col gap-2.5 overflow-auto px-4.5 py-3.5 pb-6">
           {filtrados.length === 0 && <div className="py-6 text-center text-texto-suave">Sin resultados.</div>}
-          {filtrados.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => onSeleccionar(item)}
-              className="flex min-h-[58px] w-full cursor-pointer flex-col gap-0.5 rounded-2xl border-2 border-borde bg-white px-4 py-3 text-left hover:border-primario"
-            >
-              <span className="text-lg font-bold text-texto">{item.label}</span>
-              {item.sub && <span className="text-sm text-texto-suave">{item.sub}</span>}
-            </button>
+          {grupos.map((grupo, gi) => (
+            <div key={gi} className="flex flex-col gap-2.5">
+              {grupo.etiqueta && (
+                <div className={`text-sm font-bold text-texto-suave ${gi > 0 ? 'mt-2' : ''}`}>{grupo.etiqueta}</div>
+              )}
+              {grupo.items.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => onSeleccionar(item)}
+                  className="flex min-h-[58px] w-full cursor-pointer flex-col gap-0.5 rounded-2xl border-2 border-borde bg-white px-4 py-3 text-left hover:border-primario"
+                >
+                  <span className="text-lg font-bold text-texto">{item.label}</span>
+                  {item.sub && <span className="text-sm text-texto-suave">{item.sub}</span>}
+                </button>
+              ))}
+            </div>
           ))}
         </div>
       </div>

@@ -1,0 +1,554 @@
+# CLAUDE-MODULO-2.md — Módulo 2: POS + Caja y Turnos
+
+> **Este documento vive SOLO en la rama `feature/modulo-2`.** Es el CLAUDE.md específico del Módulo 2 — mismo rol que el CLAUDE.md raíz cumple para el Módulo 1: contexto autoritativo, se actualiza en cada fase, no se inventa lógica de negocio que lo contradiga. El CLAUDE.md raíz (`main`) sigue siendo la fuente de verdad del Módulo 1 y de las entidades transversales; este archivo lo complementa mientras el Módulo 2 esté en desarrollo. Cuando el módulo se mergee a `main`, su contenido relevante se vuelca al CLAUDE.md raíz y este archivo se puede retirar.
+
+**Estado**: ✅ **COMPLETADO** (Fases 0–9 + Módulo 3). Rama `feature/modulo-2`, branch de Neon `modulo-2-dev`. Pendiente: merge a `main` y preparación para producción (ver `PRODUCCION-CHECKLIST.md`).
+
+---
+
+## 0. ORIGEN DE ESTE DOCUMENTO Y CORRECCIONES APLICADAS
+
+El cliente entregó la especificación completa del Módulo 2 (secciones 1 a 12 más abajo, preservadas tal cual las escribió) el 2026-07-17, ya validada con Ariel/Eliana/Pablo. Al cruzarla contra el `schema.prisma` real del Módulo 1 aparecieron discrepancias entre el borrador y las convenciones ya establecidas. **Se corrigieron antes de escribir la migración** (no se tocó nada del contenido de negocio, solo la representación en datos):
+
+1. **IDs**: el borrador usaba `String @id @default(cuid())` en todos los modelos nuevos. El schema real usa `Int @id @default(autoincrement())` en absolutamente todas las tablas existentes. Se mantiene `Int autoincrement` en todo lo nuevo del Módulo 2, por consistencia.
+2. **No existe un modelo `Combo`**: los combos son `Producto` con `tipo: COMBO` + `ComboComponente` (implementado en el Módulo 1, ver CLAUDE.md raíz §9). El borrador tenía `comboId` en `ItemDePedido` y `Atencion` además de `productoId` — **se eliminó `comboId` en ambos**. Un combo se vende como cualquier `Producto` (`productoId` apunta al combo); al confirmar, el backend recorre `ComboComponente` de ese producto para generar el `MovimientoStock` de cada componente.
+3. **`TipoMovimientoStock` ya tenía reservados** (agregados en el Módulo 1 pensando en este momento): `VENTA`, `ANULACION_REPOSICION`, `ATENCION`, `MERMA_QUEMADO`, `RETORNO_A_PRODUCCION`, `MARCADO_POLLO`, `AJUSTE`. No se agregó nada a ese enum.
+4. **`TipoAlerta` ya tenía reservados** `DISCREPANCIA_CAJA`, `BLOQUEO_TURNO`, `STOCK_MINIMO` — se reutilizan tal cual.
+5. **Se agregó el enum `MedioPago`** (no existía): `EFECTIVO`, `DEBITO`, `CREDITO`, `MERCADO_PAGO`, `TRANSFERENCIA`.
+6. **Modelado del "pollo marcado" — decisión de diseño mía, NO validada explícitamente con el cliente**: el borrador tiene `EventoMarcadoPollo` como bitácora pero no especifica cómo se lleva el conteo de "cuántos pollos marcados hay ahora". Para no inventar un mecanismo de stock paralelo al ya existente, se modela igual que todo lo demás en el sistema: **"Pollo a la leña (entero) — MARCADO" es un `Producto` nuevo** (mismo patrón que ya existe entre "Pollo a la leña (entero)" y "Pollo a la leña (medio)"), con stock = SUM(MovimientoStock) igual que cualquier producto, sin precio propio (nunca se vende directamente). `EventoMarcadoPollo` dispara, en la misma transacción: un `MovimientoStock` `MARCADO_POLLO` negativo sobre "Pollo a la leña (entero)" (fresco) y uno positivo sobre "Pollo a la leña (entero) — MARCADO". Vender un "medio" descuenta 0.5 del marcado (el campo ya es `Decimal(12,3)`, soporta fracciones igual que los insumos de las fichas técnicas). **Repreguntar al cliente** si este modelo coincide con cómo manejan físicamente el pollo partido a mitad (¿la otra mitad queda disponible para otro cliente, o se descarta/retorna?).
+7. **Precisión numérica**: se sigue la convención ya establecida — montos de dinero `Decimal @db.Decimal(12, 2)` (igual que `Precio.monto`), cantidades/stock `Decimal @db.Decimal(12, 3)` (igual que `MovimientoStock.cantidad`). `Arqueo.valorContado/valorEsperado/diferencia` usa `Decimal(12,3)` genérico para ambos tipos (efectivo y pollos); el formato de display es responsabilidad del frontend.
+8. El resto del borrador (enums de estado, la lógica de negocio completa de las secciones 4–9 de abajo) se preserva tal cual — está bien pensado y es consistente con las reglas ya validadas del Módulo 1.
+
+**Progreso de implementación** (se actualiza en cada fase, ver plan en `C:\Users\brusc\.claude\plans\recursive-sniffing-quail.md` del lado de quien lo desarrolla, o pedir el resumen):
+- ✅ Fase 0: rama `feature/modulo-2` creada. Branch de Neon `modulo-2-dev` creada (copia de `production` con datos + schema al 2026-07-17), `.env` local apuntando a ella (la URL de `production` queda comentada arriba en el mismo archivo para volver fácil al Módulo 1).
+- ✅ Fase 1: schema completo escrito, validado y migrado contra `modulo-2-dev` (migración `20260717195901_modulo_2_turnos_pedidos_caja`). Seed corrido: 81 productos (incluye "Pollo a la leña (entero) — MARCADO"), 7 usuarios. Las 13 tablas nuevas verificadas y accesibles. La base de tests (`polleria_test` de la branch nueva) también migrada; `DATABASE_URL_TEST` del `.env` apunta a ella.
+- ✅ Fase 2: **Turnos + arqueo doble ciego + bloqueo/desbloqueo (backend)** — `src/modules/turnos/` (calculos puros, service, serializers ciegos, claves de emergencia, routes registradas en `app.ts` como `/api/turnos` y `/api/claves-emergencia`). Decisiones tomadas: (a) la referencia ciega de la apertura es lo **contado** en el cierre del último turno CERRADO de la sucursal (0 si nunca hubo — primer arranque); (b) los pollos esperados al cierre = apertura contada + neto de `MovimientoStock` del producto MARCADO durante el turno (una sola fuente de verdad, no se recuentan eventos); (c) la discrepancia en el CIERRE no bloquea (alerta `DISCREPANCIA_CAJA` al admin, el turno cierra igual) — el bloqueo es solo en apertura, como pide §5.1; (d) el mensaje de bloqueo al cajero no revela ni cuál de los DOS arqueos falló; (e) claves de emergencia: 8 caracteres sin ambiguos (se dictan por teléfono), generar una nueva invalida la anterior, cualquier fallo al usarla responde el mismo error genérico `CLAVE_INVALIDA`; (f) ADMIN debe indicar `sucursalId` explícita para abrir/cerrar (no tiene sucursal fija); CAJERO/ENCARGADO usan la propia releída de DB. Tests: 14 unitarios (`turnos.calculos.test.ts`) + 20 de integración (`turnos.test.ts`, incluye no-filtración de campos ciegos por inspección del JSON crudo, RBAC y aislamiento de sucursal).
+- ✅ Fase 3: **Pedidos — núcleo del POS (backend)** — `src/modules/pedidos/` (calculos puros, service, routes en `/api/pedidos`; la comandera arrancó como mock acá y pasó a `src/modules/comanderas/` con hardware real el 2026-08-06, ver §4.11). Decisiones tomadas: (a) el pedido **nace confirmado** (`POST /pedidos` = confirmar): el carrito vive en el frontend, el registro en DB descuenta stock, congela precios y emite ticket, todo atómico; (b) **`ItemDePedido.montoTotal`** (migración `item_pedido_monto_total`): con la tabla de precio por volumen el total de N unidades no es N × unitario, así que se congela el TOTAL de la línea como fuente de verdad y `precioUnitario` queda como referencia (total/cantidad redondeado); (c) precio por volumen: tier exacto si existe, si no descomposición greedy de mayor a menor (13 empanadas = 12 + 1) — con la estructura real de precios del cliente es también la combinación más barata; (d) el pollo (entero o medio, suelto o dentro de un combo) descuenta del producto MARCADO (medio = 0,5), nunca del fresco; los combos descuentan cada componente; (e) el vuelto sale SOLO del efectivo y el `Pago` EFECTIVO se registra NETO de vuelto (lo que queda físicamente en la caja — así el arqueo de cierre cuadra); (f) PRESENCIAL puede cobrarse directo desde EN_PREPARACION (paga al momento) — el diagrama §4.4 se respeta en todo lo demás, ENTREGADO jamás se anula; (g) la referencia ciega de pollos en el PRIMER turno de una sucursal es el stock actual del producto MARCADO (0 en instalación fresca) — evita un bloqueo espurio si el sistema arranca con pollos ya en la parrilla; (h) reasignación: pedido nuevo LISTO con los precios congelados del original, sin tocar stock; perdido: líneas marcadas costo cero DESPERDICIO_QUEMADO, sin reposición. Tests: 27 unitarios (`pedidos.calculos.test.ts`) + 17 integración (`pedidos.test.ts`, incluye el cierre de turno cuadrando al centavo contra las ventas del turno).
+- ✅ Fase 4: **Atenciones, gastos, retiros y circuito del pollo (backend)** — `src/modules/caja/` (`POST /api/atenciones`, `/api/gastos-caja`, `/api/retiros-caja`, `/api/marcado-pollos`, `/api/costo-cero`). Decisiones tomadas: (a) las atenciones usan el MISMO resolvedor de stock que las ventas (combos → componentes, pollo → MARCADO); (b) gastos solo EFECTIVO/MERCADO_PAGO, categoría "OTRO" exige descripción (ídem motivo "OTRO" en atenciones); (c) retiro con selector cerrado ARIEL/ELIANA/EMA validado por enum en DB y Zod; (d) marcado de pollos: `EventoMarcadoPollo` + 2 `MovimientoStock MARCADO_POLLO` (−fresco, +marcado) atómicos, con validación bloqueante contra el stock de fresco; (e) costo cero directo (sin pedido): `DESPERDICIO_QUEMADO` mata el stock, `RETORNO_A_PRODUCCION` mueve el MISMO producto del local a la sucursal Producción (un producto puede ser vendible e insumo a la vez, CLAUDE.md raíz §9). Tests: 13 integración (`caja-y-pollo.test.ts`) — circuito completo fresco→marcado→vendido/atención/retorno/quemado con cierre que cuadra al centavo, y resumen financiero completo para admin. Fix de paso: el endpoint `/turnos/:id/resumen` adjunta gastos/retiros/atenciones/eventos explícitamente (el serializer whitelist los pisaba).
+- ✅ Fase 5: **Stock mínimo + eventos WebSocket (backend)** — `src/modules/stock-minimo/` (`POST/GET /api/config-stock-minimo`). Decisiones: (a) "bajo el mínimo" = estrictamente menor (quedar EXACTO en el mínimo no avisa); (b) el aviso viaja en la respuesta de cada venta/atención que deja stock bajo el mínimo (`avisosStockMinimo` adjunto al pedido — pop-up del POS, se repite en cada venta); (c) la `Alerta STOCK_MINIMO` al admin se crea solo al CRUZAR el umbral (antes ≥ mínimo, después < mínimo) — reponerse y volver a cruzar genera una alerta nueva; (d) el bloqueo real en cero ya lo garantiza la validación de stock (nunca negativo); (e) la evaluación corre dentro de la MISMA transacción del descuento (confirmar pedido, modificar, atención). Eventos de socket agregados: `alerta:stock_minimo`, `ticket:nuevo/actualizacion/anulacion` (por ahora a la sala de admins). La comandera pasó de mock a impresión ESC/POS real el 2026-08-06 (ver §4.11), sin tocar estos eventos. Tests: 9 integración (`stock-minimo.test.ts`).
+- ✅ Fases 6–8: **FRONTEND completo del módulo 2** (2026-07-20, verificado end-to-end en navegador contra backend real). Vive en `frontend/src/features/local/caja/` (lado cajero) y `frontend/src/features/admin/{Turnos,StockMinimo}.tsx` (lado admin). Decisiones tomadas:
+  - **ShellLocal con 3 tabs**: Caja (default, POS módulo 2) / Recibir (recepción ciega módulo 1, intacta) / Stock (solo encargado). El **gate de turno aplica solo a la tab Caja**: recibir mercadería NO exige turno abierto (la mercadería llega aunque la caja no haya abierto — circuitos distintos; §5.1 dice "ni ver el POS", y el POS efectivamente queda detrás del gate).
+  - **2 endpoints nuevos de soporte en backend**: `GET /pedidos/mas-vendidos` (ranking por sucursal desde `ItemDePedido`, ordena la grilla §4.1) y `GET /productos/precios-vigentes` (tablas vigentes en bulk, 1 request; legible por CAJERO/ENCARGADO — el precio de VENTA no es dato ciego, el historial sigue solo admin/socio). +3 tests de integración (186 total).
+  - **El carrito espeja el cálculo de precio por volumen** (`frontend/src/lib/precios.ts`, mismo greedy que `pedidos.calculos.ts`) para el total en vivo; la AUTORIDAD sigue siendo el backend al confirmar (montoTotal congelado).
+  - **Pollo entero/medio**: botones separados en la grilla (son productos distintos del catálogo) — no hay selector modal intermedio; igual de rápido y menos taps.
+  - **Desbloqueo remoto llega por polling** (turno activo cada 20 s; pedidos cada 30 s) — la sala de Socket.io por sucursal sigue pendiente (ver abajo).
+  - Cierre de turno: al confirmar muestra SOLO unidades + pollos restantes y el botón cierra la sesión (§5.3 paso 5).
+  - Verificado en vivo (2026-07-20): apertura ciega con discrepancia → BLOQUEADO (mensaje genérico, JSON sin `valorEsperado`/`diferencia` — inspeccionado en Network) → admin ve sobrante $500 y genera clave → cajero desbloquea con clave → venta 1 pollo + 6 empanadas (tier $8.500 aplicado en carrito y confirmado por backend; la grilla se reordenó sola por más vendidos) → cobro mixto MP $20.000 + efectivo $10.000 con vuelto $500 (efectivo persistido NETO $9.500) → gasto PAPAS $2.000 → retiro Ariel $5.000 → marcado 4 pollos (fresco 12→8, marcado 6+4−1=9 en DB) → cierre ciego que COINCIDE al centavo ($3.000 y 9 pollos, sin alerta) → admin ve resumen financiero completo. Build de producción y `tsc` limpios en ambos proyectos.
+- ✅ **Auditoría externa aplicada (2026-07-20)** — un chat auditor independiente contrastó el handoff contra la spec; hallazgos aplicados en el mismo día:
+  - **Salas de Socket.io por sucursal** (era el GAP 1): `server.ts` suma a CAJERO/ENCARGADO a la sala `sucursal:<id>` al conectar (sucursal releída de DB, nunca del JWT). `turno:desbloqueado` (remoto Y por clave) y `alerta:stock_minimo` ahora se pushean al POS del local en vivo; el polling de 20 s queda como respaldo. Solo eventos NO ciegos van a esa sala.
+  - **Guard atómico contra carreras** (`transicionarAtomico` en `pedidos.service.ts`): cobrar, anular, reasignar, marcar listo/no-retirado/perdido y modificar ahora condicionan el cambio de estado al estado leído DENTRO de la transacción (row lock + re-chequeo). Antes, dos anulaciones en paralelo reponían el stock DOS veces y dos cobros creaban pagos duplicados — reproducido y arreglado.
+  - **Idempotencia en `POST /pedidos`**: campo `Pedido.tokenIdempotencia` (unique, migración `20260720160000`); el POS manda un UUID por pedido armado (se renueva cuando el carrito arranca de cero). Doble click / retry de red devuelven el pedido ya creado; la carrera pura resuelve por constraint y responde el pedido ganador.
+  - **10 tests nuevos** en `tests/integration/carreras-y-vectores.test.ts` (196 total): los 8 vectores de ataque del auditor — doble confirmar, doble cobro, doble anulación, sobrepago 100% electrónico (rechaza `VUELTO_SIN_EFECTIVO`), cajero sin sucursal (error claro, no 500), encargado consultando turno de otra sucursal (403), clave de emergencia cruzada entre sucursales (rechaza con error genérico y NO quema la clave), stock mínimo evaluando componentes de combo. XSS: verificado que ningún componente usa `dangerouslySetInnerHTML`.
+  - **Cobertura de auditoría verificada**: las 15 acciones de §8 se registran todas (más 4 de estados de pedido: MARCAR_PEDIDO_LISTO, PEDIDO_NO_RETIRADO, REASIGNAR_PEDIDO, MARCAR_PEDIDO_PERDIDO).
+  - **Decisiones ratificadas y documentadas** (el auditor las pidió explícitas): (a) los IDs de TODO el proyecto son `Int autoincrement` — el borrador de spec decía cuid() pero se priorizó consistencia con el módulo 1; (b) el `Pago` EFECTIVO se guarda **NETO de vuelto** (lo que queda físicamente en la caja — así el arqueo cuadra); el monto bruto y el vuelto quedan en la auditoría de `COBRAR_PEDIDO` — **preguntar a Pablo** si necesitan el bruto como dato de reporte; (c) la discrepancia en el CIERRE queda en el `Arqueo` y el resumen del admin pero **NUNCA bloquea** — solo la apertura bloquea; (d) los precios VIGENTES son visibles por CAJERO/ENCARGADO para operar el POS (el precio de venta no es dato ciego); el HISTORIAL de precios sigue siendo solo ADMIN/SOCIO; (e) una clave de emergencia generada SIN turno específico sirve para cualquier turno bloqueado (uso previsto: el admin la genera "para Local X" desde la tarjeta del turno, que siempre la ata a un turno).
+- 🔶 Fase 9 (pulido final) — parcialmente resuelta el 2026-07-24 (informe de auditoría de negocio, contrastado contra el código real antes de aplicar nada):
+  - ✅ **Modificar pedido confirmado ya tiene UI**: `frontend/src/features/local/caja/ModificarPedido.tsx`, botón "Modificar" en `PedidosActivos.tsx` para pedidos `EN_PREPARACION`/`LISTO`. Reutiliza `PATCH /pedidos/:id` (ya existía, backend sin cambios) — precarga el carrito con los ítems actuales, deja agregar/quitar/ajustar cantidades y guarda la lista completa. Verificado end-to-end en navegador (2026-07-24): pedido con 2× "Aderezo extra" → modificado a 3× → el `MovimientoStock` solo descontó la diferencia (-1, no -3 de nuevo) y se generó el ticket `ACTUALIZACION` en cocina.
+  - ✅ **Timer de `pedido:listo_no_retirado` implementado**: `Pedido.fechaListoNoRetirado` + `Pedido.avisoNoRetiradoEmitido` (migración `20260724142643_pedido_timer_no_retirado`), función `pedidosNoRetiradosParaAvisar()` en `pedidos.service.ts`, job periódico en `server.ts` (`setInterval`, cada `INTERVALO_CHEQUEO_NO_RETIRADO_MS` = 2 min) que emite el evento a la sala de admins y marca el pedido como avisado (no se reemite en la corrida siguiente). Umbral: `MINUTOS_PEDIDO_NO_RETIRADO_ALERTA = 30` en `src/lib/constantes.ts` — **sigue sin confirmar con Pablo**, es el default de la spec. 4 tests nuevos en `pedidos.test.ts`.
+  - ✅ **`Producto.esProductoSistema` agregado** (hallazgo de la auditoría de negocio, no de la técnica anterior — riesgo real confirmado leyendo `productos.routes.ts`: el `PATCH /productos/:id` de admin no tenía ninguna protección especial para "Pollo a la leña (entero) — MARCADO"). Campo `Boolean @default(false)` en `Producto` (migración `20260724142403_producto_es_sistema`), marcado `true` en el seed para el producto MARCADO, y `productos.service.ts::actualizar()` rechaza renombrarlo o desactivarlo con `PRODUCTO_RESERVADO_SISTEMA` (409) — cambiar la categoría sigue permitido. 4 tests nuevos en `producto-sistema.test.ts`.
+  - ✅ **Housekeeping de git**: se sacaron `.claude/launch.json` y `.claude/settings.local.json` del árbol (`git rm --cached`) y se agregó `.claude/` al `.gitignore` — quedaban versionados desde el commit de Facundo.
+  - ✅ **Retorno a producción ahora genera `LineaIngreso` trazable**: `Proveedor.esProveedorSistema Boolean @default(false)` (migración `20260724160000_proveedor_es_sistema`), proveedor "Retorno interno" en el seed (`esProveedorSistema: true`). `caja.service.ts::registrarCostoCero()` al procesar `RETORNO_A_PRODUCCION` crea un `IngresoMercaderia` + `LineaIngreso` sintéticos (misma transacción) con `cantidadRestanteDisponible` = cantidad retornada — producción puede consumirlo por partida en un lote igual que cualquier ingreso de proveedor. El proveedor de sistema no aparece en `GET /proveedores` (filtrado con `esProveedorSistema: false`) y no puede renombrarse ni desactivarse (`PROVEEDOR_RESERVADO_SISTEMA`, 409). Test actualizado en `caja-y-pollo.test.ts`.
+  - ⬜ **Sigue pendiente**: motivos de atención (`MOTIVOS_ATENCION` en `frontend/src/api/caja.ts`) sin validar con el cliente.
+- ✅ **Módulo 3: Dashboard y Reportes (2026-07-25)**: implementado directamente sobre esta rama. Backend: `src/modules/dashboard/` y `src/modules/reportes/` (8 endpoints GET, ADMIN+SOCIO). Frontend: `frontend/src/features/admin/{Dashboard,Reportes}.tsx` + API layer. Dashboard como página de inicio del panel admin. Alertas extendidas con filtro por fecha. Las alertas de stock mínimo (originalmente Módulo 3) ya estaban en la Fase 5.
+  - **Nota sobre un informe de auditoría de negocio recibido el 2026-07-24**: además de los puntos de arriba, el informe pedía "crear la receta real de empanada de pollo" y documentar la lógica de la milanesa del sandwich — **ambas cosas ya estaban resueltas en `main` desde el 2026-07-18** (commit `eb7b05c`, ya mergeado a esta rama vía `38eaae7`) y ya documentadas en el CLAUDE.md raíz §11. Se verificó contra `prisma/seed.ts` línea por línea antes de descartarlas — no hacía falta ningún cambio ahí. Quien retome este documento: si un informe de otra sesión pide algo que "ya se ve resuelto" acá o en el CLAUDE.md raíz, verificar contra el código antes de reimplementarlo.
+- ✅ **Verificación de la branch de Neon `modulo-2-dev` (2026-07-26)**: `prisma migrate deploy` corrido contra `neondb` (dev) y `polleria_test` (tests) — son DOS bases separadas, cada una necesitó su propio deploy; `polleria_test` estaba desactualizada desde la Fase 9 (le faltaban 4 migraciones). Sin drift de schema. Suite completa: **202/202 tests pasan**. Ver `PRODUCCION-CHECKLIST.md` para el detalle y el gotcha de `npx prisma generate` (no hay `postinstall` que lo dispare solo después de traer cambios de schema).
+- ✅ **Auditoría de cumplimiento contra la spec final del cliente (2026-07-27)**: se cruzó un documento maestro (versión final consolidada, pasada por el cliente) ítem por ítem contra el código real — RBAC completo endpoint por endpoint, schema, flujos 1-7. Resultado: la enorme mayoría cumple; varios puntos que el documento marcaba como "pendiente" (timer de no-retirado, trazabilidad por pedido, navegación desde alertas, housekeeping de `.claude/`, cookie sameSite) ya estaban resueltos — el documento estaba desactualizado, no el sistema. El schema que describe ese documento para combos (`Combo` como modelo propio, `comboId` en `ItemDePedido`) y `Turno.id` como `String/cuid` son borradores viejos, ya corregidos acá (ver §0). Quedaron 2 discrepancias de RBAC para validar con Pablo/Ariel antes de tocar código (no se tocó nada todavía): si SOCIO debería ver `GET /alertas` (hoy solo ADMIN, así se validó originalmente) y si CAJERO debería ver `GET /stock` (hoy solo ENCARGADO lo ve, decisión original del frontend del Módulo 1). Informe completo entregado al cliente para validación.
+- ✅ **Tests de integración de Reportes y Dashboard (2026-07-27)** — cerraba el único gap que la propia spec admitía como pendiente: `tests/integration/reportes.test.ts` (17 tests: RBAC de los 8 endpoints + contenido de cada reporte, incluida la cadena de trazabilidad real ingreso→lote→transferencia→venta con `GET /reportes/trazabilidad/pedido/:id`) y `tests/integration/dashboard.test.ts` (RBAC + los 9 KPIs agregados, incluido el filtro por sucursal). Suite completa: **222/222 tests pasan**.
+- ✅ **9 mejoras de UX de Producción/Catálogo tras la primera prueba manual de la rama (2026-07-27)**, pedidas por Ariel/Pablo después de probar el Módulo 1 en esta rama:
+  1. **Foto del remito**: preview real de la imagen (antes solo un ícono + nombre de archivo) y se sacó el `capture="environment"` forzado del input para que el celular ofrezca cámara O galería en un solo selector nativo, con botón "Cambiar foto".
+  2. **"¿Qué vas a producir?" ya no muestra lo que se arma en el local**: nuevo endpoint `GET /produccion/productos-producibles` (PRODUCCION+ADMIN) que filtra a productos ELABORADO **con ficha técnica activa** — separa automáticamente "se produce por lote en planta" (milanesa, empanadas, medallones, bifes, pollo a la leña) de "se arma en el local" (hamburguesas completas, papas grandes, sandwiches) sin mantener una lista a mano. También excluye productos de sistema (`esProductoSistema`) como el pollo MARCADO, que antes aparecía ahí por error (es tipo ELABORADO pero nunca se produce por lote).
+  3. **Catálogo admin — filtros**: buscador por nombre + categoría + tipo + activo/inactivo en la pestaña Productos (client-side sobre el listado ya cargado).
+  4. **Productos habituales por proveedor**: nueva relación M2M `Proveedor.productosHabituales` ↔ `Producto` (migración `20260727235304_proveedor_productos_habituales`, sin cantidades — decisión explícita del cliente: configuración fija que carga el admin una vez, no derivada del historial). Pantalla nueva en Catálogo > Proveedores ("Habituales") con checklist de materias primas. Endpoints `GET/PUT /proveedores/:id/productos-habituales` (lectura PRODUCCION+ADMIN, escritura solo ADMIN, auditado).
+  5. **AsistenteIngreso — accesos rápidos**: al elegir el proveedor, sus productos habituales aparecen como chips arriba del selector completo; tocar uno salta directo al teclado de cantidad (sin pasar por el buscador).
+  6. **Insumos precargados de la ficha técnica**: nuevo endpoint `GET /produccion/productos/:id/insumos-esperados` (PRODUCCION+ADMIN) que devuelve solo identidades de insumos (productoInsumoId + nombre), **sin cantidades ni datos de rendimiento/desvío** (control ciego intacto). Al elegir qué producir, la lista de insumos de la ficha aparece precargada como pendientes de cargar; se puede seguir agregando un insumo extra a mano.
+  7. **Reparto automático de un insumo entre varias partidas — el cambio más pedido**: en vez de elegir partida por partida y calcular a mano, el operario dice el TOTAL que necesita de un insumo y el sistema reparte automático FIFO (de la partida más vieja a la más nueva) entre las partidas disponibles, mostrando el resultado con opción de ajustar cada partida a mano antes de confirmar (`calcularReparto`/`reajustarReparto` en `AsistenteProducir.tsx`, 100% client-side, sin cambios de backend — cada partida usada sigue generando su propia fila de `InsumoUsado`, la trazabilidad por partida no se toca). **2 bugs reales encontrados y corregidos durante la verificación en vivo**: (a) al ajustar una partida hacia abajo, el reajuste automático se rellenaba a sí misma en vez de completar con otra partida con margen — se corrigió excluyendo la partida recién editada del recálculo; (b) texto "60 unidad" en vez de "60 unidades" — se agregó el helper `unidadTexto()` con pluralización correcta, reemplazando todos los usos de `unidadDeMedida.toLowerCase()` en el archivo.
+  8. **Mostrar cuánto hay disponible** al pedir "¿cuánto usaste?": antes solo aparecía como mensaje de error al pasarse del máximo; ahora es un texto fijo siempre visible (`pistaDisponible`, prop nueva de `TecladoNumerico`).
+  9. **Editar cantidad de un insumo ya cargado** sin borrar y volver a cargar (`valorInicial`, prop nueva de `TecladoNumerico`, y botón ✎ por línea).
+
+  Verificado en vivo en el navegador contra `modulo-2-dev` con datos reales (incluida una segunda partida de nalga creada a propósito para probar el reparto cruzando 2 partidas: 10kg pedidos → 5kg de la partida del 13/7 + 5kg de la del 27/7; ajuste manual a 2kg en la primera → la segunda subió sola a 8kg para completar el total). Suite completa sigue en **222/222**, `tsc --noEmit` limpio en ambos proyectos. Quedan 2 preguntas para validar con el cliente en la próxima reunión (no bloquean nada): confirmar el diseño de "productos habituales" con Pablo en vivo, y si conviene ofrecer explícitamente "Sacar foto" / "Elegir de galería" como dos botones en vez de dejar que el celular decida (por ahora se dejó la opción más simple).
+
+---
+
+## 1. PRINCIPIO DE DISEÑO RECTOR — EL CONTROL CIEGO (INNEGOCIABLE)
+
+Ya implementado en módulo 1, se extiende al módulo 2:
+
+> **El empleado que carga un conteo NUNCA ve el valor esperado antes de cargar. El sistema compara internamente y solo informa las discrepancias al Administrador.**
+
+En el módulo 2 aplica a:
+- **Arqueo de apertura de caja**: el cajero cuenta el efectivo físico sin saber cuánto debería haber.
+- **Arqueo de pollos marcados en apertura**: mismo principio, para el conteo de pollos disponibles.
+- **Arqueo de cierre de caja**: ídem apertura.
+- **Arqueo de pollos marcados en cierre**: ídem.
+
+El backend NUNCA devuelve el monto esperado al frontend antes de que el cajero cargue su conteo. La API solo responde "coincide / no coincide" — el monto esperado, el faltante y el sobrante los ve solo el ADMINISTRADOR.
+
+---
+
+## 2. ROLES (sin cambios del módulo 1)
+
+| Rol | Qué puede hacer en el módulo 2 |
+|---|---|
+| **ADMINISTRADOR** | Todo. Recibe todas las alertas. Puede desbloquear turnos bloqueados. Genera claves de emergencia. Ve resúmenes financieros completos de todos los turnos. |
+| **SOCIO** | Solo lectura: ve reportes de ventas, cierres de caja, retiros. NO puede abrir turnos, cobrar, ni hacer nada operativo. |
+| **ENCARGADO** | Puede desbloquear un turno bloqueado si el admin se lo autoriza. Opera el POS igual que el CAJERO. Puede ver el stock de su local. |
+| **CAJERO** | Opera el POS: abre turno, carga pedidos, cobra, registra gastos y retiros, cierra turno. **No ve diferencias de caja ni montos esperados.** |
+| **PRODUCCION** | Sin acceso a ningún endpoint del módulo 2. |
+
+**Regla de sucursal**: un CAJERO o ENCARGADO solo puede abrir turno, vender y operar en la sucursal asignada en `Usuario.sucursalId`. El backend valida esto siempre contra la DB.
+
+---
+
+## 3. ENTIDADES — YA IMPLEMENTADAS EN EL SCHEMA (con las correcciones de §0)
+
+`Turno`, `Arqueo`, `BloqueoDeTurno`, `ClaveDeEmergencia`, `Pedido`, `ItemDePedido`, `Pago`, `Atencion`, `GastoDeCaja`, `RetiroDeCaja`, `EventoMarcadoPollo`, `TicketCocina`, `ConfiguracionStockMinimo` — ver `prisma/schema.prisma`, sección "MÓDULO 2 — POS + CAJA Y TURNOS". Enums: `EstadoTurno`, `MomentoArqueo`, `TipoArqueo`, `ResultadoArqueo`, `EstadoBloqueo`, `TipoDesbloqueo`, `TipoPedido`, `EstadoPedido`, `MedioPago`, `TipoCostoCero`, `SocioRetiro`, `TipoTicket`.
+
+Producto nuevo en el seed: **"Pollo a la leña (entero) — MARCADO"** (ver corrección #6 de §0).
+
+---
+
+## 4. FLUJO 4 — VENTA EN EL POS
+
+### 4.1 Pantalla del POS — reglas de UX críticas (INNEGOCIABLE)
+
+- Interfaz táctil con **botones grandes** agrupados por categoría, en **dos niveles** (reunión 4/8): el cajero toca primero el grupo (`Producto.categoriaMadre` — Pollos, Sándwiches, Empanadas, Platos, Guarniciones, Bebidas, Otros) y recién ahí se abren sus categorías. Con 16 categorías vendibles, una sola fila de chips no entraba en la tablet. El agrupador es texto libre editable desde Catálogo (columna "GRUPO EN EL POS"); vacío = "Otros". El mapeo inicial es provisorio hasta que el cliente pase su agrupación definitiva.
+- **Fila fija "LO QUE MÁS SE VENDE"** arriba de todo, con los 8 productos con más ventas de esa sucursal. **No se filtra** al cambiar de grupo ni de categoría — es el atajo del pedido típico.
+- **Buscador**: mientras hay texto pisa los filtros y busca en todo el catálogo (insensible a mayúsculas y tildes), para no obligar al cajero a acordarse de en qué categoría está lo que escribió.
+- Los productos se ordenan por **más vendidos primero** — el sistema calcula esto automáticamente desde el historial de `ItemDePedido` por sucursal. No es un orden manual. Si un producto nunca se vendió, va al final. Pedido explícito del cliente: "que lo que más se pide aparezca primero para no perder tiempo".
+- El total del pedido se actualiza en tiempo real a cada cambio.
+- El carrito del pedido está siempre visible junto a los productos.
+
+### 4.2 Tipos de pedido
+
+Al iniciar un pedido el cajero elige:
+- **PRESENCIAL**: el cliente está en el local. Se cobra en el momento.
+- **A_RETIRAR**: pedido por teléfono o WhatsApp (futuro). El cajero lo carga, queda en lista de pendientes. Se cobra cuando el cliente llega.
+
+### 4.3 Variantes y precios
+
+- **Pollos**: se venden por porción → `entero` o `medio`. Son productos distintos en el catálogo (no variantes de uno). Al tocar "Pollo" en el POS debe aparecer el selector entero/medio.
+- **Combos**: precio propio, no calculado. Ya modelado en módulo 1 con `Producto.tipo=COMBO` y `ComboComponente`. Al vender un combo, los `MovimientoStock` se generan por cada componente.
+- **Empanadas**: precio por volumen con tabla de precios (`Precio.cantidad`). Ej: 1 = $X, 6 = $Y, 12 = $Z. El POS debe calcular el precio óptimo según la cantidad pedida.
+- El precio que se usa es siempre el vigente en la fecha del pedido. Se congela en `ItemDePedido.precioUnitario` al confirmar.
+
+### 4.4 Ciclo de vida de un pedido — estados (INNEGOCIABLE)
+
+```
+Cargando items (no registrado aún)
+        ↓ [cajero confirma]
+  EN_PREPARACION  ←→  (modificaciones y anulación posibles)
+        ↓ [cajero marca como listo]
+      LISTO
+      /    \
+[cobrado]   [no viene a buscarlo]
+    ↓              ↓
+ENTREGADO    LISTO_NO_RETIRADO
+                  /    \
+         [se vende a   [se descarta]
+          otro cliente]      ↓
+               ↓          PERDIDO → (venta a costo cero, tipo DESPERDICIO_QUEMADO)
+          REASIGNADO
+
+En cualquier estado antes de ENTREGADO/PERDIDO:
+        ↓ [cajero anula]
+      ANULADO
+```
+
+### 4.5 Descuento de stock — cuándo (INNEGOCIABLE)
+
+**El stock se descuenta al CONFIRMAR el pedido (pasar a EN_PREPARACION), NO al cobrar.**
+
+Validado con Ariel textualmente: *"Si se mandó a preparar, se consumió, se retire o no."* Si el cliente no viene, el stock ya se consumió — el pedido pasa a LISTO_NO_RETIRADO y desde ahí o se reasigna (el stock ya estaba descontado, el nuevo pedido no descuenta de nuevo) o se marca como PERDIDO (venta a costo cero, el stock no se repone porque ya se usó).
+
+**Excepción: ANULADO**. Si se anula un pedido EN_PREPARACION (se manda a no prepararlo), el stock SÍ se repone (`MovimientoStock` `ANULACION_REPOSICION`).
+
+### 4.6 Modificaciones y anulaciones post-confirmación
+
+- Un pedido confirmado (EN_PREPARACION o LISTO) puede modificarse o anularse.
+- **Modificación**: ajusta el stock (descuenta o repone la diferencia), manda ticket de actualización a cocina, registra en auditoría qué cambió, quién y cuándo.
+- **Anulación**: repone TODO el stock del pedido, manda ticket de anulación a cocina, guarda el pedido COMPLETO tal como estaba en `RegistroAuditoria` (no solo "fue anulado" — los items completos quedan en el registro).
+- Un pedido ENTREGADO NO puede anularse. Solo el ADMINISTRADOR puede hacer ajustes posteriores.
+
+### 4.7 Cobro
+
+- Se puede cobrar con **combinación de medios** en un mismo pedido (ej: parte efectivo, parte MP).
+- Si hay pago en efectivo, el sistema calcula el vuelto automáticamente.
+- El pedido pasa a ENTREGADO cuando se registra el pago.
+- Medios: `EFECTIVO`, `DEBITO`, `CREDITO`, `MERCADO_PAGO`, `TRANSFERENCIA`.
+- **Recargo de tarjeta** (reunión 4/8, pedido de Pablo): al elegir `DEBITO` o `CREDITO` el POS abre primero un selector con los porcentajes que el admin dejó cargados (`RecargoTarjeta`, editable en **Catálogo → Recargos de tarjeta**), con "SIN RECARGO" siempre primero. Después se carga el monto **sin** el recargo: el sistema lo suma.
+  - `Pago.monto` sigue siendo **la parte que cubre el pedido** — el total del pedido cierra contra la suma de los `monto`, sin excepción. El extra va en `Pago.recargoPct` + `Pago.montoRecargo`.
+  - El recargo **solo** se acepta en `DEBITO`/`CREDITO` (`MEDIO_SIN_RECARGO`, 400). Como el efectivo nunca lleva recargo, el arqueo ciego de caja no se ve afectado.
+  - En el resumen del turno y en Reportes → Ventas por medio, el recargo aparece **separado de la venta** (`recargo` por medio + `totalRecargosTarjeta`): es plata que el cliente pagó de más por el plástico, no facturación.
+  - Los porcentajes se **desactivan**, no se borran: cada pago guarda el suyo, así que cambiar la lista no altera el histórico.
+
+### 4.7 bis Retiro de socio y venta a empleado (reunión 4/8)
+
+En el carrito, junto a Presencial / A retirar, el cajero elige quién se lleva el pedido: **Cliente** (default), **Socio** o **Empleado**. Es solo por **mercadería** — el retiro de PLATA sigue donde estaba, en Operaciones de caja (Pablo lo aclaró expresamente).
+
+- **Socio** → obliga a elegir cuál (`ARIEL`/`ELIANA`/`EMA`, mismo selector cerrado de los retiros). El pedido queda a **costo cero**: cada línea con `montoTotal = 0`, `esVentaCostoCero = true` y `tipoCostoCero = RETIRO_SOCIO`, así **no cuenta como venta** en ningún total. **El stock igual se descuenta** — se lo llevó. No se cobra: se cierra con `POST /:id/cobrar` sin pagos, queda `ENTREGADO` **sin ningún `Pago`** (si generara uno, ensuciaría el arqueo de caja) y se audita como `ENTREGAR_SIN_COBRO` con el socio.
+- **Empleado** → sí es venta, con el **descuento global configurable** (`ConfiguracionGeneral.DESCUENTO_EMPLEADO_PCT`, editable en **Catálogo → Recargos y descuentos**, default 20%). Se aplica **por línea y redondeando hacia abajo** a pesos enteros: el empleado nunca paga de más por un redondeo y la suma de las líneas da exacto el total.
+- El `%` queda **congelado en `Pedido.descuentoPct`** al confirmar. Cambiarlo después no toca lo ya vendido, y si el pedido se modifica se le reaplica **el suyo**, no el vigente.
+- Un pedido normal **no** se puede cerrar sin pagos (`PAGO_INSUFICIENTE`): la vía sin cobro existe solo cuando el total es 0.
+
+`ConfiguracionGeneral` es una tabla clave-valor a propósito: cada parámetro nuevo que el admin deba poder tocar no debería costar una migración.
+
+### 4.8 Atenciones / Regalías
+
+- Producto o combo sin cargo.
+- Antes de confirmar el cobro, el cajero puede registrar una atención.
+- Datos obligatorios: producto/combo, cantidad, motivo (de lista predefinida + opción "OTRO" con texto libre).
+- El stock se descuenta igual que una venta normal (`MovimientoStock` `ATENCION`).
+- No genera pago (costo cero para el cliente).
+- Queda registrada en el historial del turno como egreso de stock.
+- Cualquier usuario logueado puede registrarla (no requiere rol especial), pero queda con el nombre del que está en sesión.
+
+### 4.9 Venta a costo cero (mermas y retornos) — INNEGOCIABLE
+
+Mecanismo para registrar productos que no se cobran pero consumen stock. Se opera desde la misma pantalla del POS (no es un módulo aparte).
+
+Dos tipos:
+
+**DESPERDICIO_QUEMADO**: producto destruido, no aprovechable.
+- Stock muere ahí (`MovimientoStock` `MERMA_QUEMADO`).
+- No mueve la caja.
+- Agrupa para el reporte: *"esta semana se quemaron X pollos, Y milanesas, Z empanadas"*
+- Aplica a pollos quemados en la parrilla, milanesas sobrecocidas, empanadas quemadas, etc.
+
+**RETORNO_A_PRODUCCION**: producto que no se vendió pero es aprovechable.
+- Descuenta del stock del local (`MovimientoStock` `RETORNO_A_PRODUCCION` negativo en el local).
+- Suma al stock de la sucursal Producción como insumo (`MovimientoStock` `RETORNO_A_PRODUCCION` positivo en Producción).
+- Ejemplo: pollo cocido no vendido → vuelve a producción como insumo para empanadas de pollo.
+- No mueve la caja.
+
+### 4.10 Circuito especial del pollo (INNEGOCIABLE)
+
+El pollo tiene un stock intermedio que los demás productos no tienen.
+
+**3 estados del stock de pollo** (ver corrección #6 de §0 para el modelado en datos):
+1. **Pollo fresco/preparado** (en freezer, unidades): llega vía transferencia desde producción. Es "Pollo a la leña (entero)", `Producto` normal con su stock.
+2. **Pollo marcado** (en la parrilla, cocinándose): "tiran" los pollos a la parrilla al inicio del turno o en el transcurso. Registro por `EventoMarcadoPollo`. Descuenta del stock de pollo fresco y suma al `Producto` "Pollo a la leña (entero) — MARCADO".
+3. **Pollo vendido**: la venta descuenta de los **marcados**, no del fresco.
+
+**Reglas:**
+- La venta de pollo (entero o medio) descuenta del stock de pollos **marcados**, no del fresco.
+- Si no hay pollos marcados, no se puede vender pollo (alerta + bloqueo cuando llega a cero).
+- En el arqueo de apertura/cierre, el cajero cuenta los pollos marcados que hay físicamente (sin saber cuántos dice el sistema que debería haber — control ciego).
+- Los pollos marcados que sobran al cierre del turno pasan como saldo al turno siguiente.
+
+**Destinos del pollo marcado no vendido al final del turno:**
+- **Sigue disponible (apto)**: queda en el conteo de marcados, pasa al turno siguiente.
+- **Reutilizable** (cocido pero no como pollo entero): el cajero lo registra como `RETORNO_A_PRODUCCION` — vuelve a producción como insumo para empanadas de pollo.
+- **Quemado/inaprovechable**: el cajero lo registra como `DESPERDICIO_QUEMADO` — sale del sistema.
+
+### 4.11 Comandera (impresora térmica) — ✅ implementado 2026-08-06
+
+Reemplaza el mock de consola por ESC/POS real sobre TCP, contra el hardware efectivamente comprado: **XPRINTER XP-V320N**, socket crudo al puerto 9100 (protocolo "raw"/JetDirect, sin driver ni spooler). Cada local de venta tiene **dos** comanderas — cocina y mostrador —, cada una con su propia IP cargada por el admin desde **Catálogo → Comanderas** (nunca hardcodeada, para poder reasignarla si cambia la red del local).
+
+- `ConfiguracionComandera` (sucursal + destino `COCINA`/`MOSTRADOR` + IP + puerto, `@@unique([sucursalId, destino])`) e `ImpresionComandera` (un registro por cada intento de imprimir un `TicketCocina` en una comandera concreta). El resultado de impresión ya **no** vive en `TicketCocina` — con dos impresoras por local, un solo par `impreso`/`errorImpresion` no alcanzaba para saber cuál de las dos falló. Migración `20260806120000_comanderas_por_destino` **dropea** esas dos columnas de `TicketCocina` (pérdida de dato operativo aceptada y documentada en el propio SQL: el contenido de los tickets viejos queda intacto, solo se pierde si ya se sabía que habían impreso o no).
+- **La impresión física ocurre DESPUÉS del commit del pedido, no dentro de su transacción.** Dentro de la transacción solo se crea el `TicketCocina` y una `ImpresionComandera` pendiente por cada comandera activa del local; `despacharEnSegundoPlano()` manda los bytes por TCP recién con la transacción ya confirmada. Esperar a dos impresoras por red con los locks de stock abiertos convertiría una impresora apagada en algo que frena la caja entera — exactamente lo que la regla "nunca bloquear por hardware" prohíbe.
+- Si una comandera no responde (timeout 4 s): el pedido queda confirmado igual, esa `ImpresionComandera` guarda `impreso: false` + el error, y se emite `comandera:fallo` a la sala de la sucursal con **qué pedido y cuál de las dos** no imprimió — el POS lo muestra como banner no bloqueante ("avisá a viva voz"). Nunca un "error de impresión" genérico: el cajero necesita saber qué compensar.
+- Los comandos ESC/POS se generan a mano (`src/modules/comanderas/escpos.ts`, sin dependencia nueva): code page CP850 para los acentos, con tabla de fallback a ASCII para lo que no esté mapeado.
+- El ticket `ACTUALIZACION` muestra **qué cambió** (agregado / quitado / cambio de cantidad vía `calcularCambios()`), además del pedido completo — repetirlo entero obligaba a comparar dos papeles a mano en plena cocina. La anulación también imprime, pedido explícito del cliente.
+- **Control Ciego también en el papel**: ningún ticket lleva montos de dinero — el de mostrador lo ve el cajero, que no puede ver importes.
+- Panel admin (**Catálogo → Comanderas**, solo ADMINISTRADOR — ni el SOCIO entra, es config de red): alta/edición de IP y puerto, activar/desactivar, botón "Imprimir prueba" (única forma de validar la IP sin simular un pedido real).
+- **Pendiente, no se puede resolver sin las impresoras en la mano**: probar contra una XP-V320N real que la CP850 muestre bien los acentos, que el corte de papel funcione y que 48 columnas sea el ancho correcto del rollo; cargar las 4 IPs reales cuando estén instaladas; confirmar con Ariel/Pablo si el ticket de MOSTRADOR va idéntico al de COCINA (se asumió que sí) — en ningún caso puede llevar precios.
+
+---
+
+## 5. FLUJO 5 — CAJA Y TURNOS
+
+### 5.1 Apertura de turno
+
+**Paso 1 — Login**
+El cajero entra con su usuario. Si no hay turno abierto para su sucursal, el sistema le exige apertura antes de poder vender. No puede hacer nada (ni ver el POS) hasta abrir el turno.
+
+**Paso 2 — Arqueo doble y ciego de apertura**
+El cajero hace DOS conteos sin ver ningún número de referencia:
+1. **Cuenta el efectivo físico** en la caja e ingresa el monto.
+2. **Cuenta los pollos marcados** disponibles físicamente e ingresa la cantidad.
+
+La pantalla de arqueo es neutral: solo muestra los campos para ingresar los valores. Sin saldos anteriores, sin sugerencias, sin totales del turno anterior visibles.
+
+**Paso 3 — El sistema compara internamente**
+El sistema calcula:
+- `saldoEsperadoEfectivo` = saldo final de efectivo del turno anterior (o 0 si es el primer turno del día)
+- `pollosMarcadosEsperados` = conteo final de pollos marcados del turno anterior (o 0)
+
+Si ambos coinciden → **turno ABIERTO**, el cajero puede vender.
+Si alguno no coincide → **turno BLOQUEADO**.
+
+**CRÍTICO — qué ve el cajero cuando hay discrepancia**:
+- Mensaje genérico: *"Hay una diferencia en el conteo. Se notificó al administrador. Esperá la autorización para continuar."*
+- **NO se muestra**: cuánto hay de diferencia, qué esperaba el sistema, si es faltante o sobrante, en qué lado está el error.
+- El cajero no puede hacer nada hasta que lo desbloqueen.
+
+**Qué ve el ADMINISTRADOR cuando hay discrepancia**:
+- Monto esperado, monto contado, diferencia (faltante/sobrante), en efectivo y/o pollos marcados.
+- **Nombre del cajero que cerró el turno anterior** (para preguntarle a él primero).
+- Nombre del cajero que está intentando abrir.
+- Botón para desbloquear el turno.
+
+**Paso 4 — Desbloqueo (dos caminos)**
+
+**Camino A — Remoto (el admin tiene acceso)**:
+El ADMINISTRADOR ve la alerta en su panel, revisa los datos y aprieta "Desbloquear". El turno pasa a ABIERTO. Se registra: quién autorizó, cuándo, con qué diferencia había, cajero anterior y cajero actual.
+
+**Camino B — Clave de emergencia (el admin no tiene acceso en ese momento)**:
+- En la pantalla de bloqueo hay una opción discreta (no obvia, pequeña, en un rincón) que abre un campo para ingresar la clave.
+- El admin genera la clave desde su panel (botón "Generar clave de emergencia para Local X"). La clave es aleatoria, de un solo uso, expira a los 10 minutos.
+- El admin se la dicta al cajero por teléfono.
+- El cajero la ingresa y el turno se desbloquea.
+- El evento queda registrado igual que en el Camino A: quién autorizó, código usado, cajero anterior y actual, diferencia que había, hora exacta.
+- **La clave nunca se muestra dos veces**: después de generarla, el admin la ve una vez. Si la pierde, genera otra (la anterior queda invalidada).
+
+### 5.2 Gestión del turno
+
+Mientras el turno está ABIERTO, el cajero puede:
+
+**Vender** (Flujo 4 — ya descripto)
+
+**Registrar gastos de caja**:
+- Monto, medio de pago (solo EFECTIVO o MERCADO_PAGO para gastos), categoría de lista predefinida u "OTRO" con descripción libre.
+- Categorías sugeridas: PAPAS, LEÑA/CARBON, LIMPIEZA, BEBIDAS, VERDULERIA, CONDIMENTOS, OTRO.
+- Queda registrado con el usuario cajero y la hora.
+
+**Registrar retiros de caja**:
+- Monto, medio de pago.
+- **Quién de los socios retiró**: selector CERRADO con las 3 opciones → `ARIEL`, `ELIANA`, `EMA`. No es texto libre. No hay cuarta opción.
+- El cajero registra el retiro pero no acumula ni ve el total retirado.
+
+**Registrar marcado de pollos** (EventoMarcadoPollo):
+- "Tiré X pollos a la parrilla": el cajero indica cuántos puso a cocinar.
+- Descuenta X del stock de pollo fresco del local, suma X al conteo interno de pollos marcados.
+- Se puede hacer múltiples veces en el turno (si a mitad del turno meten más pollos).
+
+### 5.3 Cierre de turno
+
+**Paso 1 — El cajero selecciona "Cerrar turno"**
+El sistema le pide que haga el arqueo de cierre.
+
+**Paso 2 — Arqueo doble y ciego de cierre**
+Igual que en la apertura: el cajero cuenta el efectivo e ingresa el monto, cuenta los pollos marcados e ingresa la cantidad. Sin ver ningún número de referencia.
+
+**Paso 3 — El sistema cruza todo**
+El sistema calcula internamente:
+```
+Saldo final esperado efectivo =
+  saldo apertura
+  + ventas cobradas en EFECTIVO
+  - gastos pagados en EFECTIVO
+  - retiros en EFECTIVO
+  - atenciones (costo cero, no mueven caja)
+
+Saldo pollos marcados esperado =
+  pollos marcados apertura
+  + eventos de marcado durante el turno
+  - pollos vendidos (entero o medio)
+  - pollos retornados a producción
+  - pollos desperdiciados/quemados
+```
+
+**Paso 4 — Lo que ve cada rol al cierre**
+
+**El cajero VE**:
+- Resumen de ventas **por unidad, sin montos de dinero**: cuántos pollos enteros, cuántos medios, cuántas milanesas, etc.
+- Conteo final de pollos marcados que quedan (para que sepa qué tiene disponible).
+- Mensaje de confirmación de cierre.
+
+**El cajero NO VE**:
+- El total vendido en pesos.
+- La diferencia de caja (si la hay).
+- El faltante o sobrante.
+- Los montos de retiros ni de gastos.
+- Nada financiero.
+
+**El ADMINISTRADOR y los SOCIOS VEN** (en sus reportes):
+- Resumen financiero completo: ventas por medio de pago, gastos, retiros por socio, atenciones, mermas.
+- Diferencia de caja (faltante/sobrante) con el detalle del arqueo.
+- Discrepancia en pollos marcados si la hubo.
+
+**Paso 5 — El turno queda CERRADO**
+Los saldos finales (efectivo y pollos marcados) quedan registrados como referencia para el arqueo de apertura del turno siguiente. La sesión del cajero se cierra automáticamente.
+
+---
+
+## 6. LÓGICA DE NEGOCIO CRÍTICA — RESUMEN
+
+### 6.1 Stock y transacciones atómicas
+
+Todo movimiento de stock sigue el patrón ya establecido en el módulo 1:
+- Cada movimiento genera un `MovimientoStock`.
+- El stock actual = `SUM(MovimientoStock.cantidad)` por producto+sucursal.
+- Toda operación multi-tabla va en `$transaction` de Prisma.
+- Si la transacción falla, NADA se modifica.
+
+Tipos de `MovimientoStock` que usa este módulo (ya existentes en el enum, ver §0.3): `VENTA`, `ANULACION_REPOSICION`, `ATENCION`, `MERMA_QUEMADO`, `RETORNO_A_PRODUCCION`, `MARCADO_POLLO`.
+
+### 6.2 Precio vigente — congelado al confirmar
+
+El precio de cada ítem se congela en `ItemDePedido.precioUnitario` al confirmar el pedido. Si el precio del producto cambia después, el pedido histórico no se altera. Se usa el precio vigente en el momento de confirmar, considerando `Precio.cantidad` para empanadas y otros productos con tabla de precios por volumen.
+
+### 6.3 Combos — impacto en stock
+
+Al vender un combo (`productoId` apunta al `Producto` tipo `COMBO`), el stock se descuenta por cada componente (`ComboComponente`) del combo, no por el combo en sí (los combos no tienen stock propio).
+
+### 6.4 Pollos marcados — conteo ciego en apertura/cierre (INNEGOCIABLE)
+
+El arqueo de pollos marcados funciona exactamente igual que el arqueo de efectivo:
+- El cajero cuenta físicamente cuántos pollos marcados hay.
+- El sistema compara con los que debería haber.
+- La discrepancia va al ADMINISTRADOR, no al cajero.
+- Si no coincide en la apertura → turno BLOQUEADO (mismo mecanismo que el efectivo).
+
+### 6.5 Pedidos no retirados — circuito completo
+
+Un pedido `A_RETIRAR` que nadie viene a buscar:
+1. El cajero lo marca como `LISTO_NO_RETIRADO`.
+2. Opciones disponibles:
+   - **Reasignar**: otro cliente pide lo mismo. El pedido original pasa a `REASIGNADO` y queda vinculado al nuevo pedido. El stock NO se descuenta de nuevo (ya se descontó al confirmar el original). El nuevo pedido solo registra el cobro.
+   - **Marcar como perdido**: pasa a `PERDIDO`. Se registra automáticamente como venta a costo cero tipo `DESPERDICIO_QUEMADO` (el producto se tiró — ya estaba descontado del stock, no hay reposición).
+
+### 6.6 Alertas de stock mínimo desde el POS
+
+- `ConfiguracionStockMinimo` define umbrales por producto y sucursal.
+- Cada venta que baja el stock → si queda bajo el mínimo → pop-up en el POS. Se repite en CADA venta siguiente mientras siga bajo el mínimo. No bloquea.
+- Si el stock llega a **cero**: bloqueo real. No se puede vender ese producto. El POS no lo muestra como disponible o lo muestra bloqueado claramente.
+- Notificación al ADMINISTRADOR cuando se cruza el mínimo.
+
+---
+
+## 7. RBAC — ENDPOINTS DEL MÓDULO 2
+
+| Endpoint | ADMIN | SOCIO | ENCARGADO | CAJERO | PRODUCCION |
+|---|---|---|---|---|---|
+| `POST /turnos/abrir` | ✅ | ❌ | ✅ | ✅ | ❌ |
+| `POST /turnos/cerrar` | ✅ | ❌ | ✅ | ✅ | ❌ |
+| `GET /turnos/activo` | ✅ | ❌ | ✅ | ✅ | ❌ |
+| `POST /turnos/:id/desbloquear` | ✅ | ❌ | ❌ | ❌ | ❌ |
+| `POST /claves-emergencia` | ✅ | ❌ | ❌ | ❌ | ❌ |
+| `POST /claves-emergencia/usar` | ✅ | ❌ | ✅ | ✅ | ❌ |
+| `POST /pedidos` | ✅ | ❌ | ✅ | ✅ | ❌ |
+| `PATCH /pedidos/:id` | ✅ | ❌ | ✅ | ✅ | ❌ |
+| `POST /pedidos/:id/cobrar` | ✅ | ❌ | ✅ | ✅ | ❌ |
+| `POST /pedidos/:id/anular` | ✅ | ❌ | ✅ | ✅ | ❌ |
+| `POST /pedidos/:id/marcar-listo` | ✅ | ❌ | ✅ | ✅ | ❌ |
+| `POST /pedidos/:id/no-retirado` | ✅ | ❌ | ✅ | ✅ | ❌ |
+| `POST /pedidos/:id/reasignar` | ✅ | ❌ | ✅ | ✅ | ❌ |
+| `POST /pedidos/:id/marcar-perdido` | ✅ | ❌ | ✅ | ✅ | ❌ |
+| `GET /pedidos/pendientes` | ✅ | ❌ | ✅ | ✅ | ❌ |
+| `GET /pedidos/mas-vendidos` | ✅ | ❌ | ✅ | ✅ | ❌ |
+| `GET /productos/precios-vigentes` | ✅ | ✅ | ✅ | ✅ | ❌ |
+| `POST /atenciones` | ✅ | ❌ | ✅ | ✅ | ❌ |
+| `POST /gastos-caja` | ✅ | ❌ | ✅ | ✅ | ❌ |
+| `POST /retiros-caja` | ✅ | ❌ | ✅ | ✅ | ❌ |
+| `POST /marcado-pollos` | ✅ | ❌ | ✅ | ✅ | ❌ |
+| `GET /turnos` (historial) | ✅ | ✅ | ❌ | ❌ | ❌ |
+| `GET /turnos/:id/resumen` | ✅ | ✅ | ❌ | ❌ | ❌ |
+| `POST /config-stock-minimo` | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **COMANDERAS (IMPRESORAS DE COCINA/MOSTRADOR)** |||||
+| `GET/POST/PATCH/DELETE /configuracion-comandera` | ✅ | ❌ | ❌ | ❌ | ❌ |
+| `POST /configuracion-comandera/:id/probar` | ✅ | ❌ | ❌ | ❌ | ❌ |
+| `GET /configuracion-comandera/tickets/:pedidoId` (soporte) | ✅ | ❌ | ❌ | ❌ | ❌ |
+
+**Regla de sucursal en todos los endpoints operativos**: el backend valida siempre contra `Usuario.sucursalId` en la DB. Un CAJERO del Local 1 no puede abrir turno ni crear pedidos en el Local 2. Error 403 si intenta.
+
+---
+
+## 8. AUDITORÍA — ACCIONES A REGISTRAR
+
+Extender el sistema de auditoría existente con:
+
+- `ABRIR_TURNO`
+- `CERRAR_TURNO`
+- `BLOQUEO_TURNO` (con cajero anterior + cajero actual + diferencias)
+- `DESBLOQUEO_TURNO_REMOTO` (con quién autorizó + diferencias)
+- `DESBLOQUEO_TURNO_CLAVE` (con quién generó la clave + diferencias)
+- `GENERAR_CLAVE_EMERGENCIA`
+- `CONFIRMAR_PEDIDO` (con snapshot completo del pedido)
+- `MODIFICAR_PEDIDO` (con estado anterior + estado nuevo)
+- `ANULAR_PEDIDO` (con snapshot COMPLETO del pedido tal como estaba — no solo "fue anulado")
+- `COBRAR_PEDIDO`
+- `REGISTRAR_ATENCION`
+- `REGISTRAR_GASTO_CAJA`
+- `REGISTRAR_RETIRO_CAJA` (con qué socio retiró)
+- `MARCAR_POLLOS`
+- `VENTA_COSTO_CERO`
+
+Para `ANULAR_PEDIDO`: el campo `datosAnteriores` debe contener el pedido COMPLETO con todos sus ítems y precios. Regla de negocio explícita validada con el cliente.
+
+---
+
+## 9. WEBSOCKETS — USO EN MÓDULO 2
+
+El módulo 1 ya tiene Socket.io configurado para alertas en tiempo real. Extender con:
+
+| Evento | Quién emite | Quién escucha | Cuándo |
+|---|---|---|---|
+| `alerta:stock_minimo` | Backend | POS del local + Admin | Cuando el stock cruza el mínimo |
+| `ticket:nuevo` | Backend | Cocina (impresora) | Al confirmar un pedido |
+| `ticket:actualizacion` | Backend | Cocina | Al modificar un pedido |
+| `ticket:anulacion` | Backend | Cocina | Al anular un pedido |
+| `turno:bloqueado` | Backend | Admin | Al detectar discrepancia en apertura |
+| `turno:desbloqueado` | Backend | POS del cajero | Admin desbloquea turno |
+| `pedido:listo_no_retirado` | Backend (timer) | Admin | Pedido pendiente hace N minutos (configurable) |
+
+---
+
+## 10. TESTING OBLIGATORIO
+
+### 10.1 Tests unitarios (lógica pura)
+
+- Cálculo de saldo esperado de efectivo al cierre
+- Cálculo de pollos marcados esperados al cierre
+- Cálculo de diferencia de arqueo (faltante/sobrante)
+- Precio correcto con tabla de volumen (empanadas)
+- Vuelto automático en pago mixto
+- Expiración de clave de emergencia (genera código → usa antes de 10 min → ok; genera → espera → rechaza)
+- Invalidación de clave ya usada
+- Ciclo de estados del pedido (transiciones válidas e inválidas)
+
+### 10.2 Tests de integración
+
+- Flujo completo de turno: apertura → venta → cobro → gasto → retiro → cierre. Verificar que el saldo cuadra.
+- Apertura con discrepancia en efectivo → bloqueo → desbloqueo remoto → venta posible.
+- Apertura con discrepancia en pollos → bloqueo → desbloqueo por clave de emergencia → venta posible.
+- Anulación de pedido → reposición de stock → registro completo en auditoría.
+- Pedido no retirado → reasignación → el stock no se descuenta dos veces.
+- Pedido no retirado → marcar perdido → venta a costo cero generada.
+- Combo vendido → stock de cada componente descontado.
+- Pollos: marcado → venta de pollos marcados → cierre con discrepancia.
+- RBAC: PRODUCCION no puede abrir turno (403). SOCIO no puede crear pedidos (403). CAJERO no puede desbloquear turno (403).
+- **Aislamiento de sucursal**: CAJERO del Local 1 no puede operar en Local 2 (403).
+- **Control ciego de caja**: el JSON de respuesta de apertura y cierre NUNCA incluye `valorEsperado` ni `diferencia` para roles CAJERO o ENCARGADO.
+- Stock mínimo: venta que lleva a cero → bloqueo real; venta que baja del mínimo → alerta sin bloqueo.
+- Inmutabilidad de auditoría: no hay endpoint de UPDATE/DELETE en `/auditoria`.
+
+---
+
+## 11. PENDIENTES CONOCIDOS (no bloquean el módulo 2)
+
+- Heredados del Módulo 1: peso real de una milanesa individual, cookie de refresh `sameSite: strict`, fotos de remito en disco local, persona concreta para el rol ENCARGADO, plan de costeo Fases B/C. (~~Receta real de la empanada de pollo~~: ✅ resuelta el 2026-07-18, cargada en el seed — ver CLAUDE.md §11.)
+- **Antes de desplegar a producción**: revisar **`PRODUCCION-CHECKLIST.md`** (raíz del repo) ítem por ítem — fotos de remito a S3/R2, cookie `sameSite`, secrets JWT, usuarios del seed con contraseñas conocidas, ícono PWA, CORS, migraciones.
+- **Nuevo — modelado del pollo marcado (corrección #6 de §0)**: no validado con el cliente, repreguntar sobre el destino de la "otra mitad" cuando se vende un medio.
+- Bebidas: sin precio fijo en el negocio, definir si tienen precio variable o si se cargan manualmente por turno.
+- ~~Hardware de impresoras~~: ✅ implementado el 2026-08-06 (ver §4.11) — ESC/POS real por TCP contra la XPRINTER XP-V320N. Falta la prueba final con el hardware físico en la mano.
+- ~~Timer de pedidos no retirados~~: ✅ implementado el 2026-07-24 (ver §0 Fase 9) — el valor de 30 minutos sigue siendo el default de la spec sin confirmar con el cliente.
+- ~~Retorno a producción sin `LineaIngreso`~~: ✅ resuelto el 2026-07-24 (ver §0 Fase 9) — genera `IngresoMercaderia` + `LineaIngreso` con proveedor de sistema "Retorno interno".
+
+---
+
+## 12. CRITERIO DE "MÓDULO 2 TERMINADO"
+
+El backend y frontend del módulo 2 están terminados cuando:
+
+1. Un CAJERO puede abrir su turno con arqueo doble ciego (efectivo + pollos) y el sistema bloquea si hay discrepancia.
+2. El ADMINISTRADOR puede desbloquear el turno (remoto o clave de emergencia) y el evento queda auditado con ambos cajeros.
+3. El CAJERO puede cargar, confirmar, cobrar y anular pedidos desde el POS táctil.
+4. El stock se descuenta al confirmar (no al cobrar) y se repone solo en anulaciones de pedidos EN_PREPARACION.
+5. Los pedidos no retirados pueden reasignarse o marcarse como perdidos sin descuento doble de stock.
+6. Las ventas a costo cero (mermas y retornos a producción) funcionan y agrupan para reportes.
+7. El circuito del pollo marcado funciona: fresco → marcado → vendido/retornado/quemado.
+8. El cajero cierra el turno con arqueo doble ciego y NO ve ningún dato financiero en su resumen.
+9. El ADMINISTRADOR y los SOCIOS ven el resumen financiero completo en sus reportes.
+10. La comandera imprime de verdad por ESC/POS sobre TCP contra las dos impresoras del local (cocina y mostrador); si una falla, el pedido se confirma igual y el POS avisa cuál no imprimió.
+11. Todos los tests pasan, incluidos los de control ciego de caja y RBAC del módulo 2.
+12. El CLAUDE.md se actualiza con las decisiones tomadas durante el desarrollo y los pendientes resueltos.

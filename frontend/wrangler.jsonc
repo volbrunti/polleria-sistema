@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "polleria-sistema",
+  "compatibility_date": "2026-08-01",
+  "assets": {
+    "directory": "./dist",
+    // Sin esto, recargar la página en una ruta interna (ej: /admin/dashboard)
+    // da 404: es una SPA de React Router, todo lo que no sea un archivo
+    // estático tiene que caer en index.html y que el router del cliente
+    // resuelva la ruta.
+    "not_found_handling": "single-page-application"
+  }
+}

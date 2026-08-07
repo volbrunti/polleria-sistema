@@ -64,7 +64,16 @@ export function ShellProduccion() {
           />
         )}
 
-        {pantalla === 'ingreso' && <AsistenteIngreso onVolver={volverAlMenu} onFinalizado={volverAlMenu} />}
+        {pantalla === 'ingreso' && (
+          <AsistenteIngreso
+            onVolver={volverAlMenu}
+            onFinalizado={volverAlMenu}
+            onIrAProducir={() => {
+              void lotesAbiertos.refetch();
+              setPantalla('producir');
+            }}
+          />
+        )}
 
         {pantalla === 'producir' && (
           <AsistenteProducir

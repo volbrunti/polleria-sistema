@@ -143,6 +143,18 @@ export async function cerrarLote(params: {
   unidadesProducidasReales: number;
   desperdicioRealKg: number;
   usuarioId: number;
+  /**
+   * Lo que REALMENTE se usó de cada insumo, si difiere de lo estimado al
+   * abrir. Ariel lo pidió con un caso concreto: estimó 10 kg de pan rallado,
+   * pero al terminar zarandeó, tiró la parte húmeda y devolvió el resto a la
+   * bolsa — usó 6,450. "Pongo lo que usé realmente, no lo que se estimaba"
+   * (reunión 4/8).
+   *
+   * Se puede corregir sin movimientos compensatorios porque abrirLote no toca
+   * el stock: los descuentos recién ocurren acá, así que alcanza con ajustar
+   * las cantidades antes de descontar.
+   */
+  insumosReales?: { insumoUsadoId: number; cantidadUsada: number }[];
 }) {
   const sucursalProduccion = await prisma.sucursal.findFirst({ where: { tipo: 'PRODUCCION' } });
   if (!sucursalProduccion) throw Errores.noEncontrado('Sucursal de producción');
@@ -157,6 +169,28 @@ export async function cerrarLote(params: {
     });
     if (!lote) throw Errores.noEncontrado('Lote de producción');
     if (lote.estado === 'CERRADO') throw Errores.loteYaCerrado();
+
+    // Corrección de lo realmente usado, ANTES de validar y descontar. Se
+    // muta también el objeto en memoria para que todo lo que sigue (validación,
+    // rendimiento esperado, movimientos de stock) trabaje con el número real.
+    const huboCorrecciones = (params.insumosReales?.length ?? 0) > 0;
+    if (params.insumosReales) {
+      const idsDelLote = new Set(lote.insumosUsados.map((i) => i.id));
+      for (const correccion of params.insumosReales) {
+        if (!idsDelLote.has(correccion.insumoUsadoId)) {
+          throw Errores.validacion(`El insumo ${correccion.insumoUsadoId} no pertenece a este lote`);
+        }
+        if (correccion.cantidadUsada < 0) {
+          throw Errores.validacion('La cantidad usada no puede ser negativa');
+        }
+        const insumo = lote.insumosUsados.find((i) => i.id === correccion.insumoUsadoId)!;
+        insumo.cantidadUsada = new Prisma.Decimal(correccion.cantidadUsada);
+        await tx.insumoUsado.update({
+          where: { id: insumo.id },
+          data: { cantidadUsada: insumo.cantidadUsada },
+        });
+      }
+    }
 
     const insumosInput: InsumoInput[] = lote.insumosUsados.map((i) => ({
       productoInsumoId: i.productoInsumoId,
@@ -216,17 +250,21 @@ export async function cerrarLote(params: {
         });
       }
 
-      await tx.movimientoStock.create({
-        data: {
-          productoId: insumo.productoInsumoId,
-          sucursalId: sucursalProduccion.id,
-          tipo: 'CONSUMO_PRODUCCION',
-          cantidad: cantidadConsumo.negated(),
-          usuarioId: params.usuarioId,
-          tipoOrigen: 'LoteDeProduccion',
-          origenId: lote.id,
-        },
-      });
+      // Si al corregir quedó en 0 (no se usó ese insumo), no se registra
+      // movimiento: sería ruido en el historial de stock.
+      if (!cantidadConsumo.isZero()) {
+        await tx.movimientoStock.create({
+          data: {
+            productoId: insumo.productoInsumoId,
+            sucursalId: sucursalProduccion.id,
+            tipo: 'CONSUMO_PRODUCCION',
+            cantidad: cantidadConsumo.negated(),
+            usuarioId: params.usuarioId,
+            tipoOrigen: 'LoteDeProduccion',
+            origenId: lote.id,
+          },
+        });
+      }
     }
 
     // 3) alta de las unidades producidas
@@ -242,8 +280,17 @@ export async function cerrarLote(params: {
       },
     });
 
-    // 4) desvío vs. esperado (interno — jamás expuesto al operario)
-    const unidadesEsperadas = lote.unidadesEsperadas ?? new Prisma.Decimal(0);
+    // 4) desvío vs. esperado (interno — jamás expuesto al operario).
+    //    Si se corrigieron los insumos, el esperado se recalcula con lo que
+    //    realmente se usó: comparar contra la estimación de la apertura daría
+    //    un desvío falso y dispararía alertas que no corresponden.
+    const unidadesEsperadas = huboCorrecciones
+      ? calcularUnidadesEsperadas({
+          cantidadInsumoPrincipal: totalPrincipal,
+          cantidadPorUnidadProducida: ingredientePrincipal.cantidadPorUnidadProducida,
+          desperdicioEsperadoPct: lote.fichaTecnicaVersion.desperdicioEsperadoPct,
+        })
+      : (lote.unidadesEsperadas ?? new Prisma.Decimal(0));
     const desvioPct = calcularDesvioPct(unidadesReales, unidadesEsperadas);
     const alertaDisparada = superaUmbral(desvioPct, lote.fichaTecnicaVersion.umbralDesvioAlertaPct);
 
@@ -253,8 +300,12 @@ export async function cerrarLote(params: {
         estado: 'CERRADO',
         unidadesProducidasReales: unidadesReales,
         desperdicioRealKg: desperdicioReal,
+        unidadesEsperadas,
         desvioPct,
         alertaDisparada,
+        // El lote pasa a ser la partida del producto terminado: arranca con
+        // todo lo producido disponible para enviar.
+        cantidadRestanteDisponible: unidadesReales,
       },
       include: INCLUDE_LOTE,
     });
@@ -288,6 +339,17 @@ export async function cerrarLote(params: {
         desperdicioRealKg: desperdicioReal.toString(),
         desvioPct: desvioPct.toString(),
         alertaDisparada,
+        // Queda registrado que el operario corrigió lo estimado: es
+        // justamente el dato que el admin va a querer mirar después.
+        ...(huboCorrecciones
+          ? {
+              insumosCorregidos: lote.insumosUsados.map((i) => ({
+                insumoUsadoId: i.id,
+                productoInsumoId: i.productoInsumoId,
+                cantidadUsada: i.cantidadUsada.toString(),
+              })),
+            }
+          : {}),
       },
     });
 
@@ -304,6 +366,25 @@ export async function cerrarLote(params: {
   }
 
   return resultado.lote;
+}
+
+// Lotes cerrados con saldo sin enviar — las "partidas" del producto terminado.
+// Con productoId, para elegir de cuál sale un envío; sin él, todo lo que hay.
+// Orden FIFO (más viejo primero), igual que las partidas de materia prima:
+// Pablo quiere mandar primero lo de ayer, no lo recién producido.
+export async function lotesDisponibles(productoId?: number) {
+  return prisma.loteDeProduccion.findMany({
+    where: {
+      ...(productoId != null ? { productoElaboradoId: productoId } : {}),
+      estado: 'CERRADO',
+      cantidadRestanteDisponible: { gt: 0 },
+    },
+    include: {
+      productoElaborado: { select: { nombre: true, unidadDeMedida: true } },
+      usuarioOperario: { select: { username: true } },
+    },
+    orderBy: { fechaHora: 'asc' },
+  });
 }
 
 // Productos que efectivamente se producen por lote en planta: tipo ELABORADO

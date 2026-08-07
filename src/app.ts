@@ -2,8 +2,12 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
+import fastifyStatic from '@fastify/static';
+import path from 'node:path';
+import fs from 'node:fs';
 import { ZodError } from 'zod';
 import authPlugin from './plugins/auth';
+import { config } from './config';
 import { AppError } from './lib/errores';
 import { authRoutes } from './modules/auth/auth.routes';
 import { usuariosRoutes } from './modules/usuarios/usuarios.routes';
@@ -17,15 +21,39 @@ import { produccionRoutes } from './modules/produccion/produccion.routes';
 import { transferenciasRoutes } from './modules/transferencias/transferencias.routes';
 import { auditoriaRoutes } from './modules/auditoria/auditoria.routes';
 import { alertasRoutes } from './modules/alertas/alertas.routes';
+import { turnosRoutes, clavesEmergenciaRoutes } from './modules/turnos/turnos.routes';
+import { pedidosRoutes } from './modules/pedidos/pedidos.routes';
+import { cajaRoutes } from './modules/caja/caja.routes';
+import { stockMinimoRoutes } from './modules/stock-minimo/stock-minimo.routes';
+import { recargosRoutes } from './modules/recargos/recargos.routes';
+import { configuracionRoutes } from './modules/configuracion/configuracion.routes';
+import { comanderasRoutes } from './modules/comanderas/comanderas.routes';
+import { reportesRoutes } from './modules/reportes/reportes.routes';
+import { dashboardRoutes } from './modules/dashboard/dashboard.routes';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
     logger: process.env.NODE_ENV !== 'test',
   });
 
-  await app.register(cors, { origin: true, credentials: true });
+  // origin sale de config: lista blanca en producción, reflejo libre en dev.
+  // Ver config.ts — con credentials:true, reflejar cualquier origen sería
+  // dejar que cualquier sitio use la cookie de refresh del usuario.
+  await app.register(cors, { origin: config.origenesPermitidos, credentials: true });
   await app.register(cookie);
   await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
+
+  // Fotos de remito: si R2 está configurado (obligatorio en producción, ver
+  // config.ts) las URLs apuntan directo al bucket público y esto no hace
+  // falta. Si no, es el fallback de disco local para desarrollar sin
+  // credenciales — se sirven como /uploads/remitos/<archivo>.
+  if (!config.r2.configurado) {
+    const raizUploads = path.resolve(process.cwd(), config.dirUploads);
+    // @fastify/static explota si el root no existe todavía — en un
+    // contenedor recién creado la carpeta no está hasta la primera foto.
+    fs.mkdirSync(raizUploads, { recursive: true });
+    await app.register(fastifyStatic, { root: raizUploads, prefix: '/uploads/' });
+  }
   await app.register(authPlugin);
 
   app.setErrorHandler((error, _req, reply) => {
@@ -57,6 +85,19 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(transferenciasRoutes, { prefix: '/api/transferencias' });
   await app.register(auditoriaRoutes, { prefix: '/api/auditoria' });
   await app.register(alertasRoutes, { prefix: '/api/alertas' });
+  // Módulo 2
+  await app.register(turnosRoutes, { prefix: '/api/turnos' });
+  await app.register(clavesEmergenciaRoutes, { prefix: '/api/claves-emergencia' });
+  await app.register(pedidosRoutes, { prefix: '/api/pedidos' });
+  // atenciones, gastos-caja, retiros-caja, marcado-pollos, costo-cero
+  await app.register(cajaRoutes, { prefix: '/api' });
+  await app.register(stockMinimoRoutes, { prefix: '/api/config-stock-minimo' });
+  await app.register(recargosRoutes, { prefix: '/api/recargos-tarjeta' });
+  await app.register(configuracionRoutes, { prefix: '/api/configuracion' });
+  await app.register(comanderasRoutes, { prefix: '/api/configuracion-comandera' });
+  // Módulo 3
+  await app.register(reportesRoutes, { prefix: '/api/reportes' });
+  await app.register(dashboardRoutes, { prefix: '/api/dashboard' });
 
   return app;
 }

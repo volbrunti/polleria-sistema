@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { listarLotes } from '../../api/produccion';
 import { listarUsuarios } from '../../api/usuarios';
@@ -10,6 +11,15 @@ export function ProduccionLotes() {
   const usuarios = useQuery({ queryKey: ['usuarios'], queryFn: listarUsuarios });
   const fichas = useQuery({ queryKey: ['fichas'], queryFn: listarFichas });
   const [abiertos, setAbiertos] = useState<Set<number>>(new Set());
+  const [searchParams] = useSearchParams();
+
+  // Llegada desde una alerta (Alertas.tsx "Ver lote"): abre y scrollea a la fila.
+  const loteDestacado = searchParams.get('lote') ? Number(searchParams.get('lote')) : null;
+  useEffect(() => {
+    if (loteDestacado == null || !lotes.data?.some((l) => l.id === loteDestacado)) return;
+    setAbiertos((prev) => new Set(prev).add(loteDestacado));
+    document.getElementById(`lote-${loteDestacado}`)?.scrollIntoView({ block: 'center' });
+  }, [loteDestacado, lotes.data]);
 
   const nombreOperario = (id: number) => usuarios.data?.find((u) => u.id === id)?.nombre ?? `#${id}`;
   const versionDeFicha = (versionId: number) => {
@@ -35,8 +45,8 @@ export function ProduccionLotes() {
         <h1 className="m-0 text-2xl font-extrabold">Producción — Lotes</h1>
         <div className="mt-1 text-sm text-texto-suave">Esperado vs. real, desvíos y trazabilidad completa.</div>
       </div>
-      <div className="overflow-x-auto rounded-2xl border border-borde bg-white">
-        <div className="grid min-w-[1060px] grid-cols-[90px_110px_1fr_130px_90px_80px_90px_110px_80px_110px] gap-x-3 bg-chip px-4.5 py-3 text-xs font-extrabold tracking-wide text-texto-suave">
+      <div className="tabla-cards overflow-x-auto rounded-2xl border border-borde bg-white">
+        <div className="tabla-encabezado grid min-w-[1060px] grid-cols-[90px_110px_1fr_130px_90px_80px_90px_110px_80px_110px] gap-x-3 bg-chip px-4.5 py-3 text-xs font-extrabold tracking-wide text-texto-suave">
           <span>LOTE</span>
           <span>FECHA</span>
           <span>PRODUCTO</span>
@@ -52,19 +62,23 @@ export function ProduccionLotes() {
         {lotes.data?.map((l) => {
           const desvio = l.desvioPct != null ? Number(l.desvioPct) : null;
           return (
-            <div key={l.id} className="border-t border-[#eef1ea]">
-              <div className="grid min-w-[1060px] grid-cols-[90px_110px_1fr_130px_90px_80px_90px_110px_80px_110px] items-center gap-x-3 px-4.5 py-3.5 text-sm">
-                <span className="font-mono text-texto-suave">L-{l.id}</span>
-                <span className="text-texto-suave">{fmtFecha(l.fechaHora)}</span>
+            <div
+              key={l.id}
+              id={`lote-${l.id}`}
+              className={`border-t border-[#eef1ea] ${l.id === loteDestacado ? 'bg-[#fff7d9]' : ''}`}
+            >
+              <div className="tabla-fila grid min-w-[1060px] grid-cols-[90px_110px_1fr_130px_90px_80px_90px_110px_80px_110px] items-center gap-x-3 px-4.5 py-3.5 text-sm">
+                <span data-col="LOTE" className="font-mono text-texto-suave">L-{l.id}</span>
+                <span data-col="FECHA" className="text-texto-suave">{fmtFecha(l.fechaHora)}</span>
                 <span className="font-semibold">{l.productoElaborado}</span>
-                <span>{nombreOperario(l.usuarioOperarioId)}</span>
-                <span className="text-right">{l.unidadesEsperadas != null ? fmtNumero(l.unidadesEsperadas) : '—'}</span>
-                <span className="text-right font-bold">{l.unidadesProducidasReales != null ? fmtNumero(l.unidadesProducidasReales) : '—'}</span>
-                <span className="text-right font-extrabold" style={desvio != null && Math.abs(desvio) >= 10 ? { color: '#a02514' } : undefined}>
+                <span data-col="OPERARIO">{nombreOperario(l.usuarioOperarioId)}</span>
+                <span data-col="ESPERADO" className="text-right">{l.unidadesEsperadas != null ? fmtNumero(l.unidadesEsperadas) : '—'}</span>
+                <span data-col="REAL" className="text-right font-bold">{l.unidadesProducidasReales != null ? fmtNumero(l.unidadesProducidasReales) : '—'}</span>
+                <span data-col="DESVÍO" className="text-right font-extrabold" style={desvio != null && Math.abs(desvio) >= 10 ? { color: '#a02514' } : undefined}>
                   {desvio != null ? `${fmtNumero(desvio)} %` : '—'}
                 </span>
-                <span className="text-right text-texto-suave">{l.desperdicioRealKg != null ? fmtNumero(l.desperdicioRealKg) : '—'}</span>
-                <span className="text-texto-suave">{versionDeFicha(l.fichaTecnicaVersionId)}</span>
+                <span data-col="DESPERDICIO" className="text-right text-texto-suave">{l.desperdicioRealKg != null ? fmtNumero(l.desperdicioRealKg) : '—'}</span>
+                <span data-col="FICHA" className="text-texto-suave">{versionDeFicha(l.fichaTecnicaVersionId)}</span>
                 <button
                   type="button"
                   onClick={() => toggle(l.id)}

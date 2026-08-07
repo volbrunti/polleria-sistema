@@ -3,7 +3,7 @@ import type { RecepcionResultado, Transferencia } from './types';
 
 export function generarTransferencia(datos: {
   sucursalDestinoId: number;
-  lineas: { productoId: number; cantidadEnviada: number }[];
+  lineas: { productoId: number; cantidadEnviada: number; loteOrigenId?: number }[];
 }) {
   return apiFetch<Transferencia>('/api/transferencias', { method: 'POST', body: datos });
 }
@@ -18,6 +18,7 @@ export function intentarRecepcion(
   });
 }
 
+/** SOLO ADMIN: el cajero no puede cerrar una recepción que no cuadra. */
 export function confirmarConDiscrepancia(
   id: number,
   lineas: { productoId: number; cantidadRecibida: number }[],
@@ -26,6 +27,26 @@ export function confirmarConDiscrepancia(
     method: 'POST',
     body: { lineas },
   });
+}
+
+export interface IntentoRecepcion {
+  numero: number;
+  fechaHora: string;
+  usuario: string | null;
+  coincidio: boolean;
+  lineas: {
+    productoId: number;
+    producto: string;
+    unidadDeMedida: 'KG' | 'UNIDAD' | null;
+    cantidadEnviada: string;
+    cantidadContada: string;
+    diferencia: string;
+  }[];
+}
+
+/** SOLO ADMIN: historial de conteos de una recepción trabada. */
+export function intentosDeRecepcion(id: number) {
+  return apiFetch<IntentoRecepcion[]>(`/api/transferencias/${id}/intentos`);
 }
 
 export function listarTransferencias(filtros?: {

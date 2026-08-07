@@ -4,6 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import * as ingresosService from './ingresos.service';
+import { config } from '../../config';
+import { subirAR2 } from '../../lib/almacenamiento';
 
 // Validación Flujo 1: proveedor obligatorio, al menos una línea, cantidades > 0
 const registrarSchema = z.object({
@@ -27,9 +29,10 @@ const listarQuery = z.object({
   proveedorId: z.coerce.number().int().positive().optional(),
 });
 
-const lineasQuery = z.object({ productoId: z.coerce.number().int().positive() });
+// Sin productoId devuelve toda la materia prima con saldo (panel de Producción)
+const lineasQuery = z.object({ productoId: z.coerce.number().int().positive().optional() });
 
-const DIR_UPLOADS = path.resolve(process.cwd(), 'uploads', 'remitos');
+const DIR_UPLOADS = path.resolve(process.cwd(), config.dirUploads, 'remitos');
 
 export async function ingresosRoutes(app: FastifyInstance) {
   // Carga de ingresos: PRODUCCION (y ADMIN)
@@ -43,7 +46,9 @@ export async function ingresosRoutes(app: FastifyInstance) {
     },
   );
 
-  // Foto del remito: multipart, solo respaldo visual (el sistema NO la procesa)
+  // Foto del remito: multipart, solo respaldo visual (el sistema NO la procesa).
+  // Va a R2 si está configurado (obligatorio en producción, ver config.ts);
+  // si no, cae a disco local — fallback solo para desarrollar sin credenciales.
   app.post(
     '/foto',
     { preHandler: [app.autenticar, app.requerirRoles('PRODUCCION', 'ADMINISTRADOR')] },
@@ -52,9 +57,20 @@ export async function ingresosRoutes(app: FastifyInstance) {
       if (!archivo) return reply.code(400).send({ codigo: 'VALIDACION', mensaje: 'Falta el archivo' });
       const extension = path.extname(archivo.filename) || '.jpg';
       const nombre = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${extension}`;
+      const buffer = await archivo.toBuffer();
+
+      if (config.r2.configurado) {
+        const url = await subirAR2({
+          buffer,
+          nombreArchivo: nombre,
+          contentType: archivo.mimetype || 'application/octet-stream',
+        });
+        return reply.code(201).send({ fotoRemitoUrl: url });
+      }
+
       fs.mkdirSync(DIR_UPLOADS, { recursive: true });
       const destino = path.join(DIR_UPLOADS, nombre);
-      await fs.promises.writeFile(destino, await archivo.toBuffer());
+      await fs.promises.writeFile(destino, buffer);
       return reply.code(201).send({ fotoRemitoUrl: `/uploads/remitos/${nombre}` });
     },
   );

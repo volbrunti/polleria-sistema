@@ -10,10 +10,15 @@ const loginSchema = z.object({
 
 const COOKIE_REFRESH = 'refresh_token';
 
+// En producción, frontend (Vercel) y backend (Railway) quedan en dominios
+// distintos: sameSite:'none' es obligatorio para que el navegador mande la
+// cookie en esas requests cross-site, y solo es válido junto con secure:true
+// (ya atado a esProduccion). En desarrollo el proxy de Vite hace todo
+// same-origin, así que 'lax' alcanza y evita depender de HTTPS local.
 const opcionesCookie = {
   httpOnly: true,
   secure: config.esProduccion,
-  sameSite: 'strict' as const,
+  sameSite: config.esProduccion ? ('none' as const) : ('lax' as const),
   path: '/api/auth',
   maxAge: config.jwtRefreshExpiresDias * 24 * 60 * 60,
 };

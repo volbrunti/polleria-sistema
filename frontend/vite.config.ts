@@ -35,10 +35,13 @@ export default defineConfig({
     }),
   ],
   server: {
+    // 127.0.0.1 y no "localhost": Node resuelve localhost a ::1 primero, así
+    // que si hay OTRO server escuchando en el 3000 por IPv6 el proxy le pega a
+    // ese en vez de al backend. Con la IP explícita no hay ambigüedad.
     proxy: {
-      '/api': { target: 'http://localhost:3000', changeOrigin: true },
-      '/uploads': { target: 'http://localhost:3000', changeOrigin: true },
-      '/socket.io': { target: 'http://localhost:3000', ws: true, changeOrigin: true },
+      '/api': { target: 'http://127.0.0.1:3000', changeOrigin: true },
+      '/uploads': { target: 'http://127.0.0.1:3000', changeOrigin: true },
+      '/socket.io': { target: 'http://127.0.0.1:3000', ws: true, changeOrigin: true },
     },
   },
 });

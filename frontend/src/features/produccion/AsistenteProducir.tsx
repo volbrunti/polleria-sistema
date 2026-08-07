@@ -166,6 +166,7 @@ export function AsistenteProducir({ onVolver, onLoteAbierto }: Props) {
         id: productoInsumoId,
         nombre: nombreFallback,
         categoria: '',
+        categoriaMadre: null,
         tipo: 'MATERIA_PRIMA',
         unidadDeMedida: unidadFallback,
         activo: true,
@@ -408,7 +409,30 @@ export function AsistenteProducir({ onVolver, onLoteAbierto }: Props) {
           unidad={overlay.producto.unidadDeMedida === 'KG' ? 'kg' : 'u'}
           permiteDecimal={overlay.producto.unidadDeMedida === 'KG'}
           maximo={overlay.totalDisponible}
-          pistaDisponible={`Tenés ${fmtNumero(overlay.totalDisponible)} ${unidadTexto(overlay.producto.unidadDeMedida, overlay.totalDisponible)} en total entre ${overlay.lineas.length} partida${overlay.lineas.length === 1 ? '' : 's'}.`}
+          // Desglosado por partida, no solo el total: el saldo chico de una
+          // partida vieja se pierde adentro de la suma y termina olvidado en
+          // la heladera (pedido de Ariel y Pablo, reunión 4/8).
+          pistaDisponible={
+            <div className="flex flex-col gap-1">
+              <div>
+                Tenés {fmtNumero(overlay.totalDisponible)}{' '}
+                {unidadTexto(overlay.producto.unidadDeMedida, overlay.totalDisponible)} entre{' '}
+                {overlay.lineas.length} partida{overlay.lineas.length === 1 ? '' : 's'}:
+              </div>
+              {overlay.lineas.map((l) => (
+                <div key={l.id} className="flex justify-between gap-2 font-normal">
+                  <span className="truncate">
+                    · {l.ingresoMercaderia ? fmtFecha(l.ingresoMercaderia.fechaHora) : 'sin fecha'}
+                    {l.ingresoMercaderia ? ` — ${l.ingresoMercaderia.proveedor.nombre}` : ''}
+                  </span>
+                  <span className="shrink-0 font-bold">
+                    {fmtNumero(l.cantidadRestanteDisponible)}{' '}
+                    {unidadTexto(overlay.producto.unidadDeMedida, l.cantidadRestanteDisponible)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          }
           mensajeMaximo={`No alcanza. Entre todas las partidas tenés ${fmtNumero(overlay.totalDisponible)} ${unidadTexto(overlay.producto.unidadDeMedida, overlay.totalDisponible)}.`}
           onCancelar={() => setOverlay(null)}
           onConfirmar={(deseado) => {
@@ -423,8 +447,8 @@ export function AsistenteProducir({ onVolver, onLoteAbierto }: Props) {
           <div className="flex max-h-[85%] w-full flex-col gap-3 overflow-hidden rounded-t-3xl bg-white p-5 sm:max-w-md sm:rounded-3xl">
             <div className="text-lg font-extrabold">Así se reparte — {overlay.producto.nombre}</div>
             <div className="text-sm text-texto-suave">
-              {fmtNumero(overlay.deseado)} {unidadTexto(overlay.producto.unidadDeMedida, overlay.deseado)} en total. Tocá una partida
-              para ajustarla a mano si hace falta.
+              {fmtNumero(overlay.deseado)} {unidadTexto(overlay.producto.unidadDeMedida, overlay.deseado)} en total, de la
+              partida más vieja a la más nueva. Podés ajustar cualquiera con ✎.
             </div>
             <div className="flex flex-col gap-2 overflow-auto">
               {overlay.entradas.map((e, idx) => (
@@ -451,6 +475,25 @@ export function AsistenteProducir({ onVolver, onLoteAbierto }: Props) {
                       {fmtNumero(e.cantidad)} {unidadTexto(overlay.producto.unidadDeMedida, e.cantidad)} de{' '}
                       {fmtNumero(e.linea.cantidadRestanteDisponible)} disponibles
                     </div>
+                  </button>
+                  {/* El renglón entero ya era editable, pero nadie lo descubría:
+                      el ✎ hace visible que el reparto automático se puede tocar. */}
+                  <button
+                    type="button"
+                    aria-label="Editar cuánto sale de esta partida"
+                    onClick={() =>
+                      setOverlay({
+                        tipo: 'tecladoEditarEntrada',
+                        producto: overlay.producto,
+                        deseado: overlay.deseado,
+                        todasLasLineas: overlay.todasLasLineas,
+                        entradas: overlay.entradas,
+                        indice: idx,
+                      })
+                    }
+                    className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-borde-fuerte bg-white text-base hover:bg-chip"
+                  >
+                    ✎
                   </button>
                   <button
                     type="button"
