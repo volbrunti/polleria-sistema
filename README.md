@@ -28,6 +28,7 @@ Instrucciones completas paso a paso en [DEPLOY.md](DEPLOY.md). Resumen del estad
 ### Pendiente para terminar este despliegue (2026-08-07)
 
 - [x] Variables base de Railway cargadas (`DATABASE_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `NODE_ENV=production`, `ADMIN_INICIAL_USUARIO`, `ADMIN_INICIAL_PASSWORD`).
+- [x] `NPM_CONFIG_PRODUCTION=false` — sin esto el build rompe (`TS7016` en `@types/jsonwebtoken`): con `NODE_ENV=production`, el builder instala con `--omit=dev` y ahí vive `typescript`. Ver DEPLOY.md §2.2.
 - [ ] Crear el bucket de R2 y cargar `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_URL_PUBLICA` en Railway (ver DEPLOY.md §2.3) — **obligatorias, el backend no arranca sin las 5**. Reemplaza al volumen/`DIR_UPLOADS` que se había planeado antes.
 - [ ] Completar a mano el **Healthcheck Path** (`/api/salud`) en Railway → Settings → Deploy — el builder mostraba "Railpack" en vez de "Nixpacks", así que no está confirmado que esté leyendo `railway.json` solo.
 - [ ] Terminar de conectar y deployar el frontend en Cloudflare Pages (root `frontend/`, build `npm run build`, output `dist/`, variable `VITE_API_URL` = URL del backend de Railway).

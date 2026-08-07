@@ -49,6 +49,7 @@ En *Variables*, cargá:
 | `JWT_SECRET` | Un secreto largo y aleatorio |
 | `JWT_REFRESH_SECRET` | **Otro distinto** del anterior |
 | `NODE_ENV` | `production` |
+| `NPM_CONFIG_PRODUCTION` | `false` — **necesaria pese al nombre**, ver nota abajo |
 | `ORIGENES_PERMITIDOS` | La URL del frontend, sin barra final (la completás en el paso 3.2) |
 | `R2_ACCOUNT_ID` | El Account ID de Cloudflare (paso 2.3) |
 | `R2_ACCESS_KEY_ID` | Del token de API R2 que generás en el paso 2.3 |
@@ -65,6 +66,8 @@ node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 ```
 
 `PORT` la inyecta Railway sola — no la cargues.
+
+> **`NPM_CONFIG_PRODUCTION=false` es imprescindible pese al nombre.** Con `NODE_ENV=production` puesto, Nixpacks instala el proyecto con `--omit=dev` — y ahí vive `typescript`, así que el build (`tsc`) rompe. Por cómo se resuelve el árbol de dependencias, la mayoría de las devDependencies sobreviven igual (quedan enganchadas a alguna dependencia de producción), pero al menos `@types/jsonwebtoken` no, y el build falla con `TS7016: Could not find a declaration file for module 'jsonwebtoken'`. Esta variable le dice a `npm` que instale las devDependencies de todas formas — es independiente de `NODE_ENV`, que sigue controlando el comportamiento de la app en runtime.
 
 > Con `NODE_ENV=production` el server **no arranca** si falta `JWT_SECRET`, `JWT_REFRESH_SECRET`, `ORIGENES_PERMITIDOS` o cualquiera de las 5 variables de R2. Es a propósito: es preferible que no levante a que levante perdiendo datos o insegura.
 
