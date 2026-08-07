@@ -45,20 +45,14 @@ export function crearComandera(datos: {
   ip: string;
   puerto?: number;
 }) {
-  return apiFetch<Comandera>('/api/configuracion-comandera', {
-    method: 'POST',
-    body: JSON.stringify(datos),
-  });
+  return apiFetch<Comandera>('/api/configuracion-comandera', { method: 'POST', body: datos });
 }
 
 export function actualizarComandera(
   id: number,
   cambios: { nombre?: string; ip?: string; puerto?: number; activa?: boolean },
 ) {
-  return apiFetch<Comandera>(`/api/configuracion-comandera/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify(cambios),
-  });
+  return apiFetch<Comandera>(`/api/configuracion-comandera/${id}`, { method: 'PATCH', body: cambios });
 }
 
 export function eliminarComandera(id: number) {

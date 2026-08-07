@@ -134,11 +134,13 @@ describe('Pedidos — confirmación y stock', () => {
     // stock ya descontado sin cobrar
     expect(await stockDe(f.productos.milanesa, f.sucursales.local1)).toBe(18);
 
-    // ticket NUEVO registrado (comandera mock)
+    // ticket NUEVO registrado. El resultado de impresión ya no vive en
+    // TicketCocina (ver ImpresionComandera, comanderas.service.ts): sin
+    // ninguna comandera configurada para este local en los fixtures, no hay
+    // impresiones que verificar acá — eso lo cubre comanderas.test.ts.
     const prisma = await getPrisma();
     const ticket = await prisma.ticketCocina.findFirst({ where: { pedidoId: pedido.id, tipo: 'NUEVO' } });
     expect(ticket).not.toBeNull();
-    expect(ticket!.impreso).toBe(true);
   });
 
   it('la tabla por volumen se aplica al confirmar (6 empanadas = $8.500, no $9.600)', async () => {
