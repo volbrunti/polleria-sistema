@@ -60,8 +60,11 @@ export function ShellAdmin() {
   const inicio = 'dashboard';
 
   // En celular el sidebar fijo se comía la pantalla (236 de 375 px, dejando 83
-  // para el contenido). Por debajo de `md` pasa a ser un cajón que se abre
-  // desde el botón de menú; de `md` para arriba queda igual que siempre.
+  // para el contenido). Por debajo de `md` se reemplaza por un menú a pantalla
+  // completa con ítems grandes — no por el mismo sidebar encogido, que deja los
+  // destinos apretados justo donde se navega con el pulgar. De `md` para arriba
+  // el sidebar queda igual que siempre: con 12 secciones, un navbar horizontal
+  // las apretaría.
   const [menuAbierto, setMenuAbierto] = useState(false);
   const cerrarMenu = () => setMenuAbierto(false);
 
@@ -96,21 +99,67 @@ export function ShellAdmin() {
         )}
       </div>
 
-      {/* Fondo oscuro detrás del cajón abierto — tocarlo lo cierra */}
+      {/* Menú de celular: pantalla completa, un destino por línea y tipografía
+          grande. Solo existe por debajo de `md`. */}
       {menuAbierto && (
-        <button
-          type="button"
-          aria-label="Cerrar menú"
-          onClick={cerrarMenu}
-          className="fixed inset-0 z-40 cursor-pointer bg-black/45 md:hidden"
-        />
+        <div className="fixed inset-0 z-50 flex flex-col bg-sidebar text-white md:hidden">
+          <div className="flex items-center gap-3 border-b border-sidebar-borde px-4 py-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-acento text-[13px] font-extrabold text-texto">
+              L&amp;C
+            </div>
+            <div className="min-w-0 flex-1 truncate text-[15px] font-extrabold tracking-wide">
+              LIMÓN &amp; CHIMI
+            </div>
+            <button
+              type="button"
+              onClick={cerrarMenu}
+              aria-label="Cerrar menú"
+              className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-[10px] text-3xl leading-none font-light hover:bg-[#1e3a29]"
+            >
+              ×
+            </button>
+          </div>
+
+          <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-5 py-6">
+            {itemsVisibles.map((item) => (
+              <NavLink
+                key={item.a}
+                to={`/admin/${item.a}`}
+                onClick={cerrarMenu}
+                className={({ isActive }) =>
+                  `flex min-h-[58px] items-center gap-3 text-2xl font-extrabold tracking-wide uppercase ${
+                    isActive ? 'text-sidebar-texto' : 'text-white'
+                  }`
+                }
+              >
+                <span className="flex-1">{item.label}</span>
+                {item.a === 'alertas' && (alertasNoVistas.data?.length ?? 0) > 0 && (
+                  <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-error px-2 text-sm font-extrabold text-white">
+                    {alertasNoVistas.data!.length}
+                  </span>
+                )}
+              </NavLink>
+            ))}
+          </nav>
+
+          <div className="flex items-center gap-3 border-t border-sidebar-borde px-5 py-4">
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-base font-bold">Hola, {usuario?.nombre}</div>
+              <div className="text-xs text-sidebar-texto">{usuario?.rol}</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => void salir()}
+              className="min-h-11 cursor-pointer rounded-xl border border-sidebar-borde bg-transparent px-4 text-sm font-semibold text-white/85"
+            >
+              Salir
+            </button>
+          </div>
+        </div>
       )}
 
-      <div
-        className={`fixed inset-y-0 left-0 z-50 flex h-screen w-59 flex-shrink-0 flex-col gap-1.5 overflow-y-auto bg-sidebar p-3.5 text-white transition-transform md:static md:z-auto md:translate-x-0 ${
-          menuAbierto ? 'translate-x-0' : '-translate-x-full'
-        }`}
-      >
+      {/* Sidebar de escritorio — oculto en celular, ahí manda el menú de arriba */}
+      <div className="hidden h-screen w-59 flex-shrink-0 flex-col gap-1.5 overflow-y-auto bg-sidebar p-3.5 text-white md:flex">
         <div className="flex items-center gap-2.5 px-2 pb-4.5">
           <div className="flex h-9.5 w-9.5 items-center justify-center rounded-[10px] bg-acento text-[13px] font-extrabold text-texto">
             L&amp;C
