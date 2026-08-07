@@ -41,13 +41,13 @@ export function Stock() {
       <div className="flex flex-wrap items-center gap-3.5">
         <h1 className="m-0 flex-1 text-2xl font-extrabold">Stock</h1>
         {vista === 'tabla' && (
-          <div className="flex gap-1.5 rounded-xl bg-[#e6e9e2] p-1.5">
+          <div className="flex w-full gap-1.5 overflow-x-auto rounded-xl bg-[#e6e9e2] p-1.5 md:w-auto">
             {sucursales.data?.map((s) => (
               <button
                 key={s.id}
                 type="button"
                 onClick={() => setSucursalId(s.id)}
-                className={`min-h-11 cursor-pointer rounded-lg px-4 text-sm font-bold ${
+                className={`min-h-11 shrink-0 cursor-pointer rounded-lg px-4 text-sm font-bold ${
                   sucursalActiva === s.id ? 'bg-primario text-white' : 'text-texto-suave'
                 }`}
               >

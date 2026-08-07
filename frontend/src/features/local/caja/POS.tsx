@@ -175,6 +175,8 @@ export function POS({ sucursalId }: Props) {
   const [vueltoFinal, setVueltoFinal] = useState<string | null>(null);
   const [confirmadoSinCobro, setConfirmadoSinCobro] = useState(false);
   const [retiroConfirmado, setRetiroConfirmado] = useState<Pedido | null>(null);
+  // Solo aplica en celular: en tablet/escritorio el carrito está siempre a la vista.
+  const [carritoAbierto, setCarritoAbierto] = useState(false);
 
   // Buscando: la búsqueda pisa los filtros y busca en TODO el catálogo, para
   // no obligar al cajero a acordarse en qué categoría está lo que escribió.
@@ -242,6 +244,7 @@ export function POS({ sucursalId }: Props) {
       void queryClient.invalidateQueries({ queryKey: ['pedidos'] });
       void queryClient.invalidateQueries({ queryKey: ['mas-vendidos'] });
       setCarrito([]);
+      setCarritoAbierto(false); // en celular, vuelve a la grilla de productos
       const eraRetiroDeSocio = beneficiario === 'SOCIO';
       setBeneficiario(null);
       setSocio(null);
@@ -279,9 +282,10 @@ export function POS({ sucursalId }: Props) {
   const cargando = productosQ.isLoading || preciosQ.isLoading;
 
   return (
-    <div className="flex min-h-0 flex-1">
+    <div className="flex min-h-0 flex-1 flex-col md:flex-row">
       {/* ── Grilla de productos ── */}
-      <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-auto p-4">
+      {/* pb-24 en celular: deja aire para la barra fija del pedido */}
+      <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-auto p-4 pb-24 md:pb-4">
         <div className="relative">
           <input
             type="search"
@@ -370,8 +374,27 @@ export function POS({ sucursalId }: Props) {
         )}
       </div>
 
-      {/* ── Carrito (siempre visible) ── */}
-      <div className="flex w-[340px] shrink-0 flex-col border-l border-borde bg-white">
+      {/* ── Carrito ──
+          En tablet/escritorio va como panel lateral fijo, siempre visible.
+          En celular, 340px fijos dejaban 32px para los productos: ahí pasa a
+          ser una hoja que se abre desde la barra inferior. */}
+      <div
+        className={`flex-col border-borde bg-white md:static md:flex md:w-[340px] md:shrink-0 md:border-l ${
+          carritoAbierto ? 'fixed inset-0 z-30 flex overflow-y-auto' : 'hidden'
+        }`}
+      >
+        {/* Encabezado de la hoja, solo en celular */}
+        <div className="flex items-center justify-between border-b border-borde px-4 py-3 md:hidden">
+          <span className="text-lg font-extrabold">El pedido</span>
+          <button
+            type="button"
+            onClick={() => setCarritoAbierto(false)}
+            className="min-h-11 cursor-pointer rounded-xl border-2 border-borde-fuerte bg-white px-4 text-sm font-bold text-texto-suave"
+          >
+            SEGUIR CARGANDO
+          </button>
+        </div>
+
         <div className="flex gap-1.5 p-3">
           {(['PRESENCIAL', 'A_RETIRAR'] as const).map((t) => (
             <button
@@ -537,6 +560,34 @@ export function POS({ sucursalId }: Props) {
           </button>
         </div>
       </div>
+
+      {/* ── Barra del pedido: solo en celular, con el carrito cerrado ──
+          Reemplaza al panel lateral, que en pantalla chica no entra. Muestra
+          lo único que el cajero necesita de un vistazo mientras carga:
+          cuántos ítems lleva y cuánto va. */}
+      {!carritoAbierto && (
+        <button
+          type="button"
+          onClick={() => setCarritoAbierto(true)}
+          className="fixed inset-x-0 bottom-0 z-20 flex min-h-[68px] cursor-pointer items-center gap-3 border-t border-borde bg-white px-4 py-2.5 text-left md:hidden"
+        >
+          <div className="min-w-0 flex-1">
+            <div className="text-[13px] font-semibold text-texto-suave">
+              {carrito.length === 0
+                ? 'Sin productos todavía'
+                : `${carrito.length} ${carrito.length === 1 ? 'producto' : 'productos'}`}
+            </div>
+            <div className="text-xl font-extrabold">{fmtMoneda(totalCarrito)}</div>
+          </div>
+          <span
+            className={`flex min-h-12 items-center rounded-2xl px-5 text-base font-extrabold ${
+              carrito.length === 0 ? 'bg-chip text-texto-suave' : 'bg-primario text-white'
+            }`}
+          >
+            VER PEDIDO
+          </span>
+        </button>
+      )}
 
       {/* ── Pop-up de stock mínimo: se repite en CADA venta (§6.6) ── */}
       {avisos && (

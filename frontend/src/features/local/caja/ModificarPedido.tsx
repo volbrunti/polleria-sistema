@@ -128,8 +128,10 @@ export function ModificarPedido({ pedido, onCerrar }: Props) {
         </button>
       </div>
 
-      <div className="flex min-h-0 flex-1">
-        <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-auto p-4">
+      {/* En celular se apila: productos arriba, pedido abajo con su propio
+          scroll. De md para arriba vuelve al split lateral de siempre. */}
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-auto p-4">
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -169,7 +171,7 @@ export function ModificarPedido({ pedido, onCerrar }: Props) {
           </div>
         </div>
 
-        <div className="flex w-[340px] shrink-0 flex-col border-l border-borde bg-white">
+        <div className="flex max-h-[45vh] w-full shrink-0 flex-col border-t border-borde bg-white md:max-h-none md:w-[340px] md:border-l md:border-t-0">
           <div className="flex-1 overflow-auto px-3 pt-3">
             {carrito.length === 0 ? (
               <div className="p-5 text-center text-[15px] text-texto-suave">

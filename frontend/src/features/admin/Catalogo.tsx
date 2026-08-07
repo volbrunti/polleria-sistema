@@ -77,13 +77,15 @@ export function Catalogo({ puedeEscribir }: Props) {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3.5">
         <h1 className="m-0 flex-1 text-2xl font-extrabold">Catálogo</h1>
-        <div className="flex gap-1.5 rounded-xl bg-[#e6e9e2] p-1.5">
+        {/* En celular no entran las 7 pestañas: se scrollea de costado en vez
+            de dejar las últimas fuera de la pantalla (mismo patrón que Reportes). */}
+        <div className="flex w-full gap-1.5 overflow-x-auto rounded-xl bg-[#e6e9e2] p-1.5 md:w-auto">
           {tabsVisibles.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
-              className={`min-h-11 cursor-pointer rounded-lg px-4 text-sm font-bold ${
+              className={`min-h-11 shrink-0 cursor-pointer rounded-lg px-4 text-sm font-bold ${
                 tab === t.id ? 'bg-primario text-white' : 'text-texto-suave'
               }`}
             >
