@@ -102,8 +102,8 @@ export function Transferencias({ puedeEscribir }: Props) {
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-2xl border border-borde bg-white">
-        <div className="grid min-w-[1060px] grid-cols-[90px_110px_150px_1fr_90px_90px_80px_170px_130px] gap-x-3 bg-chip px-4.5 py-3 text-xs font-extrabold tracking-wide text-texto-suave">
+      <div className="tabla-cards overflow-x-auto rounded-2xl border border-borde bg-white">
+        <div className="tabla-encabezado grid min-w-[1060px] grid-cols-[90px_110px_150px_1fr_90px_90px_80px_170px_130px] gap-x-3 bg-chip px-4.5 py-3 text-xs font-extrabold tracking-wide text-texto-suave">
           <span>REMITO</span>
           <span>FECHA</span>
           <span>RUTA</span>
@@ -122,25 +122,25 @@ export function Transferencias({ puedeEscribir }: Props) {
               <div
                 key={`${t.id}-${l.id}`}
                 id={`transferencia-${t.id}`}
-                className={`grid min-w-[1060px] grid-cols-[90px_110px_150px_1fr_90px_90px_80px_170px_130px] items-center gap-x-3 border-t border-[#eef1ea] px-4.5 py-3 text-sm ${
+                className={`tabla-fila grid min-w-[1060px] grid-cols-[90px_110px_150px_1fr_90px_90px_80px_170px_130px] items-center gap-x-3 border-t border-[#eef1ea] px-4.5 py-3 text-sm ${
                   t.id === transferenciaDestacada ? 'bg-[#fff7d9]' : ''
                 }`}
               >
                 <span className="font-mono text-texto-suave">T-{String(t.id).padStart(5, '0')}</span>
-                <span className="text-texto-suave">{fmtFechaHora(t.fechaHoraEnvio)}</span>
-                <span>
+                <span data-col="FECHA" className="text-texto-suave">{fmtFechaHora(t.fechaHoraEnvio)}</span>
+                <span data-col="RUTA">
                   {t.sucursalOrigen} → {t.sucursalDestino}
                 </span>
                 <span className="font-semibold">{l.producto}</span>
-                <span className="text-right">{l.cantidadEnviada != null ? fmtNumero(l.cantidadEnviada) : '—'}</span>
-                <span className="text-right">{l.cantidadRecibida != null ? fmtNumero(l.cantidadRecibida) : '—'}</span>
-                <span className="text-right font-extrabold" style={dif != null && dif !== 0 ? { color: '#a02514' } : undefined}>
+                <span data-col="ENVIADO" className="text-right">{l.cantidadEnviada != null ? fmtNumero(l.cantidadEnviada) : '—'}</span>
+                <span data-col="RECIBIDO" className="text-right">{l.cantidadRecibida != null ? fmtNumero(l.cantidadRecibida) : '—'}</span>
+                <span data-col="DIF." className="text-right font-extrabold" style={dif != null && dif !== 0 ? { color: '#a02514' } : undefined}>
                   {dif != null ? fmtNumero(dif) : '—'}
                 </span>
-                <span className="text-[13px] text-texto-suave">
+                <span data-col="FIRMAS" className="text-[13px] text-texto-suave">
                   {t.usuarioEmisor} → {t.usuarioReceptor ?? '—'}
                 </span>
-                <span className="text-[13px] font-extrabold" style={{ color: ESTILO_ESTADO[t.estado] }}>
+                <span data-col="ESTADO" className="text-[13px] font-extrabold" style={{ color: ESTILO_ESTADO[t.estado] }}>
                   {LABEL_ESTADO[t.estado]}
                 </span>
               </div>

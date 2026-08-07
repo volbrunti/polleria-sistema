@@ -286,8 +286,8 @@ function TabProductos({ puedeEscribir }: { puedeEscribir: boolean }) {
           <option value="todos">Todos</option>
         </select>
       </div>
-      <div className="overflow-x-auto rounded-2xl border border-borde bg-white">
-        <div className="grid grid-cols-[1fr_150px_140px_150px_100px_110px] bg-chip px-5 py-3 text-xs font-extrabold tracking-wide text-texto-suave">
+      <div className="tabla-cards overflow-x-auto rounded-2xl border border-borde bg-white">
+        <div className="tabla-encabezado grid grid-cols-[1fr_150px_140px_150px_100px_110px] bg-chip px-5 py-3 text-xs font-extrabold tracking-wide text-texto-suave">
           <span>NOMBRE</span>
           <span>CATEGORÍA</span>
           <span>GRUPO EN EL POS</span>
@@ -299,14 +299,14 @@ function TabProductos({ puedeEscribir }: { puedeEscribir: boolean }) {
           <div className="px-5 py-6 text-center text-sm text-texto-suave">Sin resultados con estos filtros.</div>
         )}
         {productosFiltrados.map((p) => (
-          <div key={p.id} className="grid grid-cols-[1fr_150px_140px_150px_100px_110px] items-center border-t border-[#eef1ea] px-5 py-3.5 text-sm">
+          <div key={p.id} className="tabla-fila grid grid-cols-[1fr_150px_140px_150px_100px_110px] items-center border-t border-[#eef1ea] px-5 py-3.5 text-sm">
             <span className={`font-semibold ${p.activo ? '' : 'text-texto-suave line-through'}`}>{p.nombre}</span>
-            <span className="text-texto-suave">{p.categoria}</span>
-            <span className="text-texto-suave">
+            <span data-col="CATEGORÍA" className="text-texto-suave">{p.categoria}</span>
+            <span data-col="GRUPO EN EL POS" className="text-texto-suave">
               {p.tipo === 'MATERIA_PRIMA' ? '—' : (p.categoriaMadre ?? 'Otros')}
             </span>
-            <span className="font-mono text-xs text-texto-suave">{p.tipo}</span>
-            <span className="text-texto-suave">{p.unidadDeMedida}</span>
+            <span data-col="TIPO" className="font-mono text-xs text-texto-suave">{p.tipo}</span>
+            <span data-col="UNIDAD" className="text-texto-suave">{p.unidadDeMedida}</span>
             {puedeEscribir && (
               <button type="button" onClick={() => abrirEditar(p)} className="min-h-9 w-fit cursor-pointer rounded-lg border border-borde-fuerte bg-white px-3.5 text-[13px] font-bold text-primario">
                 Editar

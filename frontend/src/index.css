@@ -56,3 +56,47 @@ textarea {
 .animate-pop {
   animation: pop 0.4s ease-out;
 }
+
+/* ── Tablas que se vuelven tarjetas en celular ──────────────────────────
+   Las tablas del panel de admin son grillas de ancho fijo (hasta 1060px):
+   en un celular obligaban a barrer de costado para leer una fila. Marcando
+   el contenedor con `tabla-cards`, el encabezado se oculta y cada fila se
+   apila como una tarjeta, con el nombre de la columna delante de cada valor
+   (sale de `data-col`, así no hay que duplicar los títulos en el markup).
+   De 768px para arriba no cambia nada: sigue siendo la misma grilla. */
+@media (max-width: 767px) {
+  .tabla-cards .tabla-encabezado {
+    display: none;
+  }
+
+  .tabla-cards .tabla-fila {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+  }
+
+  /* Cada celda pasa a ser "ETIQUETA ....... valor" en una línea */
+  .tabla-cards .tabla-fila > * {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    text-align: left;
+    min-width: 0;
+  }
+
+  .tabla-cards .tabla-fila > [data-col]::before {
+    content: attr(data-col);
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    color: var(--color-texto-suave);
+  }
+
+  /* Celdas sin data-col (botones de acción): ocupan el ancho completo */
+  .tabla-cards .tabla-fila > :not([data-col]) {
+    justify-content: flex-start;
+  }
+}

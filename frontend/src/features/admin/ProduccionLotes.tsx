@@ -45,8 +45,8 @@ export function ProduccionLotes() {
         <h1 className="m-0 text-2xl font-extrabold">Producción — Lotes</h1>
         <div className="mt-1 text-sm text-texto-suave">Esperado vs. real, desvíos y trazabilidad completa.</div>
       </div>
-      <div className="overflow-x-auto rounded-2xl border border-borde bg-white">
-        <div className="grid min-w-[1060px] grid-cols-[90px_110px_1fr_130px_90px_80px_90px_110px_80px_110px] gap-x-3 bg-chip px-4.5 py-3 text-xs font-extrabold tracking-wide text-texto-suave">
+      <div className="tabla-cards overflow-x-auto rounded-2xl border border-borde bg-white">
+        <div className="tabla-encabezado grid min-w-[1060px] grid-cols-[90px_110px_1fr_130px_90px_80px_90px_110px_80px_110px] gap-x-3 bg-chip px-4.5 py-3 text-xs font-extrabold tracking-wide text-texto-suave">
           <span>LOTE</span>
           <span>FECHA</span>
           <span>PRODUCTO</span>
@@ -67,18 +67,18 @@ export function ProduccionLotes() {
               id={`lote-${l.id}`}
               className={`border-t border-[#eef1ea] ${l.id === loteDestacado ? 'bg-[#fff7d9]' : ''}`}
             >
-              <div className="grid min-w-[1060px] grid-cols-[90px_110px_1fr_130px_90px_80px_90px_110px_80px_110px] items-center gap-x-3 px-4.5 py-3.5 text-sm">
-                <span className="font-mono text-texto-suave">L-{l.id}</span>
-                <span className="text-texto-suave">{fmtFecha(l.fechaHora)}</span>
+              <div className="tabla-fila grid min-w-[1060px] grid-cols-[90px_110px_1fr_130px_90px_80px_90px_110px_80px_110px] items-center gap-x-3 px-4.5 py-3.5 text-sm">
+                <span data-col="LOTE" className="font-mono text-texto-suave">L-{l.id}</span>
+                <span data-col="FECHA" className="text-texto-suave">{fmtFecha(l.fechaHora)}</span>
                 <span className="font-semibold">{l.productoElaborado}</span>
-                <span>{nombreOperario(l.usuarioOperarioId)}</span>
-                <span className="text-right">{l.unidadesEsperadas != null ? fmtNumero(l.unidadesEsperadas) : '—'}</span>
-                <span className="text-right font-bold">{l.unidadesProducidasReales != null ? fmtNumero(l.unidadesProducidasReales) : '—'}</span>
-                <span className="text-right font-extrabold" style={desvio != null && Math.abs(desvio) >= 10 ? { color: '#a02514' } : undefined}>
+                <span data-col="OPERARIO">{nombreOperario(l.usuarioOperarioId)}</span>
+                <span data-col="ESPERADO" className="text-right">{l.unidadesEsperadas != null ? fmtNumero(l.unidadesEsperadas) : '—'}</span>
+                <span data-col="REAL" className="text-right font-bold">{l.unidadesProducidasReales != null ? fmtNumero(l.unidadesProducidasReales) : '—'}</span>
+                <span data-col="DESVÍO" className="text-right font-extrabold" style={desvio != null && Math.abs(desvio) >= 10 ? { color: '#a02514' } : undefined}>
                   {desvio != null ? `${fmtNumero(desvio)} %` : '—'}
                 </span>
-                <span className="text-right text-texto-suave">{l.desperdicioRealKg != null ? fmtNumero(l.desperdicioRealKg) : '—'}</span>
-                <span className="text-texto-suave">{versionDeFicha(l.fichaTecnicaVersionId)}</span>
+                <span data-col="DESPERDICIO" className="text-right text-texto-suave">{l.desperdicioRealKg != null ? fmtNumero(l.desperdicioRealKg) : '—'}</span>
+                <span data-col="FICHA" className="text-texto-suave">{versionDeFicha(l.fichaTecnicaVersionId)}</span>
                 <button
                   type="button"
                   onClick={() => toggle(l.id)}

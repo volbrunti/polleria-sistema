@@ -68,8 +68,8 @@ export function StockMinimo({ puedeEscribir }: Props) {
         <div className="rounded-xl bg-error-suave px-3.5 py-3 text-sm font-semibold text-error-texto">{error}</div>
       )}
 
-      <div className="overflow-x-auto rounded-2xl border border-borde bg-white">
-        <div className="grid min-w-[640px] grid-cols-[1fr_180px_120px_120px] gap-x-3 bg-chip px-4.5 py-3 text-xs font-extrabold tracking-wide text-texto-suave">
+      <div className="tabla-cards overflow-x-auto rounded-2xl border border-borde bg-white">
+        <div className="tabla-encabezado grid min-w-[640px] grid-cols-[1fr_180px_120px_120px] gap-x-3 bg-chip px-4.5 py-3 text-xs font-extrabold tracking-wide text-texto-suave">
           <span>PRODUCTO</span>
           <span>SUCURSAL</span>
           <span className="text-right">MÍNIMO</span>
@@ -79,11 +79,11 @@ export function StockMinimo({ puedeEscribir }: Props) {
         {configsQ.data?.map((c) => (
           <div
             key={c.id}
-            className="grid min-w-[640px] grid-cols-[1fr_180px_120px_120px] items-center gap-x-3 border-t border-[#eef1ea] px-4.5 py-3 text-sm"
+            className="tabla-fila grid min-w-[640px] grid-cols-[1fr_180px_120px_120px] items-center gap-x-3 border-t border-[#eef1ea] px-4.5 py-3 text-sm"
           >
             <span className="font-semibold">{c.producto?.nombre}</span>
-            <span className="text-texto-suave">{c.sucursal?.nombre}</span>
-            <span className="text-right font-extrabold">{fmtNumero(c.minimo, 1)}</span>
+            <span data-col="SUCURSAL" className="text-texto-suave">{c.sucursal?.nombre}</span>
+            <span data-col="MÍNIMO" className="text-right font-extrabold">{fmtNumero(c.minimo, 1)}</span>
             <span className="text-right">
               {puedeEscribir ? (
                 <button

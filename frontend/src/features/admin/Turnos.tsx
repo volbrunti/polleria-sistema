@@ -210,15 +210,16 @@ function FilaArqueo({ arqueo }: { arqueo: Arqueo }) {
   const fmt = (v: string | null | undefined) =>
     v == null ? '—' : esEfectivo ? fmtMoneda(v) : fmtNumero(v, 1);
   return (
-    <div className="grid grid-cols-[110px_130px_1fr_1fr_1fr_110px] items-center gap-x-3 border-t border-[#eef1ea] px-4 py-2.5 text-sm">
+    <div className="tabla-fila grid grid-cols-[110px_130px_1fr_1fr_1fr_110px] items-center gap-x-3 border-t border-[#eef1ea] px-4 py-2.5 text-sm">
       <span className="font-semibold">{arqueo.momento === 'APERTURA' ? 'Apertura' : 'Cierre'}</span>
-      <span className="text-texto-suave">{esEfectivo ? 'Efectivo' : 'Pollos marcados'}</span>
-      <span className="text-right">{fmt(arqueo.valorContado)}</span>
-      <span className="text-right">{fmt(arqueo.valorEsperado)}</span>
-      <span className="text-right font-extrabold" style={dif != null && dif !== 0 ? { color: '#a02514' } : undefined}>
+      <span data-col="TIPO" className="text-texto-suave">{esEfectivo ? 'Efectivo' : 'Pollos marcados'}</span>
+      <span data-col="CONTADO" className="text-right">{fmt(arqueo.valorContado)}</span>
+      <span data-col="ESPERADO" className="text-right">{fmt(arqueo.valorEsperado)}</span>
+      <span data-col="DIFERENCIA" className="text-right font-extrabold" style={dif != null && dif !== 0 ? { color: '#a02514' } : undefined}>
         {fmt(arqueo.diferencia)}
       </span>
       <span
+        data-col="RESULTADO"
         className="text-right text-[13px] font-extrabold"
         style={{ color: arqueo.resultado === 'COINCIDE' ? '#1a7f3f' : '#a02514' }}
       >
@@ -242,8 +243,8 @@ function DetalleTurno({ turnoId }: { turnoId: number }) {
   return (
     <div className="flex flex-col gap-3.5 border-t border-[#eef1ea] bg-panel px-4.5 py-4">
       {/* Arqueos: contado vs esperado — el corazón del control */}
-      <div className="rounded-xl border border-borde bg-white">
-        <div className="grid grid-cols-[110px_130px_1fr_1fr_1fr_110px] gap-x-3 px-4 py-2.5 text-xs font-extrabold tracking-wide text-texto-suave">
+      <div className="tabla-cards rounded-xl border border-borde bg-white">
+        <div className="tabla-encabezado grid grid-cols-[110px_130px_1fr_1fr_1fr_110px] gap-x-3 px-4 py-2.5 text-xs font-extrabold tracking-wide text-texto-suave">
           <span>MOMENTO</span>
           <span>TIPO</span>
           <span className="text-right">CONTADO</span>

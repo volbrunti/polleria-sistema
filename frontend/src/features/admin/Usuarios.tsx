@@ -198,8 +198,8 @@ export function Usuarios() {
         <div className="rounded-xl bg-error-suave px-3.5 py-2.5 text-sm font-semibold text-error-texto">{errorLista}</div>
       )}
 
-      <div className="overflow-x-auto rounded-2xl border border-borde bg-white">
-        <div className="grid grid-cols-[1fr_160px_180px_140px_90px_170px] bg-chip px-5 py-3 text-xs font-extrabold tracking-wide text-texto-suave">
+      <div className="tabla-cards overflow-x-auto rounded-2xl border border-borde bg-white">
+        <div className="tabla-encabezado grid grid-cols-[1fr_160px_180px_140px_90px_170px] bg-chip px-5 py-3 text-xs font-extrabold tracking-wide text-texto-suave">
           <span>NOMBRE</span>
           <span>USUARIO</span>
           <span>ROL</span>
@@ -208,16 +208,16 @@ export function Usuarios() {
           <span />
         </div>
         {usuarios.data?.map((u) => (
-          <div key={u.id} className="grid grid-cols-[1fr_160px_180px_140px_90px_170px] items-center border-t border-[#eef1ea] px-5 py-3.5 text-sm">
+          <div key={u.id} className="tabla-fila grid grid-cols-[1fr_160px_180px_140px_90px_170px] items-center border-t border-[#eef1ea] px-5 py-3.5 text-sm">
             <span className="font-semibold">{u.nombre}</span>
-            <span className="font-mono text-[13px] text-texto-suave">{u.username}</span>
-            <span>{u.rol}</span>
-            <span className="text-texto-suave">
+            <span data-col="USUARIO" className="font-mono text-[13px] text-texto-suave">{u.username}</span>
+            <span data-col="ROL">{u.rol}</span>
+            <span data-col="SUCURSAL" className="text-texto-suave">
               {ROLES_CON_SUCURSAL.includes(u.rol)
                 ? (locales.find((l) => l.id === u.sucursalId)?.nombre ?? '— sin asignar —')
                 : '—'}
             </span>
-            <span className="font-bold" style={{ color: u.activo ? '#1a7f3f' : '#a02514' }}>
+            <span data-col="ACTIVO" className="font-bold" style={{ color: u.activo ? '#1a7f3f' : '#a02514' }}>
               {u.activo ? 'Sí' : 'No'}
             </span>
             <span className="flex gap-2">
