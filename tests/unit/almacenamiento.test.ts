@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from 'vitest';
+import { AppError } from '../../src/lib/errores';
 
 // config.ts corre configuracionR2() al importarse — hay que fijar las env
 // vars ANTES del import para que quede "configurado: true". Se limpian en
@@ -101,11 +102,27 @@ describe('subirAR2 — arma el PUT firmado correctamente', () => {
     expect(url).toBe('https://fotos.limonychimi.com.ar/foto-1.jpg');
   });
 
-  it('si R2 responde error, lanza con el status y no devuelve una URL falsa', async () => {
+  // El mensaje que ve el operario dejó de ser el volcado técnico: R2 caído no
+  // puede frenar la carga de un ingreso, así que tiene que decirle que puede
+  // seguir sin la foto (auditoría 2026-08-07, E-4). El status igual se conserva
+  // en detalleTecnico, que se loguea del lado del servidor y no se manda nunca.
+  it('si R2 responde error: no devuelve una URL falsa, avisa que se puede seguir sin foto, y conserva el status para diagnóstico', async () => {
     fetchMock.mockResolvedValue(new Response('Access Denied', { status: 403 }));
 
-    await expect(
-      subirAR2({ buffer: Buffer.from('x'), nombreArchivo: 'a.jpg', contentType: 'image/jpeg' }),
-    ).rejects.toThrow(/403/);
+    const error = await subirAR2({
+      buffer: Buffer.from('x'),
+      nombreArchivo: 'a.jpg',
+      contentType: 'image/jpeg',
+    }).catch((e) => e as AppError);
+
+    expect(error).toBeInstanceOf(AppError);
+    expect(error.codigo).toBe('FOTO_NO_SUBIDA');
+    expect(error.statusCode).toBe(503);
+    // accionable para el operario, sin datos técnicos encima
+    expect(error.message).toMatch(/sin ella/i);
+    expect(error.message).not.toMatch(/403/);
+    // …pero el status no se pierde
+    expect(error.detalleTecnico).toMatch(/403/);
+    expect(error.detalleTecnico).toMatch(/Access Denied/);
   });
 });

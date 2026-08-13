@@ -4,6 +4,7 @@ import { listarProductos, tablasPrecioVigentes } from '../../../api/productos';
 import { listarConfiguracion, CLAVE_DESCUENTO_EMPLEADO } from '../../../api/configuracion';
 import { cobrarPedido, confirmarPedido, masVendidos } from '../../../api/pedidos';
 import { calcularPrecioTotal, type TierPrecio } from '../../../lib/precios';
+import { nuevoToken } from '../../../lib/idempotencia';
 import { fmtMoneda } from '../../../lib/formato';
 import { ApiError } from '../../../api/client';
 import { CobrarPedido } from './CobrarPedido';
@@ -86,7 +87,7 @@ function BotonBeneficiario({
   );
 }
 
-// POS táctil (CLAUDE-MODULO-2.md §4.1, INNEGOCIABLE): botones grandes por
+// POS táctil (CLAUDE.md §5 Flujo 4, INNEGOCIABLE): botones grandes por
 // categoría, productos ordenados por MÁS VENDIDOS (ranking del backend, no
 // manual), carrito siempre visible, total en tiempo real.
 export function POS({ sucursalId }: Props) {
@@ -190,11 +191,11 @@ export function POS({ sucursalId }: Props) {
   // Token de idempotencia: uno por pedido armado. Se renueva cuando el
   // carrito arranca de cero — un retry del MISMO carrito reusa el token y el
   // backend devuelve el pedido ya creado en vez de duplicarlo.
-  const tokenPedido = useRef(crypto.randomUUID());
+  const tokenPedido = useRef(nuevoToken());
 
   function agregar(producto: Producto) {
     setCarrito((c) => {
-      if (c.length === 0) tokenPedido.current = crypto.randomUUID();
+      if (c.length === 0) tokenPedido.current = nuevoToken();
       const idx = c.findIndex((l) => l.producto.id === producto.id);
       if (idx === -1) return [...c, { producto, cantidad: 1 }];
       return c.map((l, i) => (i === idx ? { ...l, cantidad: l.cantidad + 1 } : l));

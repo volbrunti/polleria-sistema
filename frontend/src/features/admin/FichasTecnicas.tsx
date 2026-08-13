@@ -4,6 +4,7 @@ import { listarFichas, crearFicha, crearNuevaVersion, type VersionInput } from '
 import { listarProductos } from '../../api/productos';
 import { ApiError } from '../../api/client';
 import { fmtFecha, fmtNumero } from '../../lib/formato';
+import { ErrorDeCarga } from '../../components/ui/ErrorDeCarga';
 
 interface Props {
   puedeEscribir: boolean;
@@ -261,6 +262,7 @@ export function FichasTecnicas({ puedeEscribir }: Props) {
       )}
 
       {fichas.isLoading && <div className="text-texto-suave">Cargando…</div>}
+      {fichas.isError && <ErrorDeCarga onReintentar={() => void fichas.refetch()} />}
 
       {fichas.data?.map((f) => {
         const activa = f.versiones.find((v) => v.activa);

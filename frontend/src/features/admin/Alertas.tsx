@@ -1,9 +1,12 @@
 import { Link } from 'react-router-dom';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { listarAlertas, marcarVista } from '../../api/alertas';
 import { listarProductos } from '../../api/productos';
 import { listarUsuarios } from '../../api/usuarios';
 import { fmtFechaHora, fmtNumero } from '../../lib/formato';
+import { ApiError } from '../../api/client';
+import { ErrorDeCarga } from '../../components/ui/ErrorDeCarga';
 import type { Alerta } from '../../api/types';
 
 // Mapea el origen ciego de la alerta (tipoOrigen + origenId) a la pantalla
@@ -81,9 +84,15 @@ export function Alertas() {
   const productos = useQuery({ queryKey: ['productos', 'todos'], queryFn: () => listarProductos() });
   const usuarios = useQuery({ queryKey: ['usuarios'], queryFn: listarUsuarios });
 
+  const [errorVista, setErrorVista] = useState<string | null>(null);
   const mutVista = useMutation({
     mutationFn: marcarVista,
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['alertas'] }),
+    onSuccess: () => {
+      setErrorVista(null);
+      void queryClient.invalidateQueries({ queryKey: ['alertas'] });
+    },
+    onError: (e) =>
+      setErrorVista(e instanceof ApiError ? e.message : 'No se pudo marcar la alerta como vista.'),
   });
 
   const nombreProducto = (id: number) => productos.data?.find((p) => p.id === id)?.nombre ?? `#${id}`;
@@ -96,8 +105,20 @@ export function Alertas() {
         <div className="mt-1 text-sm text-texto-suave">Llegan en tiempo real (WebSocket). Solo vos ves esta pantalla.</div>
       </div>
 
+      {errorVista && (
+        <div className="rounded-xl bg-error-suave px-3.5 py-3 text-[15px] font-semibold text-error-texto">
+          {errorVista}
+        </div>
+      )}
+
       {alertas.isLoading && <div className="text-texto-suave">Cargando…</div>}
-      {alertas.data?.length === 0 && <div className="text-texto-suave">No hay alertas.</div>}
+      {/* Una consulta que falló no es lo mismo que "no hay alertas": si no se
+          distinguen, el admin da por hecho que no está pasando nada
+          (auditoría 2026-08-07, E-2). */}
+      {alertas.isError && <ErrorDeCarga onReintentar={() => void alertas.refetch()} />}
+      {!alertas.isError && alertas.data?.length === 0 && (
+        <div className="text-texto-suave">No hay alertas.</div>
+      )}
 
       {alertas.data?.map((a) => {
         const estilo = ESTILO_TIPO[a.tipo] ?? { texto: a.tipo, color: '#5f6d60', bg: '#e6e9e2' };

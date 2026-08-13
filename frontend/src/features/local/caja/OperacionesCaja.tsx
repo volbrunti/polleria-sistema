@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { TecladoNumerico } from '../../../components/ui/TecladoNumerico';
 import {
@@ -11,6 +11,7 @@ import {
   registrarRetiro,
 } from '../../../api/caja';
 import { listarProductos } from '../../../api/productos';
+import { nuevoToken } from '../../../lib/idempotencia';
 import { fmtMoneda } from '../../../lib/formato';
 import { ApiError } from '../../../api/client';
 import type { MedioPago, SocioRetiro } from '../../../api/types';
@@ -29,7 +30,7 @@ const ETIQUETA_MOTIVO: Record<string, string> = {
   OTRO: 'Otro',
 };
 
-// Operaciones del turno (CLAUDE-MODULO-2.md §5.2 + §4.8/§4.9): gastos,
+// Operaciones del turno (CLAUDE.md §5 Flujo 5 + §4.8/§4.9): gastos,
 // retiros (selector CERRADO de socios), marcado de pollos, mermas/retornos
 // y atenciones. Todo queda firmado por el usuario en sesión.
 export function OperacionesCaja({ sucursalId }: Props) {
@@ -151,6 +152,10 @@ function FormGasto({ sucursalId, onListo, onCancelar }: { sucursalId: number; on
   const [descripcion, setDescripcion] = useState('');
   const [tecladoAbierto, setTecladoAbierto] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Un token por formulario abierto: sobrevive a los reintentos de esta misma
+  // operación, y al cerrarse el modal el componente se desmonta y el próximo
+  // arranca con uno nuevo (ver lib/idempotencia.ts).
+  const token = useRef(nuevoToken());
 
   const mut = useMutation({
     mutationFn: () =>
@@ -160,6 +165,7 @@ function FormGasto({ sucursalId, onListo, onCancelar }: { sucursalId: number; on
         medio,
         categoria,
         descripcion: descripcion.trim() || undefined,
+        tokenIdempotencia: token.current,
       }),
     onSuccess: () => onListo('Gasto registrado'),
     onError: (e) => setError(e instanceof ApiError ? e.message : 'No se pudo registrar.'),
@@ -231,8 +237,14 @@ function FormRetiro({ sucursalId, onListo, onCancelar }: { sucursalId: number; o
   const [tecladoAbierto, setTecladoAbierto] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Un token por formulario abierto: sobrevive a los reintentos de esta misma
+  // operación, y al cerrarse el modal el componente se desmonta y el próximo
+  // arranca con uno nuevo (ver lib/idempotencia.ts).
+  const token = useRef(nuevoToken());
+
   const mut = useMutation({
-    mutationFn: () => registrarRetiro({ sucursalId, monto: monto!, medio, socio: socio! }),
+    mutationFn: () =>
+      registrarRetiro({ sucursalId, monto: monto!, medio, socio: socio!, tokenIdempotencia: token.current }),
     onSuccess: () => onListo('Retiro registrado'),
     onError: (e) => setError(e instanceof ApiError ? e.message : 'No se pudo registrar.'),
   });
@@ -298,8 +310,14 @@ function FormRetiro({ sucursalId, onListo, onCancelar }: { sucursalId: number; o
 // ── Marcado de pollos (fresco → parrilla) ──
 function FormMarcado({ sucursalId, onListo, onCancelar }: { sucursalId: number; onListo: (msj: string) => void; onCancelar: () => void }) {
   const [error, setError] = useState<string | null>(null);
+  // Un token por formulario abierto: sobrevive a los reintentos de esta misma
+  // operación, y al cerrarse el modal el componente se desmonta y el próximo
+  // arranca con uno nuevo (ver lib/idempotencia.ts).
+  const token = useRef(nuevoToken());
+
   const mut = useMutation({
-    mutationFn: (cantidad: number) => marcarPollos({ sucursalId, cantidad }),
+    mutationFn: (cantidad: number) =>
+      marcarPollos({ sucursalId, cantidad, tokenIdempotencia: token.current }),
     onSuccess: () => onListo('Pollos marcados'),
     onError: (e) => setError(e instanceof ApiError ? e.message : 'No se pudo registrar.'),
   });
@@ -366,6 +384,10 @@ function FormAtencion({ sucursalId, onListo, onCancelar }: { sucursalId: number;
   const [motivo, setMotivo] = useState<string>(MOTIVOS_ATENCION[0]);
   const [detalle, setDetalle] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // Un token por formulario abierto: sobrevive a los reintentos de esta misma
+  // operación, y al cerrarse el modal el componente se desmonta y el próximo
+  // arranca con uno nuevo (ver lib/idempotencia.ts).
+  const token = useRef(nuevoToken());
 
   const mut = useMutation({
     mutationFn: () =>
@@ -375,6 +397,7 @@ function FormAtencion({ sucursalId, onListo, onCancelar }: { sucursalId: number;
         cantidad,
         motivoCodigo: motivo,
         motivoDetalle: detalle.trim() || undefined,
+        tokenIdempotencia: token.current,
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['stock'] });

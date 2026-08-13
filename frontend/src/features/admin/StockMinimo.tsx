@@ -5,6 +5,7 @@ import { listarProductos } from '../../api/productos';
 import { listarSucursales } from '../../api/sucursales';
 import { fmtNumero } from '../../lib/formato';
 import { ApiError } from '../../api/client';
+import { ErrorDeCarga } from '../../components/ui/ErrorDeCarga';
 
 interface Props {
   puedeEscribir: boolean;
@@ -76,6 +77,7 @@ export function StockMinimo({ puedeEscribir }: Props) {
           <span className="text-right">ESTADO</span>
         </div>
         {configsQ.isLoading && <div className="px-4.5 py-4 text-texto-suave">Cargando…</div>}
+        {configsQ.isError && <ErrorDeCarga onReintentar={() => void configsQ.refetch()} />}
         {configsQ.data?.map((c) => (
           <div
             key={c.id}

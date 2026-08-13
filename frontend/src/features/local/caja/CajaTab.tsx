@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { turnoActivo } from '../../../api/turnos';
 import { usePosSocket, type FalloComandera } from '../../../lib/useSocket';
+import { reimprimirTicket } from '../../../api/comanderas';
+import { ApiError } from '../../../api/client';
 import { AperturaTurno } from './AperturaTurno';
 import { PantallaBloqueada } from './PantallaBloqueada';
 import { POS } from './POS';
@@ -63,7 +65,11 @@ export function CajaTab({ sucursalId }: Props) {
   // ── Turno ABIERTO: POS con subnavegación ──
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-1.5 border-b border-borde bg-white px-3 py-2">
+      {/* Los cuatro botones no entran en 375 px: "Cerrar turno" quedaba cortado
+          15 px contra el borde derecho, sin ningún contenedor que scrollee
+          (auditoría 2026-08-07, V-1). Con padding más chico y texto reducido en
+          móvil entra completo; de `sm` para arriba queda igual que antes. */}
+      <div className="flex items-center gap-1.5 border-b border-borde bg-white px-2 py-2 sm:px-3">
         {(
           [
             ['vender', 'Vender'],
@@ -75,7 +81,7 @@ export function CajaTab({ sucursalId }: Props) {
             key={s}
             type="button"
             onClick={() => setSeccion(s)}
-            className={`min-h-12 cursor-pointer rounded-xl px-4.5 text-base font-bold ${
+            className={`min-h-12 shrink-0 cursor-pointer rounded-xl px-3 text-[15px] font-bold sm:px-4.5 sm:text-base ${
               seccion === s ? 'bg-primario text-white' : 'text-texto-suave hover:bg-chip'
             }`}
           >
@@ -85,7 +91,7 @@ export function CajaTab({ sucursalId }: Props) {
         <button
           type="button"
           onClick={() => setCerrando(true)}
-          className="ml-auto min-h-12 cursor-pointer rounded-xl border border-borde-fuerte bg-white px-4.5 text-[15px] font-bold text-texto-suave hover:text-texto"
+          className="ml-auto min-h-12 shrink-0 cursor-pointer rounded-xl border border-borde-fuerte bg-white px-3 text-[13px] font-bold text-texto-suave hover:text-texto sm:px-4.5 sm:text-[15px]"
         >
           Cerrar turno
         </button>
@@ -136,7 +142,7 @@ function AvisoComanderaCaida({
           <div className="text-base font-extrabold text-error-texto">
             {fallos.length === 1 ? 'No salió una comanda' : `No salieron ${fallos.length} comandas`}
           </div>
-          <div className="mt-0.5 flex flex-col gap-0.5">
+          <div className="mt-0.5 flex flex-col gap-1.5">
             {fallos.map((f, i) => (
               <div key={`${f.ticketId}-${i}`} className="text-sm text-error-texto">
                 {NOMBRE_TICKET[f.tipo] ?? 'El ticket'} del{' '}
@@ -145,6 +151,10 @@ function AvisoComanderaCaida({
                   {f.destinos.map((d) => NOMBRE_DESTINO[d] ?? d.toLowerCase()).join(' ni ')}
                 </strong>
                 . Avisá a viva voz.
+                {/* Si la impresora se destrabó, esto la vuelve a intentar en el
+                    momento. Antes el cajero no tenía nada más que hacer que
+                    cantar la comanda (auditoría 2026-08-07, E-5). */}
+                <BotonReimprimir ticketId={f.ticketId} />
               </div>
             ))}
           </div>
@@ -162,5 +172,45 @@ function AvisoComanderaCaida({
         </button>
       </div>
     </div>
+  );
+}
+
+// Reintento de impresión desde el mostrador. Muestra el resultado por
+// comandera en vez de un "listo" genérico: si vuelve a fallar la de cocina
+// pero sale la de mostrador, el cajero necesita saber exactamente eso.
+function BotonReimprimir({ ticketId }: { ticketId: number }) {
+  const [estado, setEstado] = useState<'idle' | 'enviando' | string>('idle');
+
+  async function reintentar() {
+    setEstado('enviando');
+    try {
+      const r = await reimprimirTicket(ticketId);
+      const fallaron = r.resultados.filter((x) => !x.impreso);
+      setEstado(
+        fallaron.length === 0
+          ? '✓ Salió'
+          : `Sigue sin salir en ${fallaron
+              .map((x) => NOMBRE_DESTINO[x.destino] ?? x.destino.toLowerCase())
+              .join(' ni ')}`,
+      );
+    } catch (e) {
+      setEstado(e instanceof ApiError ? e.message : 'No se pudo reintentar.');
+    }
+  }
+
+  return (
+    <span className="ml-1 inline-flex items-center gap-2">
+      <button
+        type="button"
+        disabled={estado === 'enviando'}
+        onClick={() => void reintentar()}
+        className="min-h-9 cursor-pointer rounded-lg border border-error bg-white px-2.5 text-xs font-extrabold text-error-texto disabled:opacity-50"
+      >
+        {estado === 'enviando' ? 'IMPRIMIENDO…' : 'REIMPRIMIR'}
+      </button>
+      {estado !== 'idle' && estado !== 'enviando' && (
+        <span className="text-xs font-bold text-error-texto">{estado}</span>
+      )}
+    </span>
   );
 }

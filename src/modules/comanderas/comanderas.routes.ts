@@ -70,4 +70,18 @@ export async function comanderasRoutes(app: FastifyInstance) {
     const { pedidoId } = z.object({ pedidoId: z.coerce.number().int().positive() }).parse(req.params);
     return comanderasService.ticketsDePedido(pedidoId);
   });
+
+  // Reimpresión: la ÚNICA acción de comanderas que no es solo de admin. Cargar
+  // una IP es infraestructura; volver a mandar una comanda que no salió es
+  // operación de mostrador, y el cajero la necesita en el momento — pedirle
+  // que llame al administrador es lo mismo que no tener el botón.
+  // El servicio valida que el ticket sea de su sucursal.
+  app.post(
+    '/tickets/:ticketId/reimprimir',
+    { preHandler: [app.autenticar, app.requerirRoles('ADMINISTRADOR', 'ENCARGADO', 'CAJERO')] },
+    async (req) => {
+      const { ticketId } = z.object({ ticketId: z.coerce.number().int().positive() }).parse(req.params);
+      return comanderasService.reimprimir(ticketId, req.usuario.id);
+    },
+  );
 }

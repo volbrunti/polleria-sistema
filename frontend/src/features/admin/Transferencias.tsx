@@ -10,6 +10,7 @@ import { listarAlertas } from '../../api/alertas';
 import { fmtFechaHora, fmtNumero } from '../../lib/formato';
 import { ApiError } from '../../api/client';
 import type { Transferencia } from '../../api/types';
+import { ErrorDeCarga } from '../../components/ui/ErrorDeCarga';
 
 const ESTILO_ESTADO: Record<string, string> = {
   PENDIENTE_RECEPCION: '#7a5d00',
@@ -115,6 +116,7 @@ export function Transferencias({ puedeEscribir }: Props) {
           <span>ESTADO</span>
         </div>
         {transferencias.isLoading && <div className="px-4.5 py-4 text-texto-suave">Cargando…</div>}
+        {transferencias.isError && <ErrorDeCarga onReintentar={() => void transferencias.refetch()} />}
         {transferencias.data?.flatMap((t) =>
           t.lineas.map((l) => {
             const dif = l.diferencia != null ? Number(l.diferencia) : null;

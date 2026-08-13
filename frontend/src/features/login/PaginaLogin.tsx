@@ -49,7 +49,7 @@ export function PaginaLogin() {
             L&amp;C
           </div>
           <div className="text-2xl font-extrabold tracking-wide">LIMÓN &amp; CHIMI</div>
-          <div className="text-sm text-texto-suave">Sistema de gestión · Módulo 1</div>
+          <div className="text-sm text-texto-suave">Sistema de gestión</div>
         </div>
 
         <form

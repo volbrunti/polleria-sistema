@@ -6,6 +6,7 @@ import fastifyStatic from '@fastify/static';
 import path from 'node:path';
 import fs from 'node:fs';
 import { ZodError } from 'zod';
+import { Prisma } from '@prisma/client';
 import authPlugin from './plugins/auth';
 import { config } from './config';
 import { AppError } from './lib/errores';
@@ -58,6 +59,8 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   app.setErrorHandler((error, _req, reply) => {
     if (error instanceof AppError) {
+      // El detalle técnico se loguea pero NO se manda: el operario lee `message`.
+      if (error.detalleTecnico) app.log.error({ codigo: error.codigo }, error.detalleTecnico);
       return reply.code(error.statusCode).send({ codigo: error.codigo, mensaje: error.message });
     }
     if (error instanceof ZodError) {
@@ -65,6 +68,41 @@ export async function buildApp(): Promise<FastifyInstance> {
         codigo: 'VALIDACION',
         mensaje: 'Datos de entrada inválidos',
         detalles: error.issues.map((i) => ({ campo: i.path.join('.'), error: i.message })),
+      });
+    }
+    // Errores de Prisma que son casos de negocio corrientes, no fallas del
+    // sistema. Sin esto caían al 500 genérico: cargar un producto con un nombre
+    // que ya existe le respondía "Error interno del servidor" al administrador,
+    // que se iba a buscar un problema inexistente (auditoría 2026-08-07, E-1).
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2002') {
+        const campos = (error.meta?.target as string[] | undefined)?.join(', ');
+        return reply.code(409).send({
+          codigo: 'YA_EXISTE',
+          mensaje: campos ? `Ya existe un registro con ese ${campos}` : 'Ese registro ya existe',
+        });
+      }
+      if (error.code === 'P2025') {
+        return reply.code(404).send({ codigo: 'NO_ENCONTRADO', mensaje: 'No se encontró el registro' });
+      }
+      if (error.code === 'P2003') {
+        return reply.code(409).send({
+          codigo: 'EN_USO',
+          mensaje: 'El registro está referenciado por otros datos y no puede modificarse ni borrarse',
+        });
+      }
+    }
+    // Neon suspende el compute cuando no hay actividad; el primer request
+    // después puede no encontrar la base. Es temporal y se resuelve solo:
+    // conviene decirlo así en vez de mandar un 500 que parece definitivo.
+    if (
+      error instanceof Prisma.PrismaClientInitializationError ||
+      (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P1001')
+    ) {
+      app.log.error(error);
+      return reply.code(503).send({
+        codigo: 'BASE_NO_DISPONIBLE',
+        mensaje: 'La base de datos no responde en este momento. Reintentá en unos segundos.',
       });
     }
     app.log.error(error);

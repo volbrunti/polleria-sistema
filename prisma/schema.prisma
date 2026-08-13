@@ -336,6 +336,11 @@ model MovimientoStock {
 
   @@index([productoId, sucursalId])
   @@index([tipoOrigen, origenId])
+  // El índice compuesto de arriba cubre el chequeo de stock de UN producto
+  // (arranca por productoId), pero no el stock COMPLETO de una sucursal, que
+  // es lo que pide la pantalla Stock del admin: ahí hacía seq scan sobre la
+  // tabla que más crece de todo el sistema (auditoría 2026-08-07, C-7).
+  @@index([sucursalId])
   @@map("movimientos_stock")
 }
 
@@ -724,7 +729,7 @@ model Pedido {
   fechaCreacion DateTime  @default(now())
   fechaCierre   DateTime?
 
-  // Timer de "pedido no retirado" (CLAUDE-MODULO-2.md §9): cuándo entró a
+  // Timer de "pedido no retirado" (CLAUDE.md §5 Flujo 4): cuándo entró a
   // LISTO_NO_RETIRADO y si ya se avisó al admin, para no reemitir el evento
   // en cada corrida del job periódico.
   fechaListoNoRetirado   DateTime?
@@ -754,6 +759,11 @@ model ItemDePedido {
   esVentaCostoCero Boolean        @default(false)
   tipoCostoCero    TipoCostoCero?
 
+  // En PostgreSQL una FK no crea índice sola. Sin esto, cada `include: items`
+  // de un pedido (o sea: toda operación del POS) hace un seq scan sobre la
+  // tabla que más rápido crece (auditoría 2026-08-07, C-7).
+  @@index([pedidoId])
+  @@index([productoId])
   @@map("items_pedido")
 }
 
@@ -771,6 +781,9 @@ model Pago {
   montoRecargo Decimal? @db.Decimal(12, 2)
   fechaHora DateTime  @default(now())
 
+  // El cierre de turno suma los pagos EFECTIVO del turno: sin índice, seq scan
+  // en cada cierre (auditoría 2026-08-07, C-7).
+  @@index([pedidoId])
   @@map("pagos")
 }
 
@@ -807,6 +820,11 @@ model Atencion {
   usuarioId     Int
   fechaHora     DateTime @default(now())
 
+  /// Ver la nota en GastoDeCaja.tokenIdempotencia
+  tokenIdempotencia String? @unique
+
+  @@index([turnoId])
+  @@index([productoId])
   @@map("atenciones")
 }
 
@@ -822,6 +840,14 @@ model GastoDeCaja {
   usuarioId   Int
   fechaHora   DateTime  @default(now())
 
+  /// Mismo mecanismo que Pedido.tokenIdempotencia. Estas operaciones son INSERT
+  /// puros: sin token, un reintento después de un timeout de red DUPLICA el
+  /// registro, y dos gastos idénticos son indistinguibles de dos gastos
+  /// legítimos iguales — la caja cierra con un faltante que nadie puede
+  /// explicar (auditoría 2026-08-07, C-4).
+  tokenIdempotencia String? @unique
+
+  @@index([turnoId])
   @@map("gastos_caja")
 }
 
@@ -836,6 +862,10 @@ model RetiroDeCaja {
   usuarioCajeroId Int
   fechaHora       DateTime    @default(now())
 
+  /// Ver la nota en GastoDeCaja.tokenIdempotencia
+  tokenIdempotencia String? @unique
+
+  @@index([turnoId])
   @@map("retiros_caja")
 }
 
@@ -854,6 +884,12 @@ model EventoMarcadoPollo {
   usuarioId  Int
   fechaHora  DateTime @default(now())
 
+  /// Ver la nota en GastoDeCaja.tokenIdempotencia. Acá pesa el doble: el saldo
+  /// de pollos marcados es una de las dos mitades del arqueo ciego, así que un
+  /// marcado duplicado le termina cargando la diferencia al cajero.
+  tokenIdempotencia String? @unique
+
+  @@index([turnoId])
   @@map("eventos_marcado_pollo")
 }
 

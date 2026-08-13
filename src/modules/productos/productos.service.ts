@@ -116,6 +116,35 @@ export async function tablaPrecioVigente(productoId: number) {
   return [...vigentePorCantidad.values()].sort((a, b) => a.cantidad - b.cantidad);
 }
 
+// Tablas vigentes de un conjunto ACOTADO de productos, en una sola query.
+// Confirmar un pedido llamaba a tablaPrecioVigente() una vez por ítem: con la
+// latencia real contra Neon (~52 ms por viaje) un pedido de 6 productos se
+// llevaba 300 ms solo en buscar precios (auditoría 2026-08-07, C-6).
+export async function tablasPrecioVigentesDe(
+  productoIds: number[],
+): Promise<Map<number, { cantidad: number; monto: Prisma.Decimal }[]>> {
+  const mapa = new Map<number, { cantidad: number; monto: Prisma.Decimal }[]>();
+  if (productoIds.length === 0) return mapa;
+
+  const historial = await prisma.precio.findMany({
+    where: { productoId: { in: [...new Set(productoIds)] } },
+    orderBy: { fechaDesde: 'desc' },
+  });
+  // Mismo criterio que tablaPrecioVigente: por cada (producto, cantidad) manda
+  // el más reciente. El historial completo se conserva igual.
+  const vistos = new Set<string>();
+  for (const p of historial) {
+    const clave = `${p.productoId}:${p.cantidad}`;
+    if (vistos.has(clave)) continue;
+    vistos.add(clave);
+    const lista = mapa.get(p.productoId) ?? [];
+    lista.push({ cantidad: p.cantidad, monto: p.monto });
+    mapa.set(p.productoId, lista);
+  }
+  for (const lista of mapa.values()) lista.sort((a, b) => a.cantidad - b.cantidad);
+  return mapa;
+}
+
 // Versión bulk para el POS (una sola request en vez de una por producto):
 // tabla vigente de TODOS los productos que tengan algún precio cargado.
 export async function tablasPrecioVigentes() {

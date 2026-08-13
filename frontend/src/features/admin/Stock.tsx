@@ -4,6 +4,7 @@ import { listarSucursales } from '../../api/sucursales';
 import { listarProductos } from '../../api/productos';
 import { consultarStock, consultarMovimientos } from '../../api/stock';
 import { fmtFechaHora, fmtNumero } from '../../lib/formato';
+import { ErrorDeCarga } from '../../components/ui/ErrorDeCarga';
 
 export function Stock() {
   const sucursales = useQuery({ queryKey: ['sucursales'], queryFn: listarSucursales });
@@ -73,6 +74,7 @@ export function Stock() {
             <span className="text-right">UNIDAD</span>
           </div>
           {stock.isLoading && <div className="px-5 py-4 text-texto-suave">Cargando…</div>}
+          {stock.isError && <ErrorDeCarga onReintentar={() => void stock.refetch()} />}
           {stock.data?.map((r) => (
             <div key={r.productoId} className="tabla-fila grid grid-cols-[1fr_160px_120px] border-t border-[#eef1ea] px-5 py-3.5 text-[15px]">
               <span className="font-semibold">{r.nombre}</span>

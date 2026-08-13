@@ -11,8 +11,8 @@ import { prisma, OPCIONES_TX, type TxClient } from '../../lib/prisma';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { Errores } from '../../lib/errores';
 import { NOMBRE_POLLO_ENTERO, NOMBRE_POLLO_MEDIO, NOMBRE_POLLO_MARCADO } from '../../lib/constantes';
-import { obtenerStock } from '../stock/stock.service';
-import { tablaPrecioVigente } from '../productos/productos.service';
+import { obtenerStock, bloquearStock } from '../stock/stock.service';
+import { tablasPrecioVigentesDe } from '../productos/productos.service';
 import { resolverSucursalOperativa, exigirTurnoAbierto } from '../turnos/turnos.service';
 import {
   calcularPrecioTotal,
@@ -62,7 +62,7 @@ const INCLUDE_PEDIDO = {
   pagos: true,
 } as const;
 
-// ── Resolución de descuento de stock (CLAUDE-MODULO-2.md §4.3/§4.10/§6.3) ──
+// ── Resolución de descuento de stock (CLAUDE.md §5 Flujo 4) ──
 // Un combo descuenta cada componente, nunca el combo. El pollo (entero o
 // medio) descuenta del producto MARCADO, nunca del fresco — también cuando
 // viene adentro de un combo.
@@ -90,11 +90,17 @@ export async function resolverRequerimientosStock(
     }
   };
 
+  // Una sola query para todos los productos del pedido: antes era un
+  // findUnique por ítem, y cada uno dentro de la transacción son ~52 ms de
+  // locks sostenidos de más (auditoría 2026-08-07, C-6).
+  const productos = await tx.producto.findMany({
+    where: { id: { in: [...new Set(items.map((i) => i.productoId))] } },
+    include: { componentesDelCombo: { include: { productoComponente: true } } },
+  });
+  const porId = new Map(productos.map((p) => [p.id, p]));
+
   for (const item of items) {
-    const producto = await tx.producto.findUnique({
-      where: { id: item.productoId },
-      include: { componentesDelCombo: { include: { productoComponente: true } } },
-    });
+    const producto = porId.get(item.productoId);
     if (!producto) throw Errores.noEncontrado('Producto');
     if (producto.tipo === 'COMBO') {
       for (const comp of producto.componentesDelCombo) {
@@ -108,6 +114,10 @@ export async function resolverRequerimientosStock(
 }
 
 export async function validarStockRequerido(tx: TxClient, sucursalId: number, reqs: Requerimiento) {
+  // Traba todos los productos del pedido antes de mirar ningún saldo: leer sin
+  // el lock deja la puerta abierta a que otra venta descuente en el medio y el
+  // stock termine negativo (auditoría 2026-08-07, C-1).
+  await bloquearStock(tx, [...reqs.keys()].map((productoId) => ({ productoId, sucursalId })));
   for (const [productoId, cantidad] of reqs) {
     const stock = await obtenerStock(productoId, sucursalId, tx);
     if (stock.lessThan(cantidad)) {
@@ -129,20 +139,21 @@ async function crearMovimientos(
     tipo: 'VENTA' | 'ANULACION_REPOSICION';
   },
 ) {
-  for (const [productoId, cantidad] of params.reqs) {
-    if (cantidad.isZero()) continue;
-    await tx.movimientoStock.create({
-      data: {
-        productoId,
-        sucursalId: params.sucursalId,
-        tipo: params.tipo,
-        cantidad: params.tipo === 'VENTA' ? cantidad.negated() : cantidad,
-        usuarioId: params.usuarioId,
-        tipoOrigen: 'Pedido',
-        origenId: params.pedidoId,
-      },
-    });
-  }
+  // createMany y no un create por producto: era un round-trip por línea
+  // ADENTRO de la transacción, o sea locks sostenidos de más (C-6).
+  const filas = [...params.reqs]
+    .filter(([, cantidad]) => !cantidad.isZero())
+    .map(([productoId, cantidad]) => ({
+      productoId,
+      sucursalId: params.sucursalId,
+      tipo: params.tipo,
+      cantidad: params.tipo === 'VENTA' ? cantidad.negated() : cantidad,
+      usuarioId: params.usuarioId,
+      tipoOrigen: 'Pedido',
+      origenId: params.pedidoId,
+    }));
+  if (filas.length === 0) return;
+  await tx.movimientoStock.createMany({ data: filas });
 }
 
 // Un operador solo toca pedidos de SU sucursal (releída de DB, nunca JWT).
@@ -248,13 +259,19 @@ export async function confirmarPedido(params: {
     montoTotal: Prisma.Decimal;
     precioUnitario: Prisma.Decimal;
   }[] = [];
+  // Dos queries para todo el pedido en vez de dos por ítem (C-6).
+  const idsPedidos = params.items.map((i) => i.productoId);
+  const productos = await prisma.producto.findMany({ where: { id: { in: idsPedidos } } });
+  const productoPorId = new Map(productos.map((p) => [p.id, p]));
+  const tablasPorProducto = await tablasPrecioVigentesDe(idsPedidos);
+
   for (const item of params.items) {
-    const producto = await prisma.producto.findUnique({ where: { id: item.productoId } });
+    const producto = productoPorId.get(item.productoId);
     if (!producto || !producto.activo) throw Errores.noEncontrado('Producto');
     if (producto.tipo === 'MATERIA_PRIMA') {
       throw Errores.validacion(`"${producto.nombre}" es materia prima, no se vende en el POS`);
     }
-    const tabla = await tablaPrecioVigente(item.productoId);
+    const tabla = tablasPorProducto.get(item.productoId) ?? [];
     if (tabla.length === 0) throw Errores.productoSinPrecio(producto.nombre);
     let montoTotal: Prisma.Decimal;
     try {
@@ -385,13 +402,18 @@ export async function modificarPedido(params: { pedidoId: number; items: ItemInp
     montoTotal: Prisma.Decimal;
     precioUnitario: Prisma.Decimal;
   }[] = [];
+  const idsModificados = params.items.map((i) => i.productoId);
+  const productosMod = await prisma.producto.findMany({ where: { id: { in: idsModificados } } });
+  const productoModPorId = new Map(productosMod.map((p) => [p.id, p]));
+  const tablasMod = await tablasPrecioVigentesDe(idsModificados);
+
   for (const item of params.items) {
-    const producto = await prisma.producto.findUnique({ where: { id: item.productoId } });
+    const producto = productoModPorId.get(item.productoId);
     if (!producto || !producto.activo) throw Errores.noEncontrado('Producto');
     if (producto.tipo === 'MATERIA_PRIMA') {
       throw Errores.validacion(`"${producto.nombre}" es materia prima, no se vende en el POS`);
     }
-    const tabla = await tablaPrecioVigente(item.productoId);
+    const tabla = tablasMod.get(item.productoId) ?? [];
     let montoTotal: Prisma.Decimal;
     try {
       montoTotal = calcularPrecioTotal(item.cantidad, tabla);
@@ -667,7 +689,7 @@ export const marcarNoRetirado = (pedidoId: number, usuarioId: number) =>
     datosExtra: { fechaListoNoRetirado: new Date() },
   });
 
-// ── Timer de pedido no retirado (CLAUDE-MODULO-2.md §9, Fase 9) ──
+// ── Timer de pedido no retirado (CLAUDE.md §5 Flujo 4) ──
 // Corrido periódicamente por un job en server.ts. Devuelve los pedidos que
 // llevan más de MINUTOS_PEDIDO_NO_RETIRADO_ALERTA en LISTO_NO_RETIRADO y
 // todavía no generaron el aviso, y los marca como avisados en la misma
@@ -858,7 +880,7 @@ export async function listarPendientes(params: { usuarioId: number; sucursalId?:
   });
 }
 
-// Ranking de más vendidos de la sucursal (CLAUDE-MODULO-2.md §4.1): el POS
+// Ranking de más vendidos de la sucursal (CLAUDE.md §5 Flujo 4): el POS
 // ordena su grilla con esto. Se calcula del historial completo de ItemDePedido
 // (pedidos no anulados); un producto sin ventas simplemente no aparece y el
 // frontend lo manda al final.

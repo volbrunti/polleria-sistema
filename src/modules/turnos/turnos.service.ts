@@ -206,7 +206,16 @@ export async function abrirTurno(params: {
     }
 
     return { turno, alerta };
-  }, OPCIONES_TX);
+  }, OPCIONES_TX).catch((e) => {
+    // El findFirst de arriba es un check-then-act: dos aperturas en paralelo lo
+    // pasan las dos (auditoría 2026-08-07, C-3). Quien pierde choca contra
+    // uq_un_turno_activo_por_sucursal y su transacción se revierte entera —
+    // acá solo se traduce a un error de negocio que el cajero entienda.
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+      throw Errores.turnoYaActivo();
+    }
+    throw e;
+  });
 
   if (resultado.alerta) {
     alertasService.emitirAlerta({
@@ -441,7 +450,7 @@ export async function listarTurnos(filtros: { sucursalId?: number; estado?: 'ABI
   });
 }
 
-// Resumen financiero COMPLETO — solo ADMIN/SOCIO (CLAUDE-MODULO-2.md §5.3
+// Resumen financiero COMPLETO — solo ADMIN/SOCIO (CLAUDE.md §5 Flujo 5
 // paso 4). Ventas por medio de pago, gastos, retiros por socio, atenciones,
 // arqueos con esperado/diferencia.
 export async function resumenDeTurno(turnoId: number) {

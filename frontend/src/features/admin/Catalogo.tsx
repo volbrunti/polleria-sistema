@@ -536,6 +536,7 @@ function TabPrecios({ puedeEscribir }: { puedeEscribir: boolean }) {
   const [productoEditando, setProductoEditando] = useState<{ producto: Producto; cantidad: number } | null>(null);
   const [expandido, setExpandido] = useState<number | null>(null);
   const [nuevaCantidad, setNuevaCantidad] = useState<Record<number, string>>({});
+  const [errorPrecio, setErrorPrecio] = useState<string | null>(null);
 
   const mutCambiarPrecio = useMutation({
     mutationFn: (vars: { productoId: number; monto: number; cantidad: number }) =>
@@ -546,6 +547,8 @@ function TabPrecios({ puedeEscribir }: { puedeEscribir: boolean }) {
       setProductoEditando(null);
       setNuevaCantidad((m) => ({ ...m, [vars.productoId]: '' }));
     },
+    onError: (err) =>
+      setErrorPrecio(err instanceof ApiError ? err.message : 'No se pudo cambiar el precio.'),
   });
 
   return (
@@ -667,19 +670,26 @@ function TabPrecios({ puedeEscribir }: { puedeEscribir: boolean }) {
         })}
       </div>
 
+      {errorPrecio && (
+        <div className="rounded-xl bg-error-suave px-3.5 py-3 text-[15px] font-semibold text-error-texto">
+          {errorPrecio}
+        </div>
+      )}
+
       {productoEditando && (
         <TecladoNumerico
           titulo={productoEditando.cantidad === 1 ? 'Nuevo precio' : `Precio para ${productoEditando.cantidad} unidades`}
           subtitulo={productoEditando.producto.nombre}
           unidad="$"
           onCancelar={() => setProductoEditando(null)}
-          onConfirmar={(monto) =>
+          onConfirmar={(monto) => {
+            setErrorPrecio(null);
             mutCambiarPrecio.mutate({
               productoId: productoEditando.producto.id,
               monto,
               cantidad: productoEditando.cantidad,
-            })
-          }
+            });
+          }}
         />
       )}
     </div>
@@ -880,6 +890,7 @@ function ModalProductosHabituales({ proveedor, onCerrar }: { proveedor: Proveedo
   });
   const [seleccion, setSeleccion] = useState<Set<number> | null>(null);
   const [busqueda, setBusqueda] = useState('');
+  const [errorHabituales, setErrorHabituales] = useState<string | null>(null);
 
   if (seleccion === null && habituales.data) {
     setSeleccion(new Set(habituales.data.map((p) => p.id)));
@@ -891,6 +902,8 @@ function ModalProductosHabituales({ proveedor, onCerrar }: { proveedor: Proveedo
       void queryClient.invalidateQueries({ queryKey: ['proveedores', proveedor.id, 'productos-habituales'] });
       onCerrar();
     },
+    onError: (err) =>
+      setErrorHabituales(err instanceof ApiError ? err.message : 'No se pudieron guardar los productos.'),
   });
 
   const filtrados = (materiasPrimas.data ?? []).filter((p) =>
@@ -937,6 +950,11 @@ function ModalProductosHabituales({ proveedor, onCerrar }: { proveedor: Proveedo
           ))}
           {filtrados.length === 0 && <div className="py-4 text-center text-sm text-texto-suave">Sin resultados.</div>}
         </div>
+        {errorHabituales && (
+          <div className="rounded-xl bg-error-suave px-3.5 py-3 text-sm font-semibold text-error-texto">
+            {errorHabituales}
+          </div>
+        )}
         <div className="flex gap-2.5">
           <button
             type="button"
@@ -948,7 +966,10 @@ function ModalProductosHabituales({ proveedor, onCerrar }: { proveedor: Proveedo
           <button
             type="button"
             disabled={mutGuardar.isPending || seleccion === null}
-            onClick={() => mutGuardar.mutate()}
+            onClick={() => {
+              setErrorHabituales(null);
+              mutGuardar.mutate();
+            }}
             className="min-h-12 flex-[2] cursor-pointer rounded-xl bg-primario text-sm font-extrabold text-white disabled:opacity-50"
           >
             {mutGuardar.isPending ? 'GUARDANDO…' : 'GUARDAR'}
@@ -1014,6 +1035,7 @@ function TabComanderas() {
   const mutActiva = useMutation({
     mutationFn: (c: Comandera) => actualizarComandera(c.id, { activa: !c.activa }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['comanderas'] }),
+    onError: (err) => setError(err instanceof ApiError ? err.message : 'No se pudo cambiar el estado.'),
   });
 
   async function probar(c: Comandera) {

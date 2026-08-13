@@ -90,11 +90,17 @@ export function ShellAdmin() {
           LIMÓN &amp; CHIMI
         </div>
         {esAdmin && (alertasNoVistas.data?.length ?? 0) > 0 && (
+          // El contador era un blanco de 24 px: el único control de la app
+          // móvil por debajo de los 44 px recomendados (auditoría 2026-08-07,
+          // V-3). El área táctil se agranda sin agrandar la píldora roja.
           <NavLink
             to="/admin/alertas"
-            className="flex h-6 min-w-6 items-center justify-center rounded-full bg-error px-1.5 text-xs font-extrabold text-white"
+            aria-label={`${alertasNoVistas.data!.length} alertas sin ver`}
+            className="flex h-11 min-w-11 items-center justify-center"
           >
-            {alertasNoVistas.data!.length}
+            <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-error px-1.5 text-xs font-extrabold text-white">
+              {alertasNoVistas.data!.length}
+            </span>
           </NavLink>
         )}
       </div>

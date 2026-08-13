@@ -11,6 +11,7 @@ import { listarSucursales } from '../../api/sucursales';
 import { fmtFechaHora, fmtMoneda, fmtNumero } from '../../lib/formato';
 import { ApiError } from '../../api/client';
 import type { Arqueo, ClaveEmergencia, Turno } from '../../api/types';
+import { ErrorDeCarga } from '../../components/ui/ErrorDeCarga';
 
 const ESTILO_ESTADO: Record<string, string> = {
   ABIERTO: '#1a7f3f',
@@ -99,6 +100,7 @@ export function Turnos({ puedeEscribir }: Props) {
 
       <div className="flex flex-col gap-2.5">
         {turnosQ.isLoading && <div className="text-texto-suave">Cargando…</div>}
+        {turnosQ.isError && <ErrorDeCarga onReintentar={() => void turnosQ.refetch()} />}
         {turnosQ.data?.map((t) => (
           <TarjetaTurno
             key={t.id}

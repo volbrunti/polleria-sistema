@@ -5,6 +5,7 @@ import { listarLotes } from '../../api/produccion';
 import { listarUsuarios } from '../../api/usuarios';
 import { listarFichas } from '../../api/fichas';
 import { fmtFecha, fmtNumero } from '../../lib/formato';
+import { ErrorDeCarga } from '../../components/ui/ErrorDeCarga';
 
 export function ProduccionLotes() {
   const lotes = useQuery({ queryKey: ['lotes'], queryFn: () => listarLotes() });
@@ -59,6 +60,7 @@ export function ProduccionLotes() {
           <span />
         </div>
         {lotes.isLoading && <div className="px-4.5 py-4 text-texto-suave">Cargando…</div>}
+        {lotes.isError && <ErrorDeCarga onReintentar={() => void lotes.refetch()} />}
         {lotes.data?.map((l) => {
           const desvio = l.desvioPct != null ? Number(l.desvioPct) : null;
           return (

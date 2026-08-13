@@ -237,6 +237,67 @@ export async function eliminar(id: number, usuarioId: number) {
   });
 }
 
+// Reintento manual desde el POS (auditoría 2026-08-07, E-5).
+//
+// Antes, cuando una comandera fallaba el cajero veía el aviso de cuál no
+// imprimió y no tenía ninguna otra cosa que hacer más que cantar la comanda a
+// viva voz: el despacho no reintenta solo y no había endpoint para volver a
+// mandarlo. Si la impresora se destrabó dos minutos después, seguía sin salir.
+//
+// Se valida que el ticket sea de la sucursal del usuario: reimprimir es una
+// acción operativa del local, no de infraestructura, así que la habilita el
+// CAJERO/ENCARGADO — pero solo sobre lo suyo.
+export async function reimprimir(ticketId: number, usuarioId: number) {
+  const ticket = await prisma.ticketCocina.findUnique({
+    where: { id: ticketId },
+    include: { pedido: { select: { sucursalId: true } } },
+  });
+  if (!ticket) throw Errores.noEncontrado('Ticket');
+
+  const usuario = await prisma.usuario.findUnique({ where: { id: usuarioId } });
+  if (!usuario || !usuario.activo) throw Errores.noAutorizado();
+  if (usuario.rol !== 'ADMINISTRADOR' && usuario.sucursalId !== ticket.pedido.sucursalId) {
+    throw Errores.sucursalNoAutorizada();
+  }
+
+  // Se rearman las filas de impresión con las comanderas activas de HOY: si la
+  // que falló quedó desactivada, o se agregó otra, el reintento usa la
+  // configuración vigente y no la del momento del pedido.
+  const comanderas = await prisma.configuracionComandera.findMany({
+    where: { sucursalId: ticket.pedido.sucursalId, activa: true },
+  });
+  if (comanderas.length === 0) {
+    throw Errores.validacion('La sucursal no tiene comanderas activas configuradas');
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.impresionComandera.deleteMany({ where: { ticketCocinaId: ticket.id } });
+    await tx.impresionComandera.createMany({
+      data: comanderas.map((c) => ({
+        ticketCocinaId: ticket.id,
+        configuracionComanderaId: c.id,
+        impreso: false,
+      })),
+    });
+  });
+
+  await despacharImpresiones(ticket.id);
+
+  const impresiones = await prisma.impresionComandera.findMany({
+    where: { ticketCocinaId: ticket.id },
+    include: { configuracionComandera: { select: { destino: true, nombre: true } } },
+  });
+  return {
+    ticketId: ticket.id,
+    resultados: impresiones.map((i) => ({
+      destino: i.configuracionComandera.destino,
+      nombre: i.configuracionComandera.nombre,
+      impreso: i.impreso,
+      error: i.errorImpresion,
+    })),
+  };
+}
+
 // Soporte: qué se mandó a imprimir para un pedido y cómo le fue a cada
 // comandera. Sirve para responder "el ticket no salió" sin adivinar.
 export async function ticketsDePedido(pedidoId: number) {

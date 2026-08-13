@@ -1,5 +1,15 @@
 @import 'tailwindcss';
 
+/* La app es de un solo tema claro, y eso es una decisión tomada, no un olvido.
+   Pero sin declarar color-scheme, un celular con el modo oscuro forzado a nivel
+   sistema le aplica el estilo oscuro del navegador a los <input> y <select>
+   nativos mientras el resto de la pantalla sigue clara: quedan campos negros
+   sobre tarjetas blancas, y justo los campos de arqueo y de conteo son los que
+   más importa leer bien (auditoría 2026-08-07, V-2). */
+:root {
+  color-scheme: light;
+}
+
 @theme {
   /* Paleta extraída del diseño aprobado (Limón & Chimi) */
   --color-primario: #1a7f3f;

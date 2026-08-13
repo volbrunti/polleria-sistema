@@ -1,7 +1,7 @@
 import { apiFetch } from './client';
 import type { Atencion, EventoMarcadoPollo, GastoDeCaja, MedioPago, RetiroDeCaja, SocioRetiro } from './types';
 
-// Categorías sugeridas de gasto (CLAUDE-MODULO-2.md §5.2). "OTRO" exige
+// Categorías sugeridas de gasto (CLAUDE.md §5 Flujo 5). "OTRO" exige
 // descripción — el backend lo valida.
 export const CATEGORIAS_GASTO = [
   'PAPAS',
@@ -27,6 +27,8 @@ export function registrarAtencion(datos: {
   cantidad: number;
   motivoCodigo: string;
   motivoDetalle?: string;
+  /** Ver lib/idempotencia.ts — evita duplicar si se reintenta la request. */
+  tokenIdempotencia?: string;
 }) {
   return apiFetch<Atencion>('/api/atenciones', { method: 'POST', body: datos });
 }
@@ -37,6 +39,8 @@ export function registrarGasto(datos: {
   medio: 'EFECTIVO' | 'MERCADO_PAGO';
   categoria: string;
   descripcion?: string;
+  /** Ver lib/idempotencia.ts */
+  tokenIdempotencia?: string;
 }) {
   return apiFetch<GastoDeCaja>('/api/gastos-caja', { method: 'POST', body: datos });
 }
@@ -46,11 +50,18 @@ export function registrarRetiro(datos: {
   monto: number;
   medio: MedioPago;
   socio: SocioRetiro;
+  /** Ver lib/idempotencia.ts — acá es plata: un retiro duplicado descuadra la caja. */
+  tokenIdempotencia?: string;
 }) {
   return apiFetch<RetiroDeCaja>('/api/retiros-caja', { method: 'POST', body: datos });
 }
 
-export function marcarPollos(datos: { sucursalId?: number; cantidad: number }) {
+export function marcarPollos(datos: {
+  sucursalId?: number;
+  cantidad: number;
+  /** Ver lib/idempotencia.ts — un marcado duplicado descuadra el arqueo ciego de pollos. */
+  tokenIdempotencia?: string;
+}) {
   return apiFetch<EventoMarcadoPollo>('/api/marcado-pollos', { method: 'POST', body: datos });
 }
 

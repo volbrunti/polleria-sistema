@@ -68,3 +68,14 @@ export function probarComandera(id: number) {
 export function ticketsDePedido(pedidoId: number) {
   return apiFetch<TicketDePedido[]>(`/api/configuracion-comandera/tickets/${pedidoId}`);
 }
+
+// Reintento de impresión desde el POS. A diferencia del resto del módulo de
+// comanderas (que es solo admin), esto lo puede disparar el CAJERO o el
+// ENCARGADO sobre un ticket de SU sucursal: una comanda que no salió es un
+// problema del mostrador y hay que resolverlo en el momento.
+export function reimprimirTicket(ticketId: number) {
+  return apiFetch<{
+    ticketId: number;
+    resultados: { destino: string; nombre: string; impreso: boolean; error: string | null }[];
+  }>(`/api/configuracion-comandera/tickets/${ticketId}/reimprimir`, { method: 'POST' });
+}

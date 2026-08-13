@@ -3,14 +3,44 @@ import { prisma, OPCIONES_TX } from '../../lib/prisma';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { Errores } from '../../lib/errores';
 import { NOMBRE_POLLO_ENTERO, NOMBRE_POLLO_MARCADO } from '../../lib/constantes';
-import { obtenerStock } from '../stock/stock.service';
+import { obtenerStock, bloquearStock } from '../stock/stock.service';
 import { resolverSucursalOperativa, exigirTurnoAbierto } from '../turnos/turnos.service';
 import { resolverRequerimientosStock, validarStockRequerido } from '../pedidos/pedidos.service';
 import * as stockMinimoService from '../stock-minimo/stock-minimo.service';
 
-// Operaciones del turno que no son pedidos (CLAUDE-MODULO-2.md §4.8–§4.10 y
+// Operaciones del turno que no son pedidos (CLAUDE.md §5 Flujo 4 y
 // §5.2): atenciones/regalías, gastos, retiros, marcado de pollos y ventas a
 // costo cero (mermas/retornos). Todas exigen turno ABIERTO en la sucursal.
+
+// ── Idempotencia (auditoría 2026-08-07, C-4) ──
+// Estas operaciones son INSERT puros: sin token, un reintento después de un
+// timeout de red las DUPLICA, y dos gastos idénticos no se distinguen de dos
+// gastos legítimos iguales. Con los ~2,5 s que tarda hoy una operación contra
+// Neon, que el cajero toque de nuevo no es una hipótesis remota.
+// Mismo criterio que confirmarPedido (pedidos.service.ts).
+async function conIdempotencia<T>(
+  token: string | undefined,
+  buscarPrevio: (token: string) => Promise<T | null>,
+  crear: () => Promise<T>,
+): Promise<T> {
+  if (token) {
+    const previo = await buscarPrevio(token);
+    if (previo) return previo;
+  }
+  try {
+    return await crear();
+  } catch (e) {
+    // Carrera pura: dos requests con el MISMO token pasaron el chequeo de
+    // arriba en paralelo. La que pierde choca contra el unique y su
+    // transacción se revierte entera — se le devuelve el registro que ganó,
+    // igual que a un reintento común.
+    if (token && e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+      const previo = await buscarPrevio(token);
+      if (previo) return previo;
+    }
+    throw e;
+  }
+}
 
 // ── §4.8 Atenciones / regalías ──
 // Producto sin cargo: descuenta stock igual que una venta (tipo ATENCION),
@@ -22,6 +52,7 @@ export async function registrarAtencion(params: {
   cantidad: number;
   motivoCodigo: string;
   motivoDetalle?: string;
+  tokenIdempotencia?: string;
 }) {
   if (params.motivoCodigo === 'OTRO' && !params.motivoDetalle?.trim()) {
     throw Errores.validacion('El motivo "OTRO" requiere detalle');
@@ -52,6 +83,7 @@ export async function registrarAtencion(params: {
         motivoCodigo: params.motivoCodigo,
         motivoDetalle: params.motivoDetalle,
         usuarioId: params.usuarioId,
+        tokenIdempotencia: params.tokenIdempotencia,
       },
       include: { producto: { select: { nombre: true } } },
     });
@@ -102,6 +134,7 @@ export async function registrarGasto(params: {
   medio: MedioPago;
   categoria: string;
   descripcion?: string;
+  tokenIdempotencia?: string;
 }) {
   if (!MEDIOS_GASTO.includes(params.medio)) {
     throw Errores.validacion('Los gastos de caja solo pueden pagarse con EFECTIVO o MERCADO_PAGO');
@@ -111,27 +144,33 @@ export async function registrarGasto(params: {
   }
   const sucursalId = await resolverSucursalOperativa(params.usuarioId, params.sucursalId);
 
-  return prisma.$transaction(async (tx) => {
-    const turno = await exigirTurnoAbierto(sucursalId, tx);
-    const gasto = await tx.gastoDeCaja.create({
-      data: {
-        turnoId: turno.id,
-        monto: new Prisma.Decimal(params.monto),
-        medio: params.medio,
-        categoria: params.categoria,
-        descripcion: params.descripcion,
-        usuarioId: params.usuarioId,
-      },
-    });
-    await registrarAuditoria(tx, {
-      accion: 'REGISTRAR_GASTO_CAJA',
-      entidad: 'GastoDeCaja',
-      entidadId: gasto.id,
-      usuarioId: params.usuarioId,
-      datosNuevos: { monto: params.monto, medio: params.medio, categoria: params.categoria },
-    });
-    return gasto;
-  }, OPCIONES_TX);
+  return conIdempotencia(
+    params.tokenIdempotencia,
+    (token) => prisma.gastoDeCaja.findUnique({ where: { tokenIdempotencia: token } }),
+    () =>
+      prisma.$transaction(async (tx) => {
+        const turno = await exigirTurnoAbierto(sucursalId, tx);
+        const gasto = await tx.gastoDeCaja.create({
+          data: {
+            turnoId: turno.id,
+            monto: new Prisma.Decimal(params.monto),
+            medio: params.medio,
+            categoria: params.categoria,
+            descripcion: params.descripcion,
+            usuarioId: params.usuarioId,
+            tokenIdempotencia: params.tokenIdempotencia,
+          },
+        });
+        await registrarAuditoria(tx, {
+          accion: 'REGISTRAR_GASTO_CAJA',
+          entidad: 'GastoDeCaja',
+          entidadId: gasto.id,
+          usuarioId: params.usuarioId,
+          datosNuevos: { monto: params.monto, medio: params.medio, categoria: params.categoria },
+        });
+        return gasto;
+      }, OPCIONES_TX),
+  );
 }
 
 // ── §5.2 Retiros de caja ──
@@ -143,36 +182,48 @@ export async function registrarRetiro(params: {
   monto: number;
   medio: MedioPago;
   socio: SocioRetiro;
+  tokenIdempotencia?: string;
 }) {
   const sucursalId = await resolverSucursalOperativa(params.usuarioId, params.sucursalId);
 
-  return prisma.$transaction(async (tx) => {
-    const turno = await exigirTurnoAbierto(sucursalId, tx);
-    const retiro = await tx.retiroDeCaja.create({
-      data: {
-        turnoId: turno.id,
-        monto: new Prisma.Decimal(params.monto),
-        medio: params.medio,
-        socio: params.socio,
-        usuarioCajeroId: params.usuarioId,
-      },
-    });
-    // auditoría reforzada: con qué socio (Flujo 7)
-    await registrarAuditoria(tx, {
-      accion: 'REGISTRAR_RETIRO_CAJA',
-      entidad: 'RetiroDeCaja',
-      entidadId: retiro.id,
-      usuarioId: params.usuarioId,
-      datosNuevos: { monto: params.monto, medio: params.medio, socio: params.socio },
-    });
-    return retiro;
-  }, OPCIONES_TX);
+  return conIdempotencia(
+    params.tokenIdempotencia,
+    (token) => prisma.retiroDeCaja.findUnique({ where: { tokenIdempotencia: token } }),
+    () =>
+      prisma.$transaction(async (tx) => {
+        const turno = await exigirTurnoAbierto(sucursalId, tx);
+        const retiro = await tx.retiroDeCaja.create({
+          data: {
+            turnoId: turno.id,
+            monto: new Prisma.Decimal(params.monto),
+            medio: params.medio,
+            socio: params.socio,
+            usuarioCajeroId: params.usuarioId,
+            tokenIdempotencia: params.tokenIdempotencia,
+          },
+        });
+        // auditoría reforzada: con qué socio (Flujo 7)
+        await registrarAuditoria(tx, {
+          accion: 'REGISTRAR_RETIRO_CAJA',
+          entidad: 'RetiroDeCaja',
+          entidadId: retiro.id,
+          usuarioId: params.usuarioId,
+          datosNuevos: { monto: params.monto, medio: params.medio, socio: params.socio },
+        });
+        return retiro;
+      }, OPCIONES_TX),
+  );
 }
 
 // ── §4.10 Marcado de pollos: fresco → parrilla ──
 // "Tiré X pollos a la parrilla": descuenta del fresco y suma al producto
 // MARCADO, ambos MovimientoStock MARCADO_POLLO en la misma transacción.
-export async function marcarPollos(params: { usuarioId: number; sucursalId?: number; cantidad: number }) {
+export async function marcarPollos(params: {
+  usuarioId: number;
+  sucursalId?: number;
+  cantidad: number;
+  tokenIdempotencia?: string;
+}) {
   const sucursalId = await resolverSucursalOperativa(params.usuarioId, params.sucursalId);
 
   const fresco = await prisma.producto.findUnique({ where: { nombre: NOMBRE_POLLO_ENTERO } });
@@ -181,10 +232,21 @@ export async function marcarPollos(params: { usuarioId: number; sucursalId?: num
     throw Errores.noEncontrado('Producto del circuito del pollo (fresco/marcado)');
   }
 
-  return prisma.$transaction(async (tx) => {
+  return conIdempotencia(
+    params.tokenIdempotencia,
+    (token) => prisma.eventoMarcadoPollo.findUnique({ where: { tokenIdempotencia: token } }),
+    () => prisma.$transaction(async (tx) => {
     const turno = await exigirTurnoAbierto(sucursalId, tx);
 
     const cantidad = new Prisma.Decimal(params.cantidad);
+    // Se traban los DOS productos del circuito: el fresco porque de ahí sale, y
+    // el marcado porque ahí entra y su saldo es la mitad del arqueo ciego. Sin
+    // esto, dos marcados en paralelo dejaban el fresco negativo y el marcado
+    // inflado (auditoría 2026-08-07, C-2).
+    await bloquearStock(tx, [
+      { productoId: fresco.id, sucursalId },
+      { productoId: marcado.id, sucursalId },
+    ]);
     const stockFresco = await obtenerStock(fresco.id, sucursalId, tx);
     if (stockFresco.lessThan(cantidad)) {
       throw Errores.stockInsuficiente(
@@ -193,7 +255,13 @@ export async function marcarPollos(params: { usuarioId: number; sucursalId?: num
     }
 
     const evento = await tx.eventoMarcadoPollo.create({
-      data: { turnoId: turno.id, sucursalId, cantidad, usuarioId: params.usuarioId },
+      data: {
+        turnoId: turno.id,
+        sucursalId,
+        cantidad,
+        usuarioId: params.usuarioId,
+        tokenIdempotencia: params.tokenIdempotencia,
+      },
     });
 
     await tx.movimientoStock.create({
@@ -227,8 +295,9 @@ export async function marcarPollos(params: { usuarioId: number; sucursalId?: num
       datosNuevos: { cantidad: params.cantidad, sucursalId },
     });
 
-    return evento;
-  }, OPCIONES_TX);
+        return evento;
+      }, OPCIONES_TX),
+  );
 }
 
 // ── §4.9 Venta a costo cero directa (mermas y retornos) ──
@@ -259,6 +328,7 @@ export async function registrarCostoCero(params: {
     await exigirTurnoAbierto(sucursalId, tx);
 
     const cantidad = new Prisma.Decimal(params.cantidad);
+    await bloquearStock(tx, [{ productoId: params.productoId, sucursalId }]);
     const stock = await obtenerStock(params.productoId, sucursalId, tx);
     if (stock.lessThan(cantidad)) {
       throw Errores.stockInsuficiente(

@@ -10,6 +10,7 @@
 
 import crypto from 'node:crypto';
 import { config } from '../config';
+import { AppError } from './errores';
 
 function hmac(clave: Buffer | string, datos: string): Buffer {
   return crypto.createHmac('sha256', clave).update(datos, 'utf8').digest();
@@ -58,20 +59,43 @@ export async function subirAR2(params: {
     `AWS4-HMAC-SHA256 Credential=${r2.accessKeyId}/${credentialScope}, ` +
     `SignedHeaders=${signedHeaders}, Signature=${firma}`;
 
-  const respuesta = await fetch(`https://${host}${canonicalUri}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': params.contentType,
-      'x-amz-content-sha256': payloadHash,
-      'x-amz-date': amzDate,
-      Authorization: authorization,
-    },
-    body: params.buffer,
-  });
+  // El fetch de Node NO trae timeout por defecto: si R2 acepta la conexión y
+  // después no contesta, la request queda colgada para siempre ocupando una
+  // conexión del servidor (auditoría 2026-08-07, E-4). La foto del remito es
+  // respaldo visual opcional — no vale la pena esperarla más de 15 segundos.
+  let respuesta: Response;
+  try {
+    respuesta = await fetch(`https://${host}${canonicalUri}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': params.contentType,
+        'x-amz-content-sha256': payloadHash,
+        'x-amz-date': amzDate,
+        Authorization: authorization,
+      },
+      body: params.buffer,
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch (error) {
+    // Mensaje accionable en vez de un 500 mudo: el operario tiene que saber
+    // que puede seguir cargando el ingreso sin la foto.
+    throw new AppError(
+      'FOTO_NO_SUBIDA',
+      error instanceof Error && error.name === 'TimeoutError'
+        ? 'El almacenamiento de fotos no respondió. Podés cargar el ingreso sin la foto.'
+        : 'No se pudo subir la foto. Podés cargar el ingreso sin ella.',
+      503,
+    );
+  }
 
   if (!respuesta.ok) {
     const texto = await respuesta.text().catch(() => '');
-    throw new Error(`R2 respondió ${respuesta.status}: ${texto.slice(0, 300)}`);
+    throw new AppError(
+      'FOTO_NO_SUBIDA',
+      'No se pudo subir la foto. Podés cargar el ingreso sin ella.',
+      503,
+      `R2 respondió ${respuesta.status}: ${texto.slice(0, 300)}`,
+    );
   }
 
   return `${r2.urlPublica}/${params.nombreArchivo}`;

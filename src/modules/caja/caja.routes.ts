@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import * as cajaService from './caja.service';
 
-// Categorías sugeridas de gasto (CLAUDE-MODULO-2.md §5.2) — el frontend las
+// Categorías sugeridas de gasto (CLAUDE.md §5 Flujo 5) — el frontend las
 // ofrece como lista; el backend acepta cualquiera pero "OTRO" exige detalle.
 export const CATEGORIAS_GASTO = [
   'PAPAS',
@@ -16,6 +16,12 @@ export const CATEGORIAS_GASTO = [
 
 const base = { sucursalId: z.number().int().positive().optional() };
 
+// UUID que el POS genera por operación. Permite reintentar sin duplicar cuando
+// la red se cuelga a mitad de camino (auditoría 2026-08-07, C-4). No se aplica
+// a /costo-cero: esa operación no crea una fila propia sino MovimientoStock, y
+// darle idempotencia pide una columna en esa tabla — queda pendiente.
+const idempotente = { tokenIdempotencia: z.string().min(8).max(64).optional() };
+
 export async function cajaRoutes(app: FastifyInstance) {
   const operativos = [app.autenticar, app.requerirRoles('ADMINISTRADOR', 'ENCARGADO', 'CAJERO')] as const;
 
@@ -23,6 +29,7 @@ export async function cajaRoutes(app: FastifyInstance) {
     const datos = z
       .object({
         ...base,
+        ...idempotente,
         productoId: z.number().int().positive(),
         cantidad: z.number().int().positive(),
         motivoCodigo: z.string().min(1).max(50),
@@ -37,6 +44,7 @@ export async function cajaRoutes(app: FastifyInstance) {
     const datos = z
       .object({
         ...base,
+        ...idempotente,
         monto: z.number().positive(),
         medio: z.enum(['EFECTIVO', 'MERCADO_PAGO']),
         categoria: z.string().min(1).max(50),
@@ -51,6 +59,7 @@ export async function cajaRoutes(app: FastifyInstance) {
     const datos = z
       .object({
         ...base,
+        ...idempotente,
         monto: z.number().positive(),
         medio: z.enum(['EFECTIVO', 'DEBITO', 'CREDITO', 'MERCADO_PAGO', 'TRANSFERENCIA']),
         // Selector CERRADO — no hay cuarta opción (regla del cliente)
@@ -63,7 +72,7 @@ export async function cajaRoutes(app: FastifyInstance) {
 
   app.post('/marcado-pollos', { preHandler: [...operativos] }, async (req, reply) => {
     const datos = z
-      .object({ ...base, cantidad: z.number().int().positive() })
+      .object({ ...base, ...idempotente, cantidad: z.number().int().positive() })
       .parse(req.body);
     const evento = await cajaService.marcarPollos({ usuarioId: req.usuario.id, ...datos });
     return reply.code(201).send(evento);

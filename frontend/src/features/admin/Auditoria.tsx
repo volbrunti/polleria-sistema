@@ -5,6 +5,7 @@ import { listarUsuarios } from '../../api/usuarios';
 import { listarProductos } from '../../api/productos';
 import { useAuth } from '../../auth/AuthContext';
 import { fmtFechaHora, fmtNumero } from '../../lib/formato';
+import { ErrorDeCarga } from '../../components/ui/ErrorDeCarga';
 
 interface Resolvers {
   productos: Map<number, string>;
@@ -214,6 +215,7 @@ export function Auditoria() {
       </div>
 
       {registros.isLoading && <div className="text-texto-suave">Cargando…</div>}
+      {registros.isError && <ErrorDeCarga onReintentar={() => void registros.refetch()} />}
       {registros.data?.length === 0 && <div className="text-texto-suave">No hay registros con estos filtros.</div>}
 
       <div className="flex flex-col gap-2.5">

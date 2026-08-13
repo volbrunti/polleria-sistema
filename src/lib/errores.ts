@@ -5,6 +5,14 @@ export class AppError extends Error {
     public codigo: string,
     message: string,
     public statusCode: number = 400,
+    /**
+     * Detalle para diagnóstico (status de un servicio externo, respuesta cruda,
+     * etc.). Se loguea del lado del servidor y NUNCA se manda en la respuesta:
+     * `message` es lo que lee el operario y tiene que ser accionable, no un
+     * volcado técnico. Sin esto, arreglar E-4 habría significado perder el
+     * status HTTP de R2, que es lo único que sirve para saber por qué falló.
+     */
+    public detalleTecnico?: string,
   ) {
     super(message);
     this.name = 'AppError';
