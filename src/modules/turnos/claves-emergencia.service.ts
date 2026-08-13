@@ -4,7 +4,7 @@ import { Errores } from '../../lib/errores';
 import * as alertasService from '../alertas/alertas.service';
 import { calcularExpiracionClave, claveUsable, generarCodigoClave } from './turnos.calculos';
 
-// Clave de emergencia (CLAUDE-MODULO-2.md §5.1, camino B): código aleatorio
+// Clave de emergencia (CLAUDE.md §5 Flujo 5, camino B): código aleatorio
 // de un solo uso, expira a los 10 minutos. El admin lo genera desde su panel
 // y lo dicta por teléfono; el cajero lo ingresa en la pantalla de bloqueo.
 

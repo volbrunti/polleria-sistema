@@ -83,7 +83,7 @@ export function calcularCobro(params: {
   return { vuelto, efectivoNeto: efectivoRecibido.minus(vuelto) };
 }
 
-// ── Ciclo de vida del pedido (CLAUDE-MODULO-2.md §4.4) ──
+// ── Ciclo de vida del pedido (CLAUDE.md §5 Flujo 4) ──
 
 const TRANSICIONES: Record<EstadoPedido, EstadoPedido[]> = {
   // PRESENCIAL puede cobrarse en el momento (→ ENTREGADO sin pasar por LISTO)

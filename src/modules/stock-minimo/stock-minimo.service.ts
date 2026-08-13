@@ -5,7 +5,7 @@ import { Errores } from '../../lib/errores';
 import { obtenerStock } from '../stock/stock.service';
 import * as alertasService from '../alertas/alertas.service';
 
-// Alertas de stock mínimo (CLAUDE-MODULO-2.md §6.6, Flujo 6 adelantado):
+// Alertas de stock mínimo (CLAUDE.md §5 Flujo 6, Flujo 6 adelantado):
 // - bajo el mínimo → AVISO en el POS repetido en CADA venta (no bloquea)
 // - la Alerta al admin se crea solo al CRUZAR el umbral (no en cada venta)
 // - stock CERO → bloqueo real (ya lo garantiza validarStockRequerido: nunca

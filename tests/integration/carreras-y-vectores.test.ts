@@ -12,7 +12,7 @@ import {
   type Fixtures,
 } from './helpers';
 
-// Vectores de ataque de la auditoría del módulo 2 (HANDOFF-AUDITORIA-MODULO-2.md
+// Vectores de ataque de la auditoría del módulo 2 (CLAUDE.md §10
 // §5): carreras, pagos raros, aislamiento y stock mínimo con combos.
 // Corre en serie: el efectivo del turno se mantiene en 0 a propósito (todos
 // los cobros son electrónicos) para poder cerrar y re-bloquear al final.

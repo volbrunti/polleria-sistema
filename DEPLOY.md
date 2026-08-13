@@ -10,7 +10,7 @@
 
 Necesitás:
 
-- El repo en GitHub (`volbrunti/polleria-sistema`), rama `feature/modulo-2`.
+- El repo en GitHub (`volbrunti/polleria-sistema`), rama `main`.
 - Una cuenta en Railway y otra en Cloudflare (o Vercel) para el frontend.
 - El proyecto de Neon ya creado.
 
@@ -31,7 +31,7 @@ Usá una **branch nueva** de Neon para la prueba, no la de desarrollo — así p
 
 ### 2.1 Crear el servicio
 
-*New Project* → *Deploy from GitHub repo* → elegí el repo y la rama `feature/modulo-2`.
+*New Project* → *Deploy from GitHub repo* → elegí el repo y la rama `main`.
 
 Railway lee `railway.json` del repo, así que el build y el arranque ya quedan configurados:
 

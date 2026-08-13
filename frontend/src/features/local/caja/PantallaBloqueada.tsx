@@ -23,7 +23,7 @@ function textoConcepto(conceptos: string[] | undefined): string | null {
   return null;
 }
 
-// Pantalla de bloqueo (CLAUDE-MODULO-2.md §5.1): mensaje genérico SIN números
+// Pantalla de bloqueo (CLAUDE.md §5 Flujo 5): mensaje genérico SIN números
 // y sin decir de qué lado está el error. La opción de clave de emergencia es
 // discreta (chica, en un rincón).
 export function PantallaBloqueada({ turnoId, conceptos, onReintentar, onDesbloqueado }: Props) {

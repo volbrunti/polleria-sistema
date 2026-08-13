@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
 import { validarDbDeTest, limpiarDb, sembrarFixtures, getApp, getPrisma, auth, type Fixtures } from './helpers';
 
-// Módulo 2 — Alertas de stock mínimo desde el POS (CLAUDE-MODULO-2.md §6.6):
+// Módulo 2 — Alertas de stock mínimo desde el POS (CLAUDE.md §5 Flujo 6):
 // aviso repetido en CADA venta bajo el mínimo (no bloquea), Alerta al admin
 // solo al CRUZAR el umbral, bloqueo real recién en stock cero.
 

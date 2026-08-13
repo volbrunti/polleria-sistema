@@ -12,7 +12,7 @@ interface Props {
 
 type Campo = 'efectivo' | 'pollos' | null;
 
-// Arqueo DOBLE y CIEGO de apertura (CLAUDE-MODULO-2.md §5.1): pantalla
+// Arqueo DOBLE y CIEGO de apertura (CLAUDE.md §5 Flujo 5): pantalla
 // neutral, solo los dos campos. Sin saldos anteriores, sin sugerencias, sin
 // totales del turno anterior. La comparación vive en el backend.
 export function AperturaTurno({ sucursalId, onResuelto }: Props) {

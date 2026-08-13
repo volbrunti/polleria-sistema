@@ -11,7 +11,7 @@ import {
   type Fixtures,
 } from './helpers';
 
-// Módulo 3 — Reportes (CLAUDE.md §9, CLAUDE-MODULO-2.md). No tenían tests de
+// Módulo 3 — Reportes (CLAUDE.md §9, CLAUDE.md). No tenían tests de
 // integración (pendiente documentado). Arma la cadena completa de
 // trazabilidad (ingreso → lote → transferencia → venta) más un turno con
 // venta, pedido anulado, gasto, retiro, atención y merma, y valida cada

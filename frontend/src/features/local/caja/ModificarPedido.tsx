@@ -19,7 +19,7 @@ interface LineaCarrito {
 
 // Editar un pedido EN_PREPARACION/LISTO (backend PATCH /pedidos/:id, ya
 // implementado y testeado desde la Fase 3 — esta es la UI que faltaba,
-// CLAUDE-MODULO-2.md §0 Fase 9). El backend ajusta stock por la diferencia
+// CLAUDE.md §4 Fase 9). El backend ajusta stock por la diferencia
 // contra la versión anterior y emite ticket de actualización a cocina; acá
 // solo se arma la lista COMPLETA de ítems que reemplaza a la anterior.
 export function ModificarPedido({ pedido, onCerrar }: Props) {

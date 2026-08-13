@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { validarDbDeTest, limpiarDb, sembrarFixtures, getApp, getPrisma, auth, type Fixtures } from './helpers';
 
-// Módulo 2 — Turnos y arqueo doble ciego (CLAUDE-MODULO-2.md §5).
+// Módulo 2 — Turnos y arqueo doble ciego (CLAUDE.md §5 Flujo 5).
 // El archivo corre en orden: el estado de la caja se encadena entre tests
 // (el cierre de un turno es la referencia ciega de la apertura del siguiente).
 

@@ -17,7 +17,7 @@ export function calcularArqueo(
   return { diferencia, resultado: diferencia.isNegative() ? 'FALTANTE' : 'SOBRANTE' };
 }
 
-// Saldo final esperado de efectivo al cierre (CLAUDE-MODULO-2.md §5.3):
+// Saldo final esperado de efectivo al cierre (CLAUDE.md §5 Flujo 5):
 //   apertura contada + ventas cobradas en EFECTIVO − gastos en EFECTIVO − retiros en EFECTIVO
 // (las atenciones son costo cero: no mueven caja, no entran acá)
 export function calcularEfectivoEsperadoCierre(params: {
@@ -47,7 +47,7 @@ export function calcularPollosEsperadosCierre(params: {
 
 export const MINUTOS_EXPIRACION_CLAVE = 10;
 
-// Sin 0/O ni 1/I/L: la clave se dicta por teléfono (CLAUDE-MODULO-2.md §5.1)
+// Sin 0/O ni 1/I/L: la clave se dicta por teléfono (CLAUDE.md §5 Flujo 5)
 const ALFABETO_CLAVE = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const LARGO_CLAVE = 8;
 

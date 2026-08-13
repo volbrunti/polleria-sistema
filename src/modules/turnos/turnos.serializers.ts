@@ -1,6 +1,6 @@
 import type { Rol } from '@prisma/client';
 
-// CONTROL CIEGO en la capa de serialización (CLAUDE-MODULO-2.md §1 y §5):
+// CONTROL CIEGO en la capa de serialización (CLAUDE.md §2 y §5 Flujo 5):
 // los DTOs para CAJERO/ENCARGADO nunca incluyen valorEsperado, diferencia ni
 // resultado de un arqueo — ni siquiera si el arqueo "coincidió" (saberlo ya
 // revela información). Whitelist explícita, no blacklist, mismo patrón que

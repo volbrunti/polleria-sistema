@@ -57,7 +57,7 @@ async function main() {
 
   alertasService.configurarSocket(io);
 
-  // Timer de "pedido no retirado" (CLAUDE-MODULO-2.md §9, Fase 9): avisa a
+  // Timer de "pedido no retirado" (CLAUDE.md §5 Flujo 4): avisa a
   // los admins por WebSocket cuando un A_RETIRAR lleva más de N minutos en
   // LISTO_NO_RETIRADO. No bloquea nada — es un aviso, igual que el resto de
   // las alertas del sistema.

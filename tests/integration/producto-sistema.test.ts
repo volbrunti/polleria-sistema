@@ -6,7 +6,7 @@ import { validarDbDeTest, limpiarDb, sembrarFixtures, getApp, getPrisma, auth, t
 // módulo 2): "Pollo a la leña (entero) — MARCADO" y cualquier otro producto
 // que sostenga un mecanismo interno del sistema no debe poder renombrarse ni
 // desactivarse desde el catálogo de admin — rompería ese mecanismo en
-// silencio (ver CLAUDE-MODULO-2.md §0).
+// silencio (ver CLAUDE.md §4).
 
 let app: FastifyInstance;
 let f: Fixtures;

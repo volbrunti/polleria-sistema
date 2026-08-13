@@ -16,7 +16,7 @@ export interface ItemPedidoInput {
 }
 
 // Confirmar = crear: el carrito vive en el frontend; este POST descuenta
-// stock, congela precios y emite el ticket a cocina (CLAUDE-MODULO-2.md §4.5).
+// stock, congela precios y emite el ticket a cocina (CLAUDE.md §5 Flujo 4).
 // tokenIdempotencia: UUID por pedido armado — el backend deduplica doble
 // click y retries de red.
 export function confirmarPedido(datos: {

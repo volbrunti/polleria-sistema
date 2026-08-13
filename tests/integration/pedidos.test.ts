@@ -13,7 +13,7 @@ import {
 } from './helpers';
 import { pedidosNoRetiradosParaAvisar } from '../../src/modules/pedidos/pedidos.service';
 
-// Módulo 2 — Pedidos / POS (CLAUDE-MODULO-2.md §4). Corre en serie: el stock
+// Módulo 2 — Pedidos / POS (CLAUDE.md §5 Flujo 4). Corre en serie: el stock
 // y el turno se encadenan entre tests.
 
 let app: FastifyInstance;
@@ -531,7 +531,7 @@ describe('Soporte del POS: más vendidos y precios en bloque', () => {
   });
 });
 
-describe('Timer de pedido no retirado (CLAUDE-MODULO-2.md §9)', () => {
+describe('Timer de pedido no retirado (CLAUDE.md §5 Flujo 4)', () => {
   beforeAll(async () => {
     // el turno se cerró en el describe de arriba y el stock de empanada ya
     // se consumió a lo largo del archivo — reabre turno y repone stock para

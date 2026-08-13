@@ -13,7 +13,7 @@ import {
 } from './helpers';
 
 // Módulo 2 — Caja (atenciones/gastos/retiros) y circuito completo del pollo
-// (CLAUDE-MODULO-2.md §4.8–§4.10, §5.2): fresco → marcado → vendido /
+// (CLAUDE.md §5 Flujos 4 y 5): fresco → marcado → vendido /
 // atención / retornado / quemado → cierre que cuadra al centavo.
 
 let app: FastifyInstance;

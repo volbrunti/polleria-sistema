@@ -14,7 +14,7 @@ interface Props {
 
 type Campo = 'efectivo' | 'pollos' | null;
 
-// Cierre (CLAUDE-MODULO-2.md §5.3): arqueo doble ciego idéntico a la
+// Cierre (CLAUDE.md §5 Flujo 5): arqueo doble ciego idéntico a la
 // apertura. El cajero recibe SOLO el resumen por unidades — sin plata, sin
 // diferencia, sin esperado. Al terminar, la sesión se cierra sola.
 export function CierreTurno({ sucursalId, onCancelar }: Props) {

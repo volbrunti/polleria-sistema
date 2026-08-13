@@ -40,7 +40,7 @@ const cobrarSchema = z.object({
 const paramsId = z.object({ id: z.coerce.number().int().positive() });
 
 export async function pedidosRoutes(app: FastifyInstance) {
-  // Matriz RBAC de CLAUDE-MODULO-2.md §7: opera ADMIN/ENCARGADO/CAJERO
+  // Matriz RBAC de CLAUDE.md §7: opera ADMIN/ENCARGADO/CAJERO
   const operativos = [app.autenticar, app.requerirRoles('ADMINISTRADOR', 'ENCARGADO', 'CAJERO')] as const;
 
   // Confirmar = crear: descuenta stock y manda ticket a cocina (§4.5)
