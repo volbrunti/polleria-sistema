@@ -66,9 +66,28 @@ afterAll(async () => {
 });
 
 // El despacho a las impresoras es deliberadamente posterior al commit (para no
-// sostener locks de stock esperando hardware), así que el test le da un
-// respiro antes de mirar el resultado.
-const esperarImpresion = () => new Promise((r) => setTimeout(r, 600));
+// sostener locks de stock esperando hardware), así que el test tiene que
+// esperar a que termine antes de mirar el resultado. Un `setTimeout` fijo de
+// 600ms asumía un round-trip a la DB casi instantáneo; contra Neon (sobre
+// todo la región de Virginia, lejos de acá) el despacho hace 2 round-trips
+// propios (leer el ticket, actualizar cada impresión) que pueden superar eso
+// de sobra, así que en vez de adivinar un número esperamos a que las
+// impresiones del último ticket queden todas resueltas (impresa o con error).
+async function esperarImpresion(pedidoId?: number) {
+  const prisma = await getPrisma();
+  const desde = Date.now();
+  while (Date.now() - desde < 10000) {
+    const ticket = await prisma.ticketCocina.findFirst({
+      where: pedidoId ? { pedidoId } : undefined,
+      orderBy: { id: 'desc' },
+      include: { impresiones: true },
+    });
+    const resuelto =
+      ticket && ticket.impresiones.length > 0 && ticket.impresiones.every((i) => i.impreso || i.errorImpresion);
+    if (resuelto) return;
+    await new Promise((r) => setTimeout(r, 150));
+  }
+}
 
 async function vender(cantidad = 1) {
   return app.inject({
