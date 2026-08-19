@@ -722,6 +722,18 @@ model Pedido {
   // pedidos viejos conservan el que se les aplicó.
   descuentoPct       Decimal?            @db.Decimal(5, 2)
 
+  // Nombre libre para identificar el pedido en la comandera y en Pedidos
+  // Activos (pedido de Pablo tras la prueba en vivo, reunión post-prueba
+  // 2026-08). Opcional — no todos los pedidos lo necesitan.
+  nombreCliente String?
+  // Hora puntual prometida al cliente ("va a estar para las 9:15"), para
+  // que cocina sepa a qué hora se comprometieron. Aplica a PRESENCIAL y a
+  // A_RETIRAR (confirmado por Ariel). Formato "HH:MM" — no es un DateTime
+  // completo a propósito: es siempre el mismo día del pedido, y evita tener
+  // que combinar fecha+hora con zona horaria para un dato que en la
+  // práctica solo se muestra como texto en pantalla y en el ticket.
+  horaEntregaSolicitada String?
+
   items   ItemDePedido[]
   pagos   Pago[]
   tickets TicketCocina[]

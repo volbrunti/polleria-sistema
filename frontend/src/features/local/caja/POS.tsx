@@ -169,6 +169,10 @@ export function POS({ sucursalId }: Props) {
   // Retiro de socio / venta a empleado (reunión 4/8). null = venta normal.
   const [beneficiario, setBeneficiario] = useState<BeneficiarioPedido | null>(null);
   const [socio, setSocio] = useState<SocioRetiro | null>(null);
+  // Nombre y hora prometida — se piden al confirmar (no al cobrar) porque el
+  // ticket a cocina se imprime en ese momento (pedido post-prueba en vivo).
+  const [nombreCliente, setNombreCliente] = useState('');
+  const [horaEntrega, setHoraEntrega] = useState('');
   const [carrito, setCarrito] = useState<LineaCarrito[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [avisos, setAvisos] = useState<AvisoStockMinimo[] | null>(null);
@@ -240,6 +244,8 @@ export function POS({ sucursalId }: Props) {
         tokenIdempotencia: tokenPedido.current,
         ...(beneficiario ? { beneficiario } : {}),
         ...(beneficiario === 'SOCIO' && socio ? { socioBeneficiario: socio } : {}),
+        ...(nombreCliente.trim() ? { nombreCliente: nombreCliente.trim() } : {}),
+        ...(horaEntrega ? { horaEntregaSolicitada: horaEntrega } : {}),
       }),
     onSuccess: (pedido) => {
       void queryClient.invalidateQueries({ queryKey: ['pedidos'] });
@@ -249,6 +255,8 @@ export function POS({ sucursalId }: Props) {
       const eraRetiroDeSocio = beneficiario === 'SOCIO';
       setBeneficiario(null);
       setSocio(null);
+      setNombreCliente('');
+      setHoraEntrega('');
       if (pedido.avisosStockMinimo && pedido.avisosStockMinimo.length > 0) {
         setAvisos(pedido.avisosStockMinimo);
       }
@@ -409,6 +417,25 @@ export function POS({ sucursalId }: Props) {
               {t === 'PRESENCIAL' ? 'Presencial' : 'A retirar'}
             </button>
           ))}
+        </div>
+
+        {/* Nombre y hora prometida — opcionales, para ambos tipos de pedido
+            (confirmado por Ariel: aplica también a PRESENCIAL, no solo a
+            retirar). Van a la comandera de cocina. */}
+        <div className="flex gap-1.5 px-3 pb-3">
+          <input
+            value={nombreCliente}
+            onChange={(e) => setNombreCliente(e.target.value)}
+            placeholder="Nombre (opcional)"
+            className="h-11 min-w-0 flex-[2] rounded-xl border border-borde-fuerte px-3 text-[15px]"
+          />
+          <input
+            value={horaEntrega}
+            onChange={(e) => setHoraEntrega(e.target.value)}
+            type="time"
+            placeholder="Hora"
+            className="h-11 min-w-0 flex-1 rounded-xl border border-borde-fuerte px-2 text-[15px]"
+          />
         </div>
 
         {/* Retiro de socio / venta a empleado (reunión 4/8). El retiro de

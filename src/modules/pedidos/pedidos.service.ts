@@ -229,6 +229,8 @@ export async function confirmarPedido(params: {
    */
   beneficiario?: BeneficiarioPedido;
   socioBeneficiario?: SocioRetiro;
+  nombreCliente?: string;
+  horaEntregaSolicitada?: string;
 }) {
   if (params.items.length === 0) throw Errores.validacion('El pedido no tiene ítems');
   if (params.beneficiario === 'SOCIO' && !params.socioBeneficiario) {
@@ -309,6 +311,8 @@ export async function confirmarPedido(params: {
         beneficiario: params.beneficiario,
         socioBeneficiario: params.socioBeneficiario,
         descuentoPct,
+        nombreCliente: params.nombreCliente,
+        horaEntregaSolicitada: params.horaEntregaSolicitada,
         items: {
           create: lineas.map((l) => ({
             productoId: l.productoId,
@@ -339,6 +343,8 @@ export async function confirmarPedido(params: {
       tipoPedido: pedido.tipo,
       fechaHora: pedido.fechaCreacion.toISOString(),
       items: itemsDeTicket(pedido.items),
+      nombreCliente: pedido.nombreCliente ?? undefined,
+      horaEntregaSolicitada: pedido.horaEntregaSolicitada ?? undefined,
     });
 
     await registrarAuditoria(tx, {
@@ -496,6 +502,8 @@ export async function modificarPedido(params: { pedidoId: number; items: ItemInp
       // repetir el pedido entero — si no, el cocinero compara dos tickets a
       // mano en plena cocina y se le pasa algo.
       cambios: calcularCambios(itemsDeTicket(existente.items), itemsDeTicket(actualizado.items)),
+      nombreCliente: actualizado.nombreCliente ?? undefined,
+      horaEntregaSolicitada: actualizado.horaEntregaSolicitada ?? undefined,
     });
 
     await registrarAuditoria(tx, {
@@ -849,6 +857,8 @@ export async function anularPedido(params: { pedidoId: number; usuarioId: number
       tipoPedido: pedido.tipo,
       fechaHora: new Date().toISOString(),
       items: itemsDeTicket(pedido.items),
+      nombreCliente: pedido.nombreCliente ?? undefined,
+      horaEntregaSolicitada: pedido.horaEntregaSolicitada ?? undefined,
     });
 
     await registrarAuditoria(tx, {

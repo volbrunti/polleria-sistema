@@ -18,6 +18,14 @@ const confirmarSchema = z.object({
   // Retiro de socio (costo cero) / venta a empleado (con descuento)
   beneficiario: z.enum(['SOCIO', 'EMPLEADO']).optional(),
   socioBeneficiario: z.enum(['ARIEL', 'ELIANA', 'EMA']).optional(),
+  // Para identificar el pedido en la comandera y en Pedidos Activos — no es
+  // dato ciego, lo pide el cajero al armar el carrito (reunión post-prueba).
+  nombreCliente: z.string().max(80).optional(),
+  // Hora puntual prometida al cliente ("9:15"), PRESENCIAL o A_RETIRAR.
+  horaEntregaSolicitada: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Formato de hora inválido — usar HH:MM')
+    .optional(),
 });
 
 const modificarSchema = z.object({ items: z.array(itemSchema).min(1) });

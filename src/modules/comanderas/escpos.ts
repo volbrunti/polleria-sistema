@@ -121,6 +121,11 @@ export interface ContenidoTicket {
   fechaHora: string; // ISO
   items: ItemTicket[];
   cambios?: CambioTicket[];
+  // Datos opcionales para identificar el pedido en cocina (pedido de Pablo
+  // tras la prueba en vivo) — nunca montos, así que no chocan con el
+  // Control Ciego.
+  nombreCliente?: string;
+  horaEntregaSolicitada?: string; // "HH:MM"
 }
 
 const ENCABEZADO_TIPO: Record<TipoTicket, string> = {
@@ -149,6 +154,8 @@ export function construirTicket(c: ContenidoTicket): Buffer {
   partes.push(DOBLE, negrita(true), linea(`PEDIDO #${c.pedidoId}`), negrita(false), NORMAL);
   partes.push(linea(c.tipoPedido === 'A_RETIRAR' ? 'PARA RETIRAR' : 'EN EL LOCAL'));
   partes.push(linea(fechaCordoba(c.fechaHora)));
+  if (c.nombreCliente) partes.push(negrita(true), linea(c.nombreCliente.toUpperCase()), negrita(false));
+  if (c.horaEntregaSolicitada) partes.push(negrita(true), linea(`PARA LAS ${c.horaEntregaSolicitada}`), negrita(false));
 
   partes.push(alinear(0));
   partes.push(separador());

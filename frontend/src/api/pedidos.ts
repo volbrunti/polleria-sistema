@@ -27,6 +27,10 @@ export function confirmarPedido(datos: {
   /** Retiro de socio (costo cero) o venta a empleado (con descuento). */
   beneficiario?: BeneficiarioPedido;
   socioBeneficiario?: SocioRetiro;
+  /** Para identificar el pedido en la comandera y en Pedidos Activos. */
+  nombreCliente?: string;
+  /** "HH:MM" — hora puntual prometida al cliente. */
+  horaEntregaSolicitada?: string;
 }) {
   return apiFetch<Pedido>('/api/pedidos', { method: 'POST', body: datos });
 }

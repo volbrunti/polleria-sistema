@@ -24,6 +24,24 @@ const ETIQUETA_ESTADO: Record<string, { texto: string; color: string; bg: string
   LISTO_NO_RETIRADO: { texto: 'No retirado', color: '#a13333', bg: '#fdeaea' },
 };
 
+// Resalta la hora prometida cuando está cerca o ya pasó — así el cajero ve
+// de un vistazo qué pedido apura sin tener que hacer la cuenta.
+function estadoHora(hora: string): 'ok' | 'proximo' | 'vencido' {
+  const [h, m] = hora.split(':').map(Number);
+  const objetivo = new Date();
+  objetivo.setHours(h ?? 0, m ?? 0, 0, 0);
+  const minutosRestantes = (objetivo.getTime() - Date.now()) / 60_000;
+  if (minutosRestantes < 0) return 'vencido';
+  if (minutosRestantes <= 15) return 'proximo';
+  return 'ok';
+}
+
+const ESTILO_HORA: Record<ReturnType<typeof estadoHora>, string> = {
+  ok: 'bg-chip text-texto-suave',
+  proximo: 'bg-advertencia-suave text-advertencia-texto',
+  vencido: 'bg-error-suave text-error-texto',
+};
+
 // Ciclo de vida §4.4: EN_PREPARACION → LISTO → ENTREGADO/LISTO_NO_RETIRADO →
 // REASIGNADO/PERDIDO. Anulable en cualquier estado antes de ENTREGADO/PERDIDO.
 export function PedidosActivos({ sucursalId }: Props) {
@@ -103,9 +121,17 @@ export function PedidosActivos({ sucursalId }: Props) {
                 <span className="rounded-lg bg-chip px-2.5 py-1 text-[13px] font-bold text-texto-suave">
                   {p.tipo === 'PRESENCIAL' ? 'Presencial' : 'A retirar'}
                 </span>
+                {p.horaEntregaSolicitada && (
+                  <span className={`rounded-lg px-2.5 py-1 text-[13px] font-bold ${ESTILO_HORA[estadoHora(p.horaEntregaSolicitada)]}`}>
+                    Para las {p.horaEntregaSolicitada}
+                  </span>
+                )}
                 <span className="text-sm text-texto-suave">{fmtFechaHora(p.fechaCreacion)}</span>
                 <span className="ml-auto text-lg font-extrabold">{fmtMoneda(total)}</span>
               </div>
+              {p.nombreCliente && (
+                <div className="mt-1 text-[15px] font-bold text-texto">{p.nombreCliente}</div>
+              )}
 
               <div className="mt-2 flex flex-col gap-0.5">
                 {p.items.map((i) => (

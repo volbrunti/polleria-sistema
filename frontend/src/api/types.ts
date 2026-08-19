@@ -379,6 +379,9 @@ export interface Pedido {
   socioBeneficiario: SocioRetiro | null;
   /** % de descuento congelado al confirmar (solo EMPLEADO). */
   descuentoPct: string | null;
+  nombreCliente: string | null;
+  /** "HH:MM" — hora puntual prometida al cliente. */
+  horaEntregaSolicitada: string | null;
   usuarioCajero?: { username: string };
   pedidoOrigenId: number | null;
   items: ItemDePedido[];
