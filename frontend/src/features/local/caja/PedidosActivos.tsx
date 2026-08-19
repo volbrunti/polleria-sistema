@@ -108,6 +108,10 @@ export function PedidosActivos({ sucursalId }: Props) {
           const total = p.items.reduce((acc, i) => acc + Number(i.montoTotal), 0);
           const ocupado =
             mutListo.isPending || mutNoRetirado.isPending || mutReasignar.isPending;
+          // Cobro temprano (presencial pagó antes de que cocina termine): el
+          // pedido sigue EN_PREPARACION/LISTO pero ya tiene Pago adjuntos —
+          // no hay nada más para cobrar, solo falta que cocina lo termine.
+          const pagado = p.pagos.length > 0;
           return (
             <div key={p.id} className="rounded-2xl border border-borde bg-white px-4.5 py-4">
               <div className="flex flex-wrap items-center gap-2.5">
@@ -124,6 +128,11 @@ export function PedidosActivos({ sucursalId }: Props) {
                 {p.horaEntregaSolicitada && (
                   <span className={`rounded-lg px-2.5 py-1 text-[13px] font-bold ${ESTILO_HORA[estadoHora(p.horaEntregaSolicitada)]}`}>
                     Para las {p.horaEntregaSolicitada}
+                  </span>
+                )}
+                {pagado && (
+                  <span className="rounded-lg bg-primario-suave px-2.5 py-1 text-[13px] font-bold text-primario">
+                    PAGADO
                   </span>
                 )}
                 <span className="text-sm text-texto-suave">{fmtFechaHora(p.fechaCreacion)}</span>
@@ -153,10 +162,12 @@ export function PedidosActivos({ sucursalId }: Props) {
                     onClick={() => mutListo.mutate(p.id)}
                     className="min-h-12 cursor-pointer rounded-xl bg-primario px-5 text-[15px] font-extrabold text-white hover:bg-primario-hover disabled:opacity-50"
                   >
-                    MARCAR LISTO
+                    {/* Ya está pagado: no queda nada más que esperar, así que
+                        este toque cierra el pedido directo (ver marcarListo). */}
+                    {pagado ? 'LISTO — ENTREGAR' : 'MARCAR LISTO'}
                   </button>
                 )}
-                {(p.estado === 'EN_PREPARACION' || p.estado === 'LISTO') && (
+                {(p.estado === 'EN_PREPARACION' || p.estado === 'LISTO') && !pagado && (
                   <button
                     type="button"
                     onClick={() => setPedidoACobrar(p)}

@@ -586,10 +586,20 @@ export async function cobrarPedido(params: {
       })
       .filter((p) => p.monto.greaterThan(0));
 
-    await transicionarAtomico(tx, pedido.id, pedido.estado, {
-      estado: 'ENTREGADO',
-      fechaCierre: new Date(),
-    });
+    // Cobrar un PRESENCIAL que paga al momento pero sigue EN_PREPARACION
+    // (cocina todavía no lo marcó Listo) NO cierra el pedido — se adjuntan
+    // los pagos y se queda visible en Pedidos Activos como "ya pagado,
+    // esperando cocina" (pedido post-prueba en vivo: antes desaparecía de
+    // la lista aunque la comida siguiera cocinándose). `pagos.length > 0` es
+    // la señal de "ya cobrado", no hace falta un campo aparte. Cobrar desde
+    // LISTO sigue cerrando de una — ahí no queda nada más pendiente.
+    const cierraAhora = pedido.estado === 'LISTO';
+    await transicionarAtomico(
+      tx,
+      pedido.id,
+      pedido.estado,
+      cierraAhora ? { estado: 'ENTREGADO', fechaCierre: new Date() } : {},
+    );
     const cobrado = await tx.pedido.update({
       where: { id: pedido.id },
       data: { pagos: { create: pagosAPersistir } },
@@ -610,6 +620,7 @@ export async function cobrarPedido(params: {
           montoRecargo: p.montoRecargo?.toString() ?? null,
         })),
         vuelto: cobro.vuelto.toString(),
+        cierraAhora,
       },
     });
 
@@ -684,8 +695,38 @@ async function cambiarEstado(params: {
   }, OPCIONES_TX);
 }
 
-export const marcarListo = (pedidoId: number, usuarioId: number) =>
-  cambiarEstado({ pedidoId, hacia: 'LISTO', usuarioId, accion: 'MARCAR_PEDIDO_LISTO' });
+// Si el pedido ya tiene pagos adjuntos (cobro temprano desde EN_PREPARACION
+// — ver cobrarPedido), marcar Listo cierra DIRECTO a ENTREGADO: pagar era
+// lo único que faltaba, no hace falta un tercer paso. Si no está pagado
+// todavía, es el flujo normal: pasa a LISTO y espera el cobro.
+export async function marcarListo(pedidoId: number, usuarioId: number) {
+  const pedido = await prisma.pedido.findUnique({ where: { id: pedidoId }, include: INCLUDE_PEDIDO });
+  if (!pedido) throw Errores.noEncontrado('Pedido');
+  await validarUsuarioDeLaSucursal(usuarioId, pedido.sucursalId);
+
+  const yaPagado = pedido.pagos.length > 0;
+  const hacia: EstadoPedido = yaPagado ? 'ENTREGADO' : 'LISTO';
+  if (!transicionValida(pedido.estado, hacia)) {
+    throw Errores.estadoPedidoInvalido(pedido.estado, hacia);
+  }
+
+  return prisma.$transaction(async (tx) => {
+    await transicionarAtomico(tx, pedido.id, pedido.estado, {
+      estado: hacia,
+      ...(yaPagado ? { fechaCierre: new Date() } : {}),
+    });
+    const actualizado = await tx.pedido.findUniqueOrThrow({ where: { id: pedido.id }, include: INCLUDE_PEDIDO });
+    await registrarAuditoria(tx, {
+      accion: 'MARCAR_PEDIDO_LISTO',
+      entidad: 'Pedido',
+      entidadId: pedido.id,
+      usuarioId,
+      datosAnteriores: { estado: pedido.estado },
+      datosNuevos: { estado: hacia },
+    });
+    return actualizado;
+  }, OPCIONES_TX);
+}
 
 export const marcarNoRetirado = (pedidoId: number, usuarioId: number) =>
   cambiarEstado({
