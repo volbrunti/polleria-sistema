@@ -58,14 +58,25 @@ function camposDeAlerta(
     ];
   }
   if (alerta.tipo === 'DISCREPANCIA_TRANSFERENCIA') {
-    const lineas = (d.lineas as { productoId: number; cantidadEnviada: string; cantidadRecibida: string; diferencia: string }[]) ?? [];
+    // Dos caminos del backend arman esta alerta con nombres distintos: el
+    // primer intento de recepción (todavía sin resolver) usa
+    // "cantidadContada"; la resolución del admin usa "cantidadRecibida".
+    // Ambos son legítimos — hay que aceptar cualquiera de los dos.
+    type LineaAlerta = {
+      productoId: number;
+      cantidadEnviada: string;
+      cantidadRecibida?: string;
+      cantidadContada?: string;
+      diferencia: string;
+    };
+    const lineas = (d.lineas as LineaAlerta[]) ?? [];
     const campos: CampoDetalle[] = [];
     for (const l of lineas) {
       if (Number(l.diferencia) === 0) continue;
       campos.push(
         { k: 'Producto', v: nombreProducto(l.productoId) },
         { k: 'Cantidad enviada', v: fmtNumero(l.cantidadEnviada) },
-        { k: 'Cantidad recibida', v: fmtNumero(l.cantidadRecibida) },
+        { k: 'Cantidad contada/recibida', v: fmtNumero(l.cantidadRecibida ?? l.cantidadContada) },
         { k: 'Diferencia', v: fmtNumero(l.diferencia), destacado: true },
       );
     }
@@ -75,7 +86,37 @@ function camposDeAlerta(
     );
     return campos;
   }
-  return Object.entries(d).map(([k, v]) => ({ k, v: String(v) }));
+  if (alerta.tipo === 'BLOQUEO_TURNO' || alerta.tipo === 'DISCREPANCIA_CAJA') {
+    type LineaArqueo = { tipo: string; resultado: string; valorContado: string; valorEsperado: string; diferencia: string };
+    const arqueos = (d.arqueos as LineaArqueo[]) ?? [];
+    const campos: CampoDetalle[] = [];
+    if (d.sucursal) campos.push({ k: 'Sucursal', v: String(d.sucursal) });
+    for (const a of arqueos) {
+      const etiqueta = a.tipo === 'EFECTIVO' ? 'Efectivo' : 'Pollos marcados';
+      campos.push(
+        { k: `${etiqueta} — contado`, v: fmtNumero(a.valorContado) },
+        { k: `${etiqueta} — esperado`, v: fmtNumero(a.valorEsperado) },
+        {
+          k: `${etiqueta} — diferencia`,
+          v: `${a.resultado} (${fmtNumero(a.diferencia)})`,
+          destacado: a.resultado !== 'COINCIDE',
+        },
+      );
+    }
+    if (d.usuarioCajeroActualId != null) {
+      campos.push({ k: 'Cajero que abría', v: nombreUsuario(d.usuarioCajeroActualId as number) });
+    }
+    if (d.usuarioCajeroAnteriorId != null) {
+      campos.push({ k: 'Cajero del cierre anterior', v: nombreUsuario(d.usuarioCajeroAnteriorId as number) });
+    }
+    if (d.usuarioCajeroId != null) {
+      campos.push({ k: 'Cajero', v: nombreUsuario(d.usuarioCajeroId as number) });
+    }
+    return campos;
+  }
+  return Object.entries(d)
+    .filter(([, v]) => typeof v !== 'object')
+    .map(([k, v]) => ({ k, v: String(v) }));
 }
 
 export function Alertas() {
