@@ -25,6 +25,12 @@ export function insumosEsperados(productoElaboradoId: number) {
   return apiFetch<InsumoEsperado[]>(`/api/produccion/productos/${productoElaboradoId}/insumos-esperados`);
 }
 
+// Camino inverso: dada una materia prima, qué productos elaborados se
+// pueden producir con ella (ficha técnica activa que la usa como insumo).
+export function productosProduciblesCon(productoInsumoId: number) {
+  return apiFetch<Producto[]>(`/api/produccion/materia-prima/${productoInsumoId}/producible`);
+}
+
 export function abrirLote(datos: { productoElaboradoId: number; insumos: InsumoInput[] }) {
   return apiFetch<LoteDeProduccion>('/api/produccion/lotes', { method: 'POST', body: datos });
 }

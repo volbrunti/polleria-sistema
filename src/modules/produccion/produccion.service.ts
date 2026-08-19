@@ -418,6 +418,31 @@ export async function insumosDeFichaActiva(productoElaboradoId: number) {
   }));
 }
 
+// Camino inverso a insumosDeFichaActiva: dada una MATERIA_PRIMA, qué
+// productos ELABORADOS se pueden producir con ella (la usan como insumo en
+// su ficha técnica ACTIVA). Sirve al explorador de "materia prima
+// disponible" — tocar un insumo y ver qué se puede hacer con eso, en vez de
+// arrancar siempre por "¿qué vas a producir?". Devuelve solo identidad
+// (nada de cantidades ni rendimiento — mismo control ciego que
+// insumosDeFichaActiva).
+export async function productosProduciblesCon(productoInsumoId: number) {
+  const ingredientes = await prisma.ingredienteDeReceta.findMany({
+    where: {
+      productoInsumoId,
+      fichaTecnicaVersion: { activa: true },
+    },
+    include: {
+      fichaTecnicaVersion: {
+        include: { fichaTecnica: { include: { productoElaborado: true } } },
+      },
+    },
+  });
+  return ingredientes
+    .map((i) => i.fichaTecnicaVersion.fichaTecnica.productoElaborado)
+    .filter((p) => p.activo && !p.esProductoSistema)
+    .sort((a, b) => a.nombre.localeCompare(b.nombre));
+}
+
 export async function listarLotes(filtros: { estado?: 'ABIERTO' | 'CERRADO'; desde?: Date; hasta?: Date }) {
   return prisma.loteDeProduccion.findMany({
     where: { estado: filtros.estado, fechaHora: { gte: filtros.desde, lte: filtros.hasta } },

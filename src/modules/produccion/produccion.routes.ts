@@ -129,4 +129,17 @@ export async function produccionRoutes(app: FastifyInstance) {
       return produccionService.insumosDeFichaActiva(id);
     },
   );
+
+  // Camino inverso: dada una materia prima, qué productos elaborados se
+  // pueden producir con ella. Mismos roles que insumos-esperados — lo usa
+  // también el admin para el chip "se usa como insumo en..." al editar
+  // stock a mano.
+  app.get(
+    '/materia-prima/:id/producible',
+    { preHandler: [app.autenticar, app.requerirRoles('PRODUCCION', 'ADMINISTRADOR')] },
+    async (req) => {
+      const { id } = paramsId.parse(req.params);
+      return produccionService.productosProduciblesCon(id);
+    },
+  );
 }

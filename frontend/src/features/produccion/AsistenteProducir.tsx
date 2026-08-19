@@ -6,6 +6,7 @@ import { TecladoNumerico } from '../../components/ui/TecladoNumerico';
 import { listarProductos } from '../../api/productos';
 import { lineasDisponibles } from '../../api/ingresos';
 import { abrirLote, listarProductosProducibles, insumosEsperados } from '../../api/produccion';
+import { ExploradorMateriaPrima } from './ExploradorMateriaPrima';
 import { ApiError } from '../../api/client';
 import { fmtFecha, fmtNumero } from '../../lib/formato';
 import type { LineaIngresoDisponible, Producto } from '../../api/types';
@@ -130,10 +131,18 @@ function reajustarReparto(
 
 export function AsistenteProducir({ onVolver, onLoteAbierto }: Props) {
   const [paso, setPaso] = useState(1);
+  const [modoPaso1, setModoPaso1] = useState<'producto' | 'materiaPrima'>('producto');
+  const [busquedaProducto, setBusquedaProducto] = useState('');
   const [productoElaborado, setProductoElaborado] = useState<Producto | null>(null);
   const [insumos, setInsumos] = useState<InsumoUI[]>([]);
   const [overlay, setOverlay] = useState<Overlay>(null);
   const [errorEnvio, setErrorEnvio] = useState<string | null>(null);
+
+  function elegirProductoElaborado(p: Producto) {
+    setProductoElaborado(p);
+    setInsumos([]);
+    setPaso(2);
+  }
 
   const productosProducibles = useQuery({
     queryKey: ['produccion', 'productos-producibles'],
@@ -212,21 +221,55 @@ export function AsistenteProducir({ onVolver, onLoteAbierto }: Props) {
       {paso === 1 && (
         <div className="flex flex-1 flex-col gap-2.5 overflow-auto px-4 pb-5 pt-1.5">
           <div className="py-1 text-xl font-extrabold">¿Qué vas a producir?</div>
-          {productosProducibles.isLoading && <div className="text-texto-suave">Cargando…</div>}
-          {productosProducibles.data?.map((p) => (
+
+          <div className="flex gap-2 rounded-xl bg-chip p-1">
             <button
-              key={p.id}
               type="button"
-              onClick={() => {
-                setProductoElaborado(p);
-                setInsumos([]);
-                setPaso(2);
-              }}
-              className="min-h-18 w-full cursor-pointer rounded-2xl border-2 border-borde bg-white px-4.5 py-4 text-left text-xl font-extrabold hover:border-primario"
+              onClick={() => setModoPaso1('producto')}
+              className={`min-h-10 flex-1 cursor-pointer rounded-lg text-sm font-bold ${
+                modoPaso1 === 'producto' ? 'bg-white shadow-sm' : 'text-texto-suave'
+              }`}
             >
-              {p.nombre}
+              Por producto
             </button>
-          ))}
+            <button
+              type="button"
+              onClick={() => setModoPaso1('materiaPrima')}
+              className={`min-h-10 flex-1 cursor-pointer rounded-lg text-sm font-bold ${
+                modoPaso1 === 'materiaPrima' ? 'bg-white shadow-sm' : 'text-texto-suave'
+              }`}
+            >
+              Por materia prima
+            </button>
+          </div>
+
+          {modoPaso1 === 'producto' ? (
+            <>
+              <input
+                value={busquedaProducto}
+                onChange={(e) => setBusquedaProducto(e.target.value)}
+                placeholder="Buscar producto…"
+                className="h-11 w-full rounded-[10px] border border-borde-fuerte px-3 text-sm"
+              />
+              {productosProducibles.isLoading && <div className="text-texto-suave">Cargando…</div>}
+              {productosProducibles.data
+                ?.filter((p) =>
+                  busquedaProducto.trim() ? p.nombre.toLowerCase().includes(busquedaProducto.trim().toLowerCase()) : true,
+                )
+                .map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => elegirProductoElaborado(p)}
+                    className="min-h-18 w-full cursor-pointer rounded-2xl border-2 border-borde bg-white px-4.5 py-4 text-left text-xl font-extrabold hover:border-primario"
+                  >
+                    {p.nombre}
+                  </button>
+                ))}
+            </>
+          ) : (
+            <ExploradorMateriaPrima onElegirProducible={elegirProductoElaborado} />
+          )}
         </div>
       )}
 
