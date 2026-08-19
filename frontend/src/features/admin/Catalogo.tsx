@@ -895,6 +895,14 @@ function ModalProductosHabituales({ proveedor, onCerrar }: { proveedor: Proveedo
   if (seleccion === null && habituales.data) {
     setSeleccion(new Set(habituales.data.map((p) => p.id)));
   }
+  // Si la consulta de lo ya tildado falla (token vencido, corte de red),
+  // seleccion se queda en null para siempre y GUARDAR queda deshabilitado
+  // sin ningún aviso — el admin ve un botón muerto y no sabe por qué.
+  // Arrancamos en vacío igual (no lo bloqueamos) pero avisando que no se
+  // pudo traer lo que ya estaba tildado, para que no lo pise sin saberlo.
+  if (seleccion === null && habituales.isError) {
+    setSeleccion(new Set());
+  }
 
   const mutGuardar = useMutation({
     mutationFn: () => guardarProductosHabituales(proveedor.id, [...(seleccion ?? [])]),
@@ -927,6 +935,23 @@ function ModalProductosHabituales({ proveedor, onCerrar }: { proveedor: Proveedo
           Marcá qué productos suele traer este proveedor. Van a aparecer como acceso rápido al cargar un ingreso, sin
           cantidades — eso se sigue cargando en el momento.
         </div>
+        {habituales.isLoading && (
+          <div className="rounded-xl bg-chip px-3.5 py-3 text-sm font-semibold text-texto-suave">
+            Cargando lo que ya está tildado…
+          </div>
+        )}
+        {habituales.isError && (
+          <div className="flex items-center justify-between gap-3 rounded-xl bg-error-suave px-3.5 py-3 text-sm font-semibold text-error-texto">
+            <span>No se pudo traer lo que ya estaba tildado — si guardás ahora, puede pisarlo.</span>
+            <button
+              type="button"
+              onClick={() => void habituales.refetch()}
+              className="min-h-9 shrink-0 cursor-pointer rounded-lg border border-error-texto bg-white px-3 text-[13px] font-bold text-error-texto"
+            >
+              Reintentar
+            </button>
+          </div>
+        )}
         <input
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
