@@ -250,6 +250,14 @@ describe('Cobro', () => {
       headers: auth(f.usuarios.cajero.token),
       payload: { tipo: 'PRESENCIAL', items: [{ productoId: f.productos.milanesa, cantidad: 4 }] }, // $10.000
     });
+    // Cobrar desde EN_PREPARACION ya no cierra el pedido (§6, cobro
+    // temprano) — se marca Listo primero para probar el cierre en sí, que
+    // es lo que este test verifica (NETO de vuelto), no el timing.
+    await app.inject({
+      method: 'POST',
+      url: `/api/pedidos/${pedido.json().id}/marcar-listo`,
+      headers: auth(f.usuarios.cajero.token),
+    });
     const res = await app.inject({
       method: 'POST',
       url: `/api/pedidos/${pedido.json().id}/cobrar`,
@@ -281,6 +289,51 @@ describe('Cobro', () => {
     });
     expect(res.statusCode).toBe(409);
     expect(res.json().codigo).toBe('ESTADO_PEDIDO_INVALIDO');
+  });
+
+  it('cobro temprano (§6): paga en EN_PREPARACION, sigue visible, Listo lo cierra directo', async () => {
+    const pedido = (
+      await app.inject({
+        method: 'POST',
+        url: '/api/pedidos',
+        headers: auth(f.usuarios.cajero.token),
+        payload: { tipo: 'PRESENCIAL', items: [{ productoId: f.productos.milanesa, cantidad: 1 }] },
+      })
+    ).json();
+
+    const cobro = await app.inject({
+      method: 'POST',
+      url: `/api/pedidos/${pedido.id}/cobrar`,
+      headers: auth(f.usuarios.cajero.token),
+      payload: { pagos: [{ medio: 'MERCADO_PAGO', monto: 2500 }] },
+    });
+    expect(cobro.statusCode).toBe(200);
+    // No cierra todavía: cocina lo puede seguir preparando.
+    expect(cobro.json().pedido.estado).toBe('EN_PREPARACION');
+
+    const prisma = await getPrisma();
+    expect(await prisma.pago.count({ where: { pedidoId: pedido.id } })).toBe(1);
+
+    // Ya pagado: anular queda bloqueado (no se resuelve solo qué pasa con
+    // la plata) en vez de dejar el Pago huérfano en silencio.
+    const anular = await app.inject({
+      method: 'POST',
+      url: `/api/pedidos/${pedido.id}/anular`,
+      headers: auth(f.usuarios.cajero.token),
+    });
+    expect(anular.statusCode).toBe(409);
+    expect(anular.json().codigo).toBe('PEDIDO_NO_MODIFICABLE');
+
+    // Cocina termina: Marcar Listo cierra directo a ENTREGADO, sin un
+    // tercer paso de cobro (ya no queda nada pendiente).
+    const listo = await app.inject({
+      method: 'POST',
+      url: `/api/pedidos/${pedido.id}/marcar-listo`,
+      headers: auth(f.usuarios.cajero.token),
+    });
+    expect(listo.statusCode).toBe(200);
+    expect(listo.json().estado).toBe('ENTREGADO');
+    expect(await prisma.pago.count({ where: { pedidoId: pedido.id } })).toBe(1); // no duplicó el pago
   });
 });
 

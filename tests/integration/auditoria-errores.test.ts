@@ -244,6 +244,13 @@ describe('A2.4 — Transiciones de estado imposibles atacadas desde la API', () 
       method: 'POST', url: `/api/pedidos/${pedido.id}/cobrar`, headers: auth(f.usuarios.cajero.token),
       payload: { pagos: [{ medio: 'MERCADO_PAGO', monto: 2500 }] },
     });
+    // Cobrar desde EN_PREPARACION ya no cierra el pedido (§6, cobro
+    // temprano) — se queda pagado esperando a cocina. Marcar Listo ahí lo
+    // cierra directo a ENTREGADO (ya no queda nada pendiente), que es lo
+    // que este test necesita para probar que un ENTREGADO no se anula.
+    await app.inject({
+      method: 'POST', url: `/api/pedidos/${pedido.id}/marcar-listo`, headers: auth(f.usuarios.cajero.token),
+    });
     const r = await probar('POST /pedidos/:id/anular — sobre ENTREGADO', {
       method: 'POST', url: `/api/pedidos/${pedido.id}/anular`, headers: auth(f.usuarios.cajero.token),
     });

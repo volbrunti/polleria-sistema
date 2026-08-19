@@ -611,12 +611,21 @@ export async function cobrarPedido(params: {
     // la señal de "ya cobrado", no hace falta un campo aparte. Cobrar desde
     // LISTO sigue cerrando de una — ahí no queda nada más pendiente.
     const cierraAhora = pedido.estado === 'LISTO';
-    await transicionarAtomico(
-      tx,
-      pedido.id,
-      pedido.estado,
-      cierraAhora ? { estado: 'ENTREGADO', fechaCierre: new Date() } : {},
-    );
+    if (cierraAhora) {
+      await transicionarAtomico(tx, pedido.id, pedido.estado, { estado: 'ENTREGADO', fechaCierre: new Date() });
+    } else {
+      // Acá el guard de transicionarAtomico no sirve: el estado NO cambia
+      // (sigue EN_PREPARACION), así que dos cobros concurrentes verían el
+      // mismo WHERE {estado: desde} matcheado los dos y duplicarían el pago
+      // — es exactamente lo que reveló el test de carreras. El guard real es
+      // "todavía no tiene ningún Pago": la segunda llamada, tras esperar el
+      // row lock de la primera, encuentra el Pago ya creado y no matchea.
+      const r = await tx.pedido.updateMany({
+        where: { id: pedido.id, estado: pedido.estado, pagos: { none: {} } },
+        data: { estado: pedido.estado }, // mismo valor: solo hace falta un SET real (ver nota de arriba)
+      });
+      if (r.count === 0) throw Errores.estadoPedidoInvalido(pedido.estado, pedido.estado);
+    }
     const cobrado = await tx.pedido.update({
       where: { id: pedido.id },
       data: { pagos: { create: pagosAPersistir } },
@@ -880,6 +889,13 @@ export async function anularPedido(params: { pedidoId: number; usuarioId: number
   if (!transicionValida(pedido.estado, 'ANULADO')) {
     throw Errores.estadoPedidoInvalido(pedido.estado, 'ANULADO');
   }
+  // Cobro temprano (§6): un PRESENCIAL puede quedar EN_PREPARACION/LISTO con
+  // Pago ya adjuntos, esperando a cocina. Anularlo dejaría ese Pago
+  // huérfano — qué hacer con la plata en ese caso es una decisión de
+  // negocio todavía sin resolver (ver plan), así que por ahora se bloquea
+  // en vez de decidir en silencio. Mismo criterio que ya usa
+  // modificarPedido para la misma situación.
+  if (pedido.pagos.length > 0) throw Errores.pedidoNoModificable('con pagos registrados');
 
   const anulado = await prisma.$transaction(async (tx) => {
     // El guard va PRIMERO: dos anulaciones en paralelo repondrían el stock
