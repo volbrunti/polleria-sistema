@@ -220,7 +220,7 @@ export function ShellAdmin() {
           {esAdmin && <Route path="alertas" element={<Alertas />} />}
           <Route path="reportes" element={<Reportes />} />
           <Route path="turnos" element={<Turnos puedeEscribir={puedeEscribir} />} />
-          <Route path="stock" element={<Stock />} />
+          <Route path="stock" element={<Stock puedeEscribir={puedeEscribir} />} />
           <Route path="stock-minimo" element={<StockMinimo puedeEscribir={puedeEscribir} />} />
           <Route path="produccion" element={<ProduccionLotes />} />
           <Route path="transferencias" element={<Transferencias puedeEscribir={esAdmin} />} />

@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
-import { prisma, type TxClient } from '../../lib/prisma';
+import { prisma, OPCIONES_TX, type TxClient } from '../../lib/prisma';
 import { Errores } from '../../lib/errores';
+import { registrarAuditoria } from '../../lib/auditoria';
 
 // Fuente de verdad: SUM(MovimientoStock.cantidad) por producto+sucursal (CLAUDE.md §9)
 export async function obtenerStock(
@@ -102,6 +103,67 @@ export async function consultarStockSucursal(sucursalId: number) {
       };
     })
     .sort((a, b) => a.nombre.localeCompare(b.nombre));
+}
+
+// Corrección manual de stock (admin panel — pedido tras la prueba en vivo).
+// El stock nunca es un campo editable: es SUM(MovimientoStock), así que
+// "editar" es insertar UN movimiento tipo AJUSTE con el delta necesario para
+// que el SUM llegue a cantidadNueva. Con eso alcanza para que quede
+// reflejado en todas las pantallas — no hay nada más que "propagar".
+export async function crearAjuste(params: {
+  productoId: number;
+  sucursalId: number;
+  cantidadNueva: Prisma.Decimal | number;
+  motivo: string;
+  usuarioId: number;
+}) {
+  return prisma.$transaction(async (tx) => {
+    await bloquearStock(tx, [{ productoId: params.productoId, sucursalId: params.sucursalId }]);
+    const producto = await tx.producto.findUnique({ where: { id: params.productoId } });
+    if (!producto) throw Errores.noEncontrado('Producto');
+
+    const stockAnterior = await obtenerStock(params.productoId, params.sucursalId, tx);
+    const cantidadNueva = new Prisma.Decimal(params.cantidadNueva);
+    const delta = cantidadNueva.minus(stockAnterior);
+    if (delta.isZero()) throw Errores.validacion('La cantidad nueva es igual a la actual — no hay nada para ajustar');
+
+    // Sin documento de origen real (no es un ingreso, lote ni transferencia)
+    // — mismo patrón que VentaCostoCero: la referencia polimórfica apunta al
+    // propio movimiento, así que se crea con un placeholder y se actualiza.
+    const movimiento = await tx.movimientoStock.create({
+      data: {
+        productoId: params.productoId,
+        sucursalId: params.sucursalId,
+        tipo: 'AJUSTE',
+        cantidad: delta,
+        usuarioId: params.usuarioId,
+        tipoOrigen: 'AjusteManual',
+        origenId: 0,
+      },
+    });
+    await tx.movimientoStock.update({ where: { id: movimiento.id }, data: { origenId: movimiento.id } });
+
+    await registrarAuditoria(tx, {
+      accion: 'AJUSTE_STOCK_MANUAL',
+      entidad: 'MovimientoStock',
+      entidadId: movimiento.id,
+      usuarioId: params.usuarioId,
+      datosAnteriores: {
+        producto: producto.nombre,
+        sucursalId: params.sucursalId,
+        stockAnterior: stockAnterior.toString(),
+      },
+      datosNuevos: {
+        producto: producto.nombre,
+        sucursalId: params.sucursalId,
+        stockNuevo: cantidadNueva.toString(),
+        delta: delta.toString(),
+        motivo: params.motivo,
+      },
+    });
+
+    return { productoId: params.productoId, sucursalId: params.sucursalId, stockAnterior: stockAnterior.toString(), stockNuevo: cantidadNueva.toString() };
+  }, OPCIONES_TX);
 }
 
 export async function consultarMovimientos(filtros: {

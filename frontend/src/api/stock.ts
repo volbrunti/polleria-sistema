@@ -5,6 +5,13 @@ export function consultarStock(sucursalId: number) {
   return apiFetch<StockRow[]>(`/api/stock?sucursalId=${sucursalId}`);
 }
 
+export function crearAjuste(datos: { productoId: number; sucursalId: number; cantidadNueva: number; motivo: string }) {
+  return apiFetch<{ productoId: number; sucursalId: number; stockAnterior: string; stockNuevo: string }>(
+    '/api/stock/ajuste',
+    { method: 'POST', body: datos },
+  );
+}
+
 export function consultarMovimientos(filtros?: {
   productoId?: number;
   sucursalId?: number;
