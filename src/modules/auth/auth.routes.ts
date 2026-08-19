@@ -10,15 +10,22 @@ const loginSchema = z.object({
 
 const COOKIE_REFRESH = 'refresh_token';
 
-// En producción, frontend (Vercel) y backend (Railway) quedan en dominios
-// distintos: sameSite:'none' es obligatorio para que el navegador mande la
-// cookie en esas requests cross-site, y solo es válido junto con secure:true
-// (ya atado a esProduccion). En desarrollo el proxy de Vite hace todo
-// same-origin, así que 'lax' alcanza y evita depender de HTTPS local.
+// Frontend y backend viven en subdominios del MISMO dominio propio
+// (tudominio.com / api.tudominio.com) — eso es same-site para el navegador,
+// así que 'lax' alcanza y viaja sin depender de que el navegador acepte
+// cookies de terceros (Safari las bloquea por defecto con 'none').
+//
+// ⚠️ Si el backend y el frontend llegan a quedar en dominios NO relacionados
+// (ej: *.up.railway.app y *.workers.dev, como en la prueba en la nube previa
+// al dominio propio — ver DEPLOY.md), hay que volver a 'none' + secure:true,
+// que es lo único que el navegador acepta para cross-site. 'lax' entre
+// dominios no relacionados hace que el navegador directamente NO mande la
+// cookie de refresh, y el login se rompe en silencio (funciona, pero cada
+// refresh de sesión falla).
 const opcionesCookie = {
   httpOnly: true,
   secure: config.esProduccion,
-  sameSite: config.esProduccion ? ('none' as const) : ('lax' as const),
+  sameSite: 'lax' as const,
   path: '/api/auth',
   maxAge: config.jwtRefreshExpiresDias * 24 * 60 * 60,
 };

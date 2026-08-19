@@ -143,13 +143,54 @@ En este orden:
 
 ---
 
+## 5. Dominio propio (recomendado, resuelve el problema de las cookies)
+
+Con el backend en `*.up.railway.app` y el frontend en `*.workers.dev` son sitios
+distintos, así que la cookie de refresh viaja como *third-party*: Chrome la deja pasar,
+pero **Safari la bloquea por defecto** — en un iPad la sesión se corta cada 15 minutos,
+cuando vence el access token. Poner los dos bajo subdominios del mismo dominio propio
+resuelve esto de raíz: dejan de ser sitios distintos para el navegador.
+
+**Reparto**: `tudominio.com` → frontend, `api.tudominio.com` → backend,
+`fotos.tudominio.com` → bucket público de R2.
+
+1. **Cloudflare** → *Add a domain* → plan Free. Te da dos nameservers.
+2. **En el registrador** (Hostinger u otro) → reemplazar los nameservers actuales por
+   los dos de Cloudflare. Tarda entre 1 y 24 h en propagar; Cloudflare avisa por mail
+   cuando el dominio pasa a **Active**.
+3. **Frontend**: Cloudflare → Workers → tu app → *Settings → Domains & Routes* → *Add
+   Custom Domain* → `tudominio.com`. Certificado y registro DNS se crean solos.
+4. **Backend**: Railway → *Settings → Networking* → *Custom Domain* → `api.tudominio.com`.
+   Railway da un destino CNAME; en Cloudflare DNS creá ese CNAME con **Proxy status: DNS
+   only** (nube gris). *Ojo*: con el proxy naranja activado y SSL en modo "Flexible" se
+   arma un bucle de redirecciones — es el error más común de esta combinación. Si más
+   adelante querés el proxy, primero poné SSL/TLS en *Full (strict)*.
+5. **R2**: bucket → *Settings → Public access* → *Connect custom domain* →
+   `fotos.tudominio.com`. **No desactivar el acceso `r2.dev`**: las fotos ya subidas
+   guardan la URL completa en la base (`IngresoMercaderia.fotoRemitoUrl`), así que siguen
+   apuntando ahí para siempre — apagarlo rompe los remitos viejos.
+6. **Variables**: `ORIGENES_PERMITIDOS=https://tudominio.com` y
+   `R2_URL_PUBLICA=https://fotos.tudominio.com` en Railway; `VITE_API_URL=https://api.tudominio.com`
+   en Cloudflare Workers (variable de build). Redeploy de los dos — el frontend necesita
+   rebuild sí o sí, porque las `VITE_*` quedan incrustadas en el bundle al compilar.
+
+**Cambio de código que va junto con esto**: `sameSite` de la cookie de refresh pasa de
+`'none'` a `'lax'` (`src/modules/auth/auth.routes.ts`) — es más seguro (protege contra
+CSRF) y ya no depende de que el navegador acepte cookies de terceros. **Solo funciona una
+vez que frontend y backend están bajo el mismo dominio propio.** Si se despliega este
+cambio mientras todavía está en `*.up.railway.app` / `*.workers.dev`, el navegador
+directamente no manda la cookie entre esos dos sitios y el refresh de sesión falla en
+silencio (el login funciona, pero la sesión no sobrevive a un recargo de página). No
+mergear/deployar este cambio hasta que el dominio esté en Active y las variables del
+paso 6 ya estén cargadas.
+
+---
+
 ## Lo que hay que tener en cuenta
 
-**Las cookies entre dominios distintos son el riesgo principal.** Con el backend en `*.up.railway.app` y el frontend en `*.pages.dev` son sitios distintos, así que la cookie de refresh viaja como *third-party*. Chrome hoy la deja pasar, pero **Safari la bloquea por defecto** — y si el cliente prueba desde un iPad, la sesión se va a cortar cada 15 minutos, cuando vence el access token.
-
-La solución de fondo es poner los dos bajo el mismo dominio (`api.midominio.com` y `app.midominio.com`), y ahí la cookie deja de ser de terceros. Para la prueba, avisá de probar en Chrome/Android.
-
-**El plan gratis de Railway duerme el servicio.** Si el backend se suspende por inactividad, la primera request después tarda. Para una prueba está bien; para una caja abierta 12 horas, no.
+**El plan gratis de Railway duerme el servicio.** Si el backend se suspende por
+inactividad, la primera request después tarda. Para una prueba está bien; para una caja
+abierta 12 horas, no.
 
 ---
 
