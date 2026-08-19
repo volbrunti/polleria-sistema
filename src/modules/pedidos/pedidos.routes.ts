@@ -43,6 +43,9 @@ const cobrarSchema = z.object({
     // Vacío es válido SOLO si el pedido no tiene nada que cobrar (retiro de
     // socio): el servicio lo valida contra el total real.
     .default([]),
+  // Descuento de empleado/encargado elegido al cobrar (post-prueba en vivo),
+  // uno solo por cobro — se resta del total ANTES de calcular falta/vuelto.
+  descuentoPct: z.number().min(0).max(100).optional(),
 });
 
 const paramsId = z.object({ id: z.coerce.number().int().positive() });
@@ -83,7 +86,12 @@ export async function pedidosRoutes(app: FastifyInstance) {
   app.post('/:id/cobrar', { preHandler: [...operativos] }, async (req) => {
     const { id } = paramsId.parse(req.params);
     const datos = cobrarSchema.parse(req.body);
-    return pedidosService.cobrarPedido({ pedidoId: id, pagos: datos.pagos, usuarioId: req.usuario.id });
+    return pedidosService.cobrarPedido({
+      pedidoId: id,
+      pagos: datos.pagos,
+      descuentoPct: datos.descuentoPct,
+      usuarioId: req.usuario.id,
+    });
   });
 
   app.post('/:id/marcar-listo', { preHandler: [...operativos] }, async (req) => {

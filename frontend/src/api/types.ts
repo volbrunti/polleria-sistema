@@ -351,6 +351,17 @@ export interface RecargoTarjeta {
   creadoEn: string;
 }
 
+export type TipoBeneficiarioDescuento = 'EMPLEADO' | 'ENCARGADO';
+
+export interface TipoDescuento {
+  id: number;
+  nombre: string;
+  tipo: TipoBeneficiarioDescuento;
+  porcentaje: string;
+  activo: boolean;
+  creadoEn: string;
+}
+
 export interface AvisoStockMinimo {
   productoId: number;
   producto: string;

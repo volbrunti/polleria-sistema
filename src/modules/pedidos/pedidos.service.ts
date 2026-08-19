@@ -536,6 +536,14 @@ export async function cobrarPedido(params: {
    * que el total del pedido siga cerrando (reunión 4/8).
    */
   pagos: { medio: MedioPago; monto: number; recargoPct?: number }[];
+  /**
+   * Descuento de empleado/encargado elegido AL COBRAR (post-prueba en vivo),
+   * uno solo por cobro — no confundir con Pedido.descuentoPct, que es el
+   * descuento de empleado congelado AL CONFIRMAR (Flujo 4 original). Este se
+   * resta del total antes de calcular falta/vuelto; no toca
+   * ItemDePedido.montoTotal, que sigue siendo precio de lista.
+   */
+  descuentoPct?: number;
   usuarioId: number;
 }) {
   const pedido = await prisma.pedido.findUnique({ where: { id: params.pedidoId }, include: INCLUDE_PEDIDO });
@@ -552,10 +560,15 @@ export async function cobrarPedido(params: {
   }
   if (params.pagos.length === 0) throw Errores.pagoInsuficiente();
 
+  const descuentoPct =
+    params.descuentoPct != null && params.descuentoPct > 0 ? new Prisma.Decimal(params.descuentoPct) : null;
+  const totalConDescuento = descuentoPct ? aplicarDescuentoEmpleado(total, descuentoPct) : total;
+  const montoDescuento = total.minus(totalConDescuento);
+
   let cobro: { vuelto: Prisma.Decimal; efectivoNeto: Prisma.Decimal };
   try {
     cobro = calcularCobro({
-      totalPedido: total,
+      totalPedido: totalConDescuento,
       pagos: params.pagos.map((p) => ({ medio: p.medio, monto: new Prisma.Decimal(p.monto) })),
     });
   } catch (e) {
@@ -572,7 +585,7 @@ export async function cobrarPedido(params: {
 
   const actualizado = await prisma.$transaction(async (tx) => {
     const pagosAPersistir = params.pagos
-      .map((p) => {
+      .map((p, idx) => {
         // El vuelto se descuenta del efectivo, así que ese pago se persiste
         // neteado; los electrónicos entran exactos.
         const monto = p.medio === 'EFECTIVO' ? cobro.efectivoNeto : new Prisma.Decimal(p.monto);
@@ -582,6 +595,10 @@ export async function cobrarPedido(params: {
           monto,
           recargoPct: pct,
           montoRecargo: pct ? calcularRecargo(monto, pct) : null,
+          // El descuento no se reparte entre pagos — queda en el primero
+          // (mixto o no, el detalle completo también vive en la auditoría).
+          descuentoPct: idx === 0 ? descuentoPct : null,
+          montoDescuento: idx === 0 && descuentoPct ? montoDescuento : null,
         };
       })
       .filter((p) => p.monto.greaterThan(0));
@@ -613,6 +630,9 @@ export async function cobrarPedido(params: {
       usuarioId: params.usuarioId,
       datosNuevos: {
         total: total.toString(),
+        descuentoPct: descuentoPct?.toString() ?? null,
+        montoDescuento: descuentoPct ? montoDescuento.toString() : null,
+        totalConDescuento: totalConDescuento.toString(),
         pagos: pagosAPersistir.map((p) => ({
           medio: p.medio,
           monto: p.monto.toString(),

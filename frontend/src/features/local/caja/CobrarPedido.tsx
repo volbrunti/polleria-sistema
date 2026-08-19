@@ -3,9 +3,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { TecladoNumerico } from '../../../components/ui/TecladoNumerico';
 import { cobrarPedido } from '../../../api/pedidos';
 import { listarRecargos } from '../../../api/recargos';
+import { listarTiposDescuento } from '../../../api/descuentos';
 import { fmtMoneda } from '../../../lib/formato';
 import { ApiError } from '../../../api/client';
-import type { MedioPago, Pedido, RecargoTarjeta } from '../../../api/types';
+import type { MedioPago, Pedido, RecargoTarjeta, TipoDescuento } from '../../../api/types';
 
 interface Props {
   pedido: Pedido;
@@ -48,6 +49,8 @@ export function CobrarPedido({ pedido, onCobrado, onCancelar }: Props) {
   const [medioEnCarga, setMedioEnCarga] = useState<MedioPago | null>(null);
   const [eligiendoRecargo, setEligiendoRecargo] = useState<MedioPago | null>(null);
   const [recargoElegido, setRecargoElegido] = useState<{ pct: number; nombre?: string }>({ pct: 0 });
+  const [eligiendoDescuento, setEligiendoDescuento] = useState(false);
+  const [descuentoElegido, setDescuentoElegido] = useState<{ pct: number; nombre: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const recargosQ = useQuery({
@@ -56,10 +59,22 @@ export function CobrarPedido({ pedido, onCobrado, onCancelar }: Props) {
     staleTime: 10 * 60 * 1000,
   });
 
-  const total = useMemo(
+  const descuentosQ = useQuery({
+    queryKey: ['tipos-descuento'],
+    queryFn: () => listarTiposDescuento(),
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const totalLista = useMemo(
     () => pedido.items.reduce((acc, i) => acc + Number(i.montoTotal), 0),
     [pedido.items],
   );
+  // Mismo redondeo que el backend (aplicarDescuentoEmpleado: floor a pesos
+  // enteros) — acá es solo la previsualización, la autoridad es el POST.
+  const total = descuentoElegido
+    ? Math.floor((totalLista * (100 - descuentoElegido.pct)) / 100)
+    : totalLista;
+  const montoDescuento = totalLista - total;
   const pagado = pagos.reduce((acc, p) => acc + p.monto, 0);
   const falta = Math.max(0, total - pagado);
   const efectivoRecibido = pagos.filter((p) => p.medio === 'EFECTIVO').reduce((a, p) => a + p.monto, 0);
@@ -77,6 +92,7 @@ export function CobrarPedido({ pedido, onCobrado, onCancelar }: Props) {
           monto: p.monto,
           ...(p.recargoPct > 0 ? { recargoPct: p.recargoPct } : {}),
         })),
+        descuentoElegido && descuentoElegido.pct > 0 ? descuentoElegido.pct : undefined,
       ),
     onSuccess: (r) => {
       void queryClient.invalidateQueries({ queryKey: ['pedidos'] });
@@ -99,7 +115,12 @@ export function CobrarPedido({ pedido, onCobrado, onCancelar }: Props) {
       <div className="flex max-h-[92vh] w-full flex-col gap-3.5 overflow-auto rounded-t-3xl bg-white p-5 sm:max-w-lg sm:rounded-3xl">
         <div className="flex items-baseline justify-between">
           <div className="text-xl font-extrabold">Cobrar pedido #{pedido.id}</div>
-          <div className="text-2xl font-extrabold text-primario">{fmtMoneda(total)}</div>
+          <div className="text-right">
+            {descuentoElegido && (
+              <div className="text-sm font-semibold text-texto-suave line-through">{fmtMoneda(totalLista)}</div>
+            )}
+            <div className="text-2xl font-extrabold text-primario">{fmtMoneda(total)}</div>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -113,6 +134,20 @@ export function CobrarPedido({ pedido, onCobrado, onCancelar }: Props) {
               + {m.etiqueta}
             </button>
           ))}
+          {/* Descuento de empleado/encargado (pedido post-prueba en vivo) —
+              mismo lugar y mismo patrón que el recargo de tarjeta, pero
+              restando en vez de sumando. */}
+          <button
+            type="button"
+            onClick={() => setEligiendoDescuento(true)}
+            className={`min-h-[52px] cursor-pointer rounded-xl border-2 px-4 text-base font-bold ${
+              descuentoElegido
+                ? 'border-primario bg-primario-suave text-primario'
+                : 'border-borde-fuerte bg-white text-texto hover:border-primario hover:text-primario'
+            }`}
+          >
+            {descuentoElegido ? `− ${descuentoElegido.nombre} (${descuentoElegido.pct}%)` : '− Descuento'}
+          </button>
         </div>
 
         {pagos.length > 0 && (
@@ -149,6 +184,12 @@ export function CobrarPedido({ pedido, onCobrado, onCancelar }: Props) {
         )}
 
         <div className="flex flex-col gap-1 rounded-xl bg-chip px-4 py-3 text-base font-semibold">
+          {descuentoElegido && (
+            <div className="flex justify-between border-b border-borde pb-2 text-primario">
+              <span>Descuento aplicado</span>
+              <span className="font-extrabold">− {fmtMoneda(montoDescuento)}</span>
+            </div>
+          )}
           {falta > 0 ? (
             <div className="flex justify-between">
               <span>Falta</span>
@@ -210,6 +251,22 @@ export function CobrarPedido({ pedido, onCobrado, onCancelar }: Props) {
               setRecargoElegido({ pct, nombre });
               setMedioEnCarga(eligiendoRecargo);
               setEligiendoRecargo(null);
+            }}
+          />
+        )}
+
+        {eligiendoDescuento && (
+          <SelectorDescuento
+            opciones={descuentosQ.data ?? []}
+            cargando={descuentosQ.isLoading}
+            onCancelar={() => setEligiendoDescuento(false)}
+            onQuitar={() => {
+              setDescuentoElegido(null);
+              setEligiendoDescuento(false);
+            }}
+            onElegir={(pct, nombre) => {
+              setDescuentoElegido({ pct, nombre });
+              setEligiendoDescuento(false);
             }}
           />
         )}
@@ -292,6 +349,76 @@ function SelectorRecargo({
           >
             <span className="text-base font-bold">{r.nombre}</span>
             <span className="text-xl font-extrabold text-advertencia-texto">+{Number(r.porcentaje)}%</span>
+          </button>
+        ))}
+
+        <button
+          type="button"
+          onClick={onCancelar}
+          className="mt-1 min-h-[52px] w-full cursor-pointer rounded-2xl border-2 border-borde-fuerte bg-white text-base font-bold text-texto-suave"
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const ETIQUETA_TIPO_DESCUENTO: Record<TipoDescuento['tipo'], string> = {
+  EMPLEADO: 'Empleado',
+  ENCARGADO: 'Encargado',
+};
+
+// Lista de descuentos que cargó el admin, mismo patrón que SelectorRecargo
+// pero restando en vez de sumando. "SIN DESCUENTO" siempre visible arriba, y
+// "QUITAR" solo aparece si ya había uno elegido.
+function SelectorDescuento({
+  opciones,
+  cargando,
+  onElegir,
+  onQuitar,
+  onCancelar,
+}: {
+  opciones: TipoDescuento[];
+  cargando: boolean;
+  onElegir: (pct: number, nombre: string) => void;
+  onQuitar: () => void;
+  onCancelar: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/50 sm:items-center sm:p-6">
+      <div className="flex max-h-[85vh] w-full flex-col gap-2.5 overflow-auto rounded-t-3xl bg-white p-5 sm:max-w-md sm:rounded-3xl">
+        <div className="text-xl font-extrabold">¿Qué descuento corresponde?</div>
+
+        <button
+          type="button"
+          onClick={onQuitar}
+          className="min-h-[52px] w-full cursor-pointer rounded-2xl border-2 border-borde-fuerte bg-white text-base font-bold text-texto-suave"
+        >
+          SIN DESCUENTO
+        </button>
+
+        {cargando && <div className="py-3 text-center text-texto-suave">Cargando…</div>}
+        {!cargando && opciones.length === 0 && (
+          <div className="rounded-xl bg-chip px-4 py-3 text-[15px] text-texto-suave">
+            El administrador todavía no cargó tipos de descuento.
+          </div>
+        )}
+
+        {opciones.map((d) => (
+          <button
+            key={d.id}
+            type="button"
+            onClick={() => onElegir(Number(d.porcentaje), d.nombre)}
+            className="flex min-h-[60px] w-full cursor-pointer items-center justify-between rounded-2xl border-2 border-borde-fuerte bg-white px-4 text-left hover:border-primario"
+          >
+            <span className="text-base font-bold">
+              {d.nombre}
+              <span className="ml-2 text-[13px] font-semibold text-texto-suave">
+                {ETIQUETA_TIPO_DESCUENTO[d.tipo]}
+              </span>
+            </span>
+            <span className="text-xl font-extrabold text-primario">−{Number(d.porcentaje)}%</span>
           </button>
         ))}
 

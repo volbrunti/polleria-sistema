@@ -53,8 +53,13 @@ export function cobrarPedido(
   pedidoId: number,
   /** `monto` cubre el pedido; `recargoPct` es el extra de tarjeta (DEBITO/CREDITO). */
   pagos: { medio: MedioPago; monto: number; recargoPct?: number }[],
+  /** Descuento de empleado/encargado elegido al cobrar, uno solo por cobro. */
+  descuentoPct?: number,
 ) {
-  return apiFetch<CobroResultado>(`/api/pedidos/${pedidoId}/cobrar`, { method: 'POST', body: { pagos } });
+  return apiFetch<CobroResultado>(`/api/pedidos/${pedidoId}/cobrar`, {
+    method: 'POST',
+    body: { pagos, ...(descuentoPct ? { descuentoPct } : {}) },
+  });
 }
 
 export function marcarListo(pedidoId: number) {

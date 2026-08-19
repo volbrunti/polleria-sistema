@@ -18,6 +18,7 @@ import {
 } from '../../api/proveedores';
 import { listarSucursales } from '../../api/sucursales';
 import { listarRecargos, crearRecargo, actualizarRecargo } from '../../api/recargos';
+import { listarTiposDescuento, crearTipoDescuento, actualizarTipoDescuento } from '../../api/descuentos';
 import {
   listarComanderas,
   crearComandera,
@@ -1472,12 +1473,172 @@ function TabRecargos({ puedeEscribir }: { puedeEscribir: boolean }) {
           </div>
         ))}
       </div>
+
+      <TiposDescuento puedeEscribir={puedeEscribir} />
     </div>
   );
 }
 
-// Descuento a empleados (reunión 4/8): un solo porcentaje global. Se congela
-// en cada pedido al confirmarlo, así que cambiarlo no toca lo ya vendido.
+// Tipos de descuento de empleado/encargado (post-prueba en vivo): la lista
+// que el cajero ve desplegada al COBRAR, junto a los medios de pago — mismo
+// patrón que los recargos de tarjeta de arriba, pero restando. Se desactivan
+// en vez de borrarse, mismo motivo que los recargos.
+function TiposDescuento({ puedeEscribir }: { puedeEscribir: boolean }) {
+  const queryClient = useQueryClient();
+  const descuentos = useQuery({ queryKey: ['tipos-descuento', 'todos'], queryFn: () => listarTiposDescuento() });
+
+  const [abierto, setAbierto] = useState(false);
+  const [nombre, setNombre] = useState('');
+  const [tipo, setTipo] = useState<'EMPLEADO' | 'ENCARGADO'>('EMPLEADO');
+  const [porcentaje, setPorcentaje] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const invalidar = () => {
+    void queryClient.invalidateQueries({ queryKey: ['tipos-descuento'] });
+  };
+
+  const mutCrear = useMutation({
+    mutationFn: crearTipoDescuento,
+    onSuccess: () => {
+      invalidar();
+      setAbierto(false);
+      setNombre('');
+      setPorcentaje('');
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : 'No se pudo crear el descuento.'),
+  });
+
+  const mutActivo = useMutation({
+    mutationFn: (vars: { id: number; activo: boolean }) => actualizarTipoDescuento(vars.id, { activo: vars.activo }),
+    onSuccess: invalidar,
+    onError: (err) => setError(err instanceof ApiError ? err.message : 'No se pudo actualizar.'),
+  });
+
+  const pctValido = Number(porcentaje) > 0 && Number(porcentaje) <= 100;
+
+  return (
+    <div className="flex flex-col gap-3.5">
+      <div className="mt-1 text-base font-extrabold">Descuentos de empleado / encargado</div>
+      <div className="w-fit rounded-xl bg-[#fff7d9] px-3.5 py-3 text-sm font-semibold text-advertencia-texto">
+        El cajero los elige al COBRAR, junto a los medios de pago — no cambia el precio de lista
+        de cada línea, solo lo que efectivamente se cobra.
+      </div>
+
+      {puedeEscribir && !abierto && (
+        <button
+          type="button"
+          onClick={() => {
+            setAbierto(true);
+            setError(null);
+          }}
+          className="w-fit min-h-12 cursor-pointer rounded-xl bg-primario px-5 text-[15px] font-extrabold text-white hover:bg-primario-hover"
+        >
+          ＋ NUEVO DESCUENTO
+        </button>
+      )}
+
+      {abierto && (
+        <div className="flex flex-col gap-3 rounded-2xl border-2 border-primario bg-white p-4.5">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3">
+            <input
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              placeholder="Nombre (ej: Empleado turno noche)"
+              className="h-11.5 rounded-[10px] border border-borde-fuerte px-3 text-sm"
+            />
+            <select
+              value={tipo}
+              onChange={(e) => setTipo(e.target.value as 'EMPLEADO' | 'ENCARGADO')}
+              className="h-11.5 rounded-[10px] border border-borde-fuerte bg-white px-2.5 text-sm"
+            >
+              <option value="EMPLEADO">Empleado</option>
+              <option value="ENCARGADO">Encargado</option>
+            </select>
+            <input
+              value={porcentaje}
+              onChange={(e) => setPorcentaje(e.target.value)}
+              type="number"
+              min={0}
+              max={100}
+              step="0.01"
+              placeholder="% de descuento"
+              className="h-11.5 rounded-[10px] border border-borde-fuerte px-3 text-sm"
+            />
+          </div>
+          {error && (
+            <div className="rounded-xl bg-error-suave px-3.5 py-2.5 text-sm font-semibold text-error-texto">
+              {error}
+            </div>
+          )}
+          <div className="flex gap-2.5">
+            <button
+              type="button"
+              onClick={() => setAbierto(false)}
+              className="min-h-11.5 cursor-pointer rounded-xl border-2 border-borde-fuerte bg-white px-4 text-sm font-bold text-texto-suave"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={!nombre.trim() || !pctValido || mutCrear.isPending}
+              onClick={() => {
+                setError(null);
+                mutCrear.mutate({ nombre: nombre.trim(), tipo, porcentaje: Number(porcentaje) });
+              }}
+              className="min-h-11.5 cursor-pointer rounded-xl bg-primario px-5 text-sm font-extrabold text-white disabled:opacity-50"
+            >
+              GUARDAR
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="overflow-x-auto rounded-2xl border border-borde bg-white">
+        <div className="grid grid-cols-[1fr_140px_120px_120px_130px] bg-chip px-5 py-3 text-xs font-extrabold tracking-wide text-texto-suave">
+          <span>NOMBRE</span>
+          <span>TIPO</span>
+          <span className="text-right">DESCUENTO</span>
+          <span>ESTADO</span>
+          <span />
+        </div>
+        {descuentos.isLoading && <div className="px-5 py-4 text-sm text-texto-suave">Cargando…</div>}
+        {descuentos.data?.length === 0 && (
+          <div className="px-5 py-6 text-center text-sm text-texto-suave">
+            Todavía no hay descuentos cargados — el cajero solo va a poder cobrar sin descuento.
+          </div>
+        )}
+        {descuentos.data?.map((d) => (
+          <div
+            key={d.id}
+            className="grid grid-cols-[1fr_140px_120px_120px_130px] items-center border-t border-[#eef1ea] px-5 py-3.5 text-sm"
+          >
+            <span className={`font-semibold ${d.activo ? '' : 'text-texto-suave line-through'}`}>{d.nombre}</span>
+            <span className="text-texto-suave">{d.tipo === 'EMPLEADO' ? 'Empleado' : 'Encargado'}</span>
+            <span className="text-right font-extrabold">−{Number(d.porcentaje)}%</span>
+            <span className={`text-[13px] font-bold ${d.activo ? 'text-primario' : 'text-texto-suave'}`}>
+              {d.activo ? 'Activo' : 'Inactivo'}
+            </span>
+            {puedeEscribir && (
+              <button
+                type="button"
+                disabled={mutActivo.isPending}
+                onClick={() => mutActivo.mutate({ id: d.id, activo: !d.activo })}
+                className="min-h-9 w-fit cursor-pointer rounded-lg border border-borde-fuerte bg-white px-3.5 text-[13px] font-bold text-primario disabled:opacity-50"
+              >
+                {d.activo ? 'Desactivar' : 'Activar'}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Descuento a empleados (reunión 4/8): un solo porcentaje global, aplicado
+// AL CONFIRMAR cuando el cajero marca el pedido como "Empleado" (carrito).
+// Mecanismo previo, sigue activo en paralelo al nuevo de arriba (que se
+// elige AL COBRAR) — no se tocó para no romper lo que ya funcionaba.
 function DescuentoEmpleado({ puedeEscribir }: { puedeEscribir: boolean }) {
   const queryClient = useQueryClient();
   const config = useQuery({ queryKey: ['configuracion'], queryFn: listarConfiguracion });

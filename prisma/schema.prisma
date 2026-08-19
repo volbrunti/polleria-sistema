@@ -791,6 +791,13 @@ model Pago {
   /// CREDITO. El cliente terminó pagando monto + montoRecargo.
   recargoPct   Decimal? @db.Decimal(5, 2)
   montoRecargo Decimal? @db.Decimal(12, 2)
+  /// Descuento de empleado/encargado elegido al cobrar (post-prueba en
+  /// vivo) — mismo patrón que el recargo mirado al revés. Se aplica sobre
+  /// el TOTAL del pedido antes de calcular falta/vuelto; `monto` de este
+  /// Pago ya viene neto del descuento. Se guarda en el primer Pago del
+  /// cobro (si hay varios medios, no se reparte entre todos).
+  descuentoPct   Decimal? @db.Decimal(5, 2)
+  montoDescuento Decimal? @db.Decimal(12, 2)
   fechaHora DateTime  @default(now())
 
   // El cierre de turno suma los pagos EFECTIVO del turno: sin índice, seq scan
@@ -813,6 +820,32 @@ model RecargoTarjeta {
 
   @@unique([medio, nombre])
   @@map("recargos_tarjeta")
+}
+
+// A quién le corresponde el % de descuento (pedido post-prueba en vivo,
+// reunión post-prueba 2026-08). SOCIO no está acá a propósito: el retiro de
+// socio sigue siendo costo cero decidido al confirmar, estructuralmente
+// distinto — no genera Pago ni pasa por este descuento.
+enum TipoBeneficiarioDescuento {
+  EMPLEADO
+  ENCARGADO
+}
+
+/// Mismo patrón que RecargoTarjeta pero restando en vez de sumando: el admin
+/// carga tipos con nombre y % (ej. "Empleado turno noche 20%") y el cajero
+/// los elige de una lista al cobrar, al lado de los medios de pago —
+/// reemplaza el único DESCUENTO_EMPLEADO_PCT global de ConfiguracionGeneral.
+/// No es dato ciego: el cliente ve el descuento en el ticket.
+model TipoDescuento {
+  id         Int                       @id @default(autoincrement())
+  nombre     String
+  tipo       TipoBeneficiarioDescuento
+  porcentaje Decimal                   @db.Decimal(5, 2)
+  activo     Boolean                   @default(true)
+  creadoEn   DateTime                  @default(now())
+
+  @@unique([tipo, nombre])
+  @@map("tipos_descuento")
 }
 
 // Regalías / productos sin cargo. Descuenta stock igual que una venta
