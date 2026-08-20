@@ -62,13 +62,22 @@ export function TecladoNumerico({
     } else if (tecla === ',') {
       if (permiteDecimal && !valor.includes(',')) setValor((v) => (v || '0') + ',');
     } else if (valor.replace(',', '').length < 6) {
-      setValor((v) => v + tecla);
+      // Si queda un "0" solo (típico tras un error de validación sin
+      // limpiar el campo), el próximo dígito lo reemplaza en vez de
+      // concatenarse — si no, "0" + "2" + "0" queda "020" en vez de "20"
+      // (hallazgo de la revisión del 19/8, rol Producción).
+      setValor((v) => (v === '0' ? tecla : v + tecla));
     }
   }
 
   function confirmar() {
-    const n = parseFloat(valor.replace(',', '.'));
-    if (!valor || Number.isNaN(n)) return setError('Cargá un número.');
+    // Con permiteCero, el visor ya muestra "0" de entrada ({valor || '0'})
+    // aunque el operario no haya tocado ninguna tecla — pedirle que además
+    // escriba el "0" para poder confirmar es una trampa (hallazgo de la
+    // revisión del 19/8, típico en "desperdicio: puede ser 0").
+    const crudo = valor === '' && permiteCero ? '0' : valor;
+    const n = parseFloat(crudo.replace(',', '.'));
+    if (!crudo || Number.isNaN(n)) return setError('Cargá un número.');
     if (n <= 0 && !permiteCero) return setError('Tiene que ser mayor que 0.');
     if (n < 0) return setError('Tiene que ser 0 o más.');
     if (maximo != null && n > maximo) return setError(mensajeMaximo ?? `No puede superar ${fmtNumero(maximo)}.`);

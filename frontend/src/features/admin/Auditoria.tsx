@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { listarAuditoria } from '../../api/auditoria';
 import { listarUsuarios } from '../../api/usuarios';
 import { listarProductos } from '../../api/productos';
+import { listarSucursales } from '../../api/sucursales';
 import { useAuth } from '../../auth/AuthContext';
 import { fmtFechaHora, fmtNumero } from '../../lib/formato';
 import { ErrorDeCarga } from '../../components/ui/ErrorDeCarga';
@@ -10,6 +11,7 @@ import { ErrorDeCarga } from '../../components/ui/ErrorDeCarga';
 interface Resolvers {
   productos: Map<number, string>;
   usuarios: Map<number, string>;
+  sucursales: Map<number, string>;
 }
 
 // Traduce el código de acción (tal como lo graba registrarAuditoria en cada
@@ -88,6 +90,10 @@ function resolverId(clave: string, valor: number, resolvers: Resolvers): string 
     const nombre = resolvers.usuarios.get(valor);
     if (nombre) return `${nombre} (#${valor})`;
   }
+  if (c.includes('sucursal') && c.endsWith('id')) {
+    const nombre = resolvers.sucursales.get(valor);
+    if (nombre) return `${nombre} (#${valor})`;
+  }
   return null;
 }
 
@@ -163,9 +169,11 @@ export function Auditoria() {
   // del detalle quedan sin resolver (fallback al número), pero el nombre del
   // usuario que hizo la acción ya viene embebido en cada registro igual.
   const productos = useQuery({ queryKey: ['productos', 'todos'], queryFn: () => listarProductos() });
+  const sucursales = useQuery({ queryKey: ['sucursales'], queryFn: listarSucursales });
   const resolvers: Resolvers = {
     productos: new Map((productos.data ?? []).map((p) => [p.id, p.nombre])),
     usuarios: new Map((usuarios.data ?? []).map((u) => [u.id, u.nombre])),
+    sucursales: new Map((sucursales.data ?? []).map((s) => [s.id, s.nombre])),
   };
   const [expandido, setExpandido] = useState<number | null>(null);
 

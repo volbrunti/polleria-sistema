@@ -310,7 +310,7 @@ export function AsistenteProducir({ onVolver, onLoteAbierto }: Props) {
 
           {insumosPendientes.length > 0 && (
             <>
-              <div className="mt-1.5 text-sm font-bold text-texto-suave">Pide la receta (todavía sin cargar)</div>
+              <div className="mt-1.5 text-sm font-bold text-texto-suave">Faltan estos insumos de la receta — tocá para cargarlos</div>
               {insumosPendientes.map((ie) => (
                 <button
                   key={ie.productoInsumoId}

@@ -279,7 +279,29 @@ export function FichasTecnicas({ puedeEscribir }: Props) {
               {puedeEscribir && activa && (
                 <button
                   type="button"
-                  onClick={() => setFormularioAbierto({ modo: 'version', fichaId: f.id, productoNombre: f.productoElaborado?.nombre ?? '' })}
+                  onClick={() => {
+                    // Precarga la versión activa entera (rendimiento, % de
+                    // desperdicio, umbral y CADA ingrediente) — no arrancar en
+                    // blanco. Un formulario vacío invita a completar solo lo
+                    // que se quiere cambiar y dejar afuera insumos sin darse
+                    // cuenta, perdiéndolos de la receta vigente sin aviso
+                    // (pasó de verdad en la revisión del 19/8: una versión
+                    // nueva de "Milanesa de nalga" quedó con un solo
+                    // ingrediente de cuatro).
+                    const indicePrincipal = Math.max(0, activa.ingredientes.findIndex((i) => i.esPrincipal));
+                    setForm({
+                      rendimiento: String(activa.rendimientoEsperado),
+                      desperdicio: String(activa.desperdicioEsperadoPct),
+                      umbral: String(activa.umbralDesvioAlertaPct),
+                      productoElaboradoId: f.productoElaboradoId,
+                      ingredientes: activa.ingredientes.map((i) => ({
+                        productoInsumoId: i.productoInsumoId,
+                        cantidad: String(i.cantidadPorUnidadProducida),
+                      })),
+                      principal: indicePrincipal,
+                    });
+                    setFormularioAbierto({ modo: 'version', fichaId: f.id, productoNombre: f.productoElaborado?.nombre ?? '' });
+                  }}
                   className="min-h-10.5 cursor-pointer rounded-[10px] border border-borde-fuerte bg-white px-3.5 text-sm font-bold text-primario"
                 >
                   Nueva versión

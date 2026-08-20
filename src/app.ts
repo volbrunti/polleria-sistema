@@ -41,7 +41,18 @@ export async function buildApp(): Promise<FastifyInstance> {
   // origin sale de config: lista blanca en producción, reflejo libre en dev.
   // Ver config.ts — con credentials:true, reflejar cualquier origen sería
   // dejar que cualquier sitio use la cookie de refresh del usuario.
-  await app.register(cors, { origin: config.origenesPermitidos, credentials: true });
+  //
+  // methods explícito: el default de @fastify/cors es 'GET,HEAD,POST' —a
+  // diferencia del paquete `cors` de Express, del que se suele asumir el
+  // default— así que sin esto el preflight rechaza PATCH/PUT/DELETE. Eso
+  // dejó rotos en producción, en silencio, "Modificar pedido", marcar
+  // alertas como vistas, editar catálogo/usuarios/proveedores/comanderas y
+  // desactivar recargos y descuentos (hallado en la revisión del 19/8).
+  await app.register(cors, {
+    origin: config.origenesPermitidos,
+    credentials: true,
+    methods: ['GET', 'HEAD', 'POST', 'PATCH', 'PUT', 'DELETE'],
+  });
   await app.register(cookie);
   await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
 

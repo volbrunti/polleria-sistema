@@ -8,7 +8,7 @@ import { listarProveedores, productosHabituales } from '../../api/proveedores';
 import { listarProductos } from '../../api/productos';
 import { registrarIngreso, subirFotoRemito, lineasDisponibles } from '../../api/ingresos';
 import { ApiError } from '../../api/client';
-import { fmtFecha, fmtNumero } from '../../lib/formato';
+import { fmtFecha, fmtNumero, fmtUnidad } from '../../lib/formato';
 import type { LineaIngresoDisponible, Producto, Proveedor } from '../../api/types';
 
 interface Props {
@@ -61,22 +61,22 @@ function AvisoSaldoPrevio({ producto, saldo }: { producto: Producto; saldo: Line
 // dato que justifica todo el flujo: Ariel contó que pesando bolsas de papa
 // "de 10 kg" descubrió que el promedio real era 9,750.
 function DetalleLinea({ linea }: { linea: LineaIngresoUI }) {
-  const u = linea.producto.unidadDeMedida.toLowerCase();
+  const u = linea.producto.unidadDeMedida;
   const diferencia = linea.cantidadRealPesada - linea.cantidadSegunRemito;
   const coincide = Math.abs(diferencia) < 0.0005;
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-texto-suave">
       <span>
-        Remito: {fmtNumero(linea.cantidadSegunRemito)} {u}
+        Remito: {fmtNumero(linea.cantidadSegunRemito)} {fmtUnidad(u, linea.cantidadSegunRemito)}
       </span>
       <span aria-hidden>·</span>
       <span>
-        Pesado: {fmtNumero(linea.cantidadRealPesada)} {u}
+        Pesado: {fmtNumero(linea.cantidadRealPesada)} {fmtUnidad(u, linea.cantidadRealPesada)}
       </span>
       {!coincide && (
         <span className="rounded-md bg-advertencia-suave px-2 py-0.5 text-[13px] font-extrabold text-advertencia-texto">
           {diferencia > 0 ? '+' : '−'}
-          {fmtNumero(Math.abs(diferencia))} {u}
+          {fmtNumero(Math.abs(diferencia))} {fmtUnidad(u, Math.abs(diferencia))}
         </span>
       )}
     </div>
@@ -451,11 +451,13 @@ export function AsistenteIngreso({ onVolver, onFinalizado, onIrAProducir }: Prop
           inercia de venir de una pantalla idéntica. */}
       {overlay?.tipo === 'tecladoPesada' && (
         <TecladoNumerico
-          titulo="Ahora pesalo vos"
+          titulo={overlay.producto.unidadDeMedida === 'KG' ? 'Ahora pesalo vos' : 'Ahora contalo vos'}
           subtitulo={overlay.producto.nombre}
-          icono="⚖️"
+          icono={overlay.producto.unidadDeMedida === 'KG' ? '⚖️' : '🔢'}
           variante="contraste"
-          pistaDisponible={`El remito decía ${fmtNumero(overlay.remito)} ${overlay.producto.unidadDeMedida === 'KG' ? 'kg' : 'u'} — cargá lo que da la balanza`}
+          pistaDisponible={`El remito decía ${fmtNumero(overlay.remito)} ${fmtUnidad(overlay.producto.unidadDeMedida, overlay.remito)} — cargá lo que ${
+            overlay.producto.unidadDeMedida === 'KG' ? 'da la balanza' : 'contaste de verdad'
+          }`}
           unidad={overlay.producto.unidadDeMedida === 'KG' ? 'kg' : 'u'}
           permiteDecimal={overlay.producto.unidadDeMedida === 'KG'}
           onCancelar={() => setOverlay(null)}

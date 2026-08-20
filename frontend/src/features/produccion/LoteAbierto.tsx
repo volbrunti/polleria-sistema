@@ -4,7 +4,7 @@ import { TecladoNumerico } from '../../components/ui/TecladoNumerico';
 import { PantallaExito } from '../../components/ui/PantallaExito';
 import { obtenerLote, cerrarLote } from '../../api/produccion';
 import { ApiError } from '../../api/client';
-import { fmtFechaHora, fmtNumero } from '../../lib/formato';
+import { fmtFechaHora, fmtNumero, fmtUnidad } from '../../lib/formato';
 
 interface Props {
   loteId: number;
@@ -92,11 +92,11 @@ export function LoteAbierto({ loteId, onVolverMenu, onCerrado }: Props) {
                 <div key={i.id} className="flex items-center gap-2.5">
                   <div className="min-w-0 flex-1">
                     <div className="text-base">
-                      {i.productoInsumo?.nombre} — {fmtNumero(valor)} {unidad}
+                      {i.productoInsumo?.nombre} — {fmtNumero(valor)} {fmtUnidad(unidad, valor)}
                     </div>
                     {corregido != null && corregido !== estimado && (
                       <div className="text-sm font-semibold text-advertencia-texto">
-                        habías cargado {fmtNumero(estimado)} {unidad}
+                        habías cargado {fmtNumero(estimado)} {fmtUnidad(unidad, estimado)}
                       </div>
                     )}
                   </div>

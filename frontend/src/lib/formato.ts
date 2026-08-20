@@ -19,6 +19,14 @@ export function fmtMoneda(valor: string | number | null | undefined): string {
   return n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' });
 }
 
+// "kg" nunca varía, pero "unidad" sí — sin esto queda "6 unidad", "300
+// unidad" en toda pantalla que muestre una cantidad contada (hallazgo de la
+// revisión del 19/8, rol Producción).
+export function fmtUnidad(unidadDeMedida: string, cantidad: number | string): string {
+  if (unidadDeMedida.toUpperCase() === 'KG') return 'kg';
+  return Number(cantidad) === 1 ? 'unidad' : 'unidades';
+}
+
 const ZONA = 'America/Argentina/Cordoba';
 
 export function fmtFechaHora(iso: string): string {

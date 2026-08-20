@@ -78,7 +78,7 @@ export function ShellLocal() {
   }
 
   return (
-    <div className="flex min-h-screen justify-center bg-fondo px-4 py-7">
+    <div className="flex h-screen justify-center bg-fondo px-4 py-7">
       <div className="relative flex min-h-[660px] w-full max-w-[880px] flex-col overflow-hidden rounded-[22px] border border-borde bg-panel shadow-2xl">
         <div className="flex items-center gap-3 border-b border-borde bg-white px-5.5 py-3.5">
           <div className="flex h-10 w-10 items-center justify-center rounded-[11px] bg-acento text-sm font-extrabold text-texto">
