@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import * as productosService from './productos.service';
+import { booleanoQueryOpcional } from '../../lib/zod-query';
 
 const crearSchema = z.object({
   nombre: z.string().min(1),
@@ -20,7 +21,7 @@ const actualizarSchema = z.object({
 
 const listarQuery = z.object({
   tipo: z.enum(['MATERIA_PRIMA', 'ELABORADO', 'REVENTA', 'COMBO']).optional(),
-  activo: z.coerce.boolean().optional(),
+  activo: booleanoQueryOpcional,
 });
 
 const precioSchema = z.object({ monto: z.number().positive(), cantidad: z.number().int().positive().optional() });

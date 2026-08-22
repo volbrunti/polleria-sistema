@@ -1,9 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import * as alertasService from './alertas.service';
+import { booleanoQueryOpcional } from '../../lib/zod-query';
 
 const listarQuery = z.object({
-  vista: z.coerce.boolean().optional(),
+  vista: booleanoQueryOpcional,
   tipo: z
     .enum(['DESVIO_PRODUCCION', 'DISCREPANCIA_TRANSFERENCIA', 'DISCREPANCIA_CAJA', 'BLOQUEO_TURNO', 'STOCK_MINIMO'])
     .optional(),

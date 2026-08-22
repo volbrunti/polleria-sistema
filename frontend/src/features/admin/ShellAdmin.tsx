@@ -1,8 +1,9 @@
-import { useCallback, useState } from 'react';
-import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
+import { useCallback, useState, type ReactNode } from 'react';
+import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../auth/AuthContext';
 import { useAlertasSocket } from '../../lib/useSocket';
+import { ErrorBoundary } from '../../lib/ErrorBoundary';
 import { listarAlertas } from '../../api/alertas';
 import { Alertas } from './Alertas';
 import { Stock } from './Stock';
@@ -58,6 +59,16 @@ export function ShellAdmin() {
 
   const itemsVisibles = ITEMS_NAV.filter((i) => !i.soloAdmin || esAdmin);
   const inicio = 'dashboard';
+  const location = useLocation();
+
+  // Cada sección va en su propio boundary: si una pantalla revienta al
+  // dibujarse, el sidebar y el resto del panel siguen usables, en vez de
+  // quedar toda la app en blanco.
+  const seccion = (nombre: string, contenido: ReactNode) => (
+    <ErrorBoundary nombre={nombre} claveReset={location.pathname}>
+      {contenido}
+    </ErrorBoundary>
+  );
 
   // En celular el sidebar fijo se comía la pantalla (236 de 375 px, dejando 83
   // para el contenido). Por debajo de `md` se reemplaza por un menú a pantalla
@@ -216,18 +227,27 @@ export function ShellAdmin() {
       <div className="max-w-295 min-w-0 flex-1 overflow-auto p-4 pt-16 md:p-7">
         <Routes>
           <Route path="/" element={<Navigate to={inicio} replace />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          {esAdmin && <Route path="alertas" element={<Alertas />} />}
-          <Route path="reportes" element={<Reportes />} />
-          <Route path="turnos" element={<Turnos puedeEscribir={puedeEscribir} />} />
-          <Route path="stock" element={<Stock puedeEscribir={puedeEscribir} />} />
-          <Route path="stock-minimo" element={<StockMinimo puedeEscribir={puedeEscribir} />} />
-          <Route path="produccion" element={<ProduccionLotes />} />
-          <Route path="transferencias" element={<Transferencias puedeEscribir={esAdmin} />} />
-          <Route path="fichas-tecnicas" element={<FichasTecnicas puedeEscribir={puedeEscribir} />} />
-          <Route path="catalogo" element={<Catalogo puedeEscribir={puedeEscribir} />} />
-          {esAdmin && <Route path="usuarios" element={<Usuarios />} />}
-          <Route path="auditoria" element={<Auditoria />} />
+          <Route path="dashboard" element={seccion('el dashboard', <Dashboard />)} />
+          {esAdmin && <Route path="alertas" element={seccion('las alertas', <Alertas />)} />}
+          <Route path="reportes" element={seccion('los reportes', <Reportes />)} />
+          <Route path="turnos" element={seccion('los turnos', <Turnos puedeEscribir={puedeEscribir} />)} />
+          <Route path="stock" element={seccion('el stock', <Stock puedeEscribir={puedeEscribir} />)} />
+          <Route
+            path="stock-minimo"
+            element={seccion('el stock mínimo', <StockMinimo puedeEscribir={puedeEscribir} />)}
+          />
+          <Route path="produccion" element={seccion('la producción', <ProduccionLotes />)} />
+          <Route
+            path="transferencias"
+            element={seccion('las transferencias', <Transferencias puedeEscribir={esAdmin} />)}
+          />
+          <Route
+            path="fichas-tecnicas"
+            element={seccion('las fichas técnicas', <FichasTecnicas puedeEscribir={puedeEscribir} />)}
+          />
+          <Route path="catalogo" element={seccion('el catálogo', <Catalogo puedeEscribir={puedeEscribir} />)} />
+          {esAdmin && <Route path="usuarios" element={seccion('los usuarios', <Usuarios />)} />}
+          <Route path="auditoria" element={seccion('la auditoría', <Auditoria />)} />
           <Route path="*" element={<Navigate to={inicio} replace />} />
         </Routes>
       </div>

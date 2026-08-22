@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import * as descuentosService from './descuentos.service';
+import { booleanoQueryOpcional } from '../../lib/zod-query';
 
 const crearSchema = z.object({
   nombre: z.string().min(1),
@@ -25,7 +26,7 @@ export async function descuentosRoutes(app: FastifyInstance) {
     '/',
     { preHandler: [app.autenticar, app.requerirRoles('ADMINISTRADOR', 'SOCIO', 'ENCARGADO', 'CAJERO')] },
     async (req) => {
-      const { activo } = z.object({ activo: z.coerce.boolean().optional() }).parse(req.query);
+      const { activo } = z.object({ activo: booleanoQueryOpcional }).parse(req.query);
       // El cajero solo ve los vigentes; el admin puede pedir todos para editarlos.
       const soloActivos = req.usuario.rol === 'CAJERO' || req.usuario.rol === 'ENCARGADO' ? true : activo;
       return descuentosService.listar({ activo: soloActivos });
