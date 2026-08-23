@@ -622,6 +622,26 @@ al cocinero a comparar dos papeles a mano en plena cocina.
    comanda es operación de mostrador). Rearma las impresiones con las comanderas activas de
    hoy y devuelve el resultado **por impresora**.
 
+**Cómo le llegan los bytes a la impresora — directo o vía agente** (agregado 23/8, tras el
+primer intento contra hardware real): `enviarBufferATcp()` (`comanderas.service.ts`) abre el
+socket TCP directo, pero **el backend corre en Railway** (nube) y no tiene ruta a las IPs
+privadas de la LAN del local. Por eso, antes de mandar cada ticket,
+`enviarTicket(sucursalId, ...)` decide:
+- Si la sucursal **no tiene** `AgenteImpresion` configurado → TCP directo, igual que
+  siempre (sirve para dev local o un deploy que sí esté en la misma LAN que las
+  comanderas).
+- Si **sí tiene** agente configurado → se le relaya el buffer por Socket.io (sala
+  `agente-impresion:<sucursalId>`, ver `agente-impresion.service.ts` y
+  `agente-impresion/` en la raíz del repo) y es el agente — un proceso corriendo en una
+  PC del local — el que hace el TCP directo desde adentro de la LAN. Si el agente no está
+  conectado, falla al toque con `AGENTE_IMPRESION_NO_CONECTADO` en vez de intentar un TCP
+  condenado a colgar 4 segundos.
+
+El agente se autentica con un token opaco de sucursal (no un JWT de usuario — es
+infraestructura, no una cuenta humana), generado y rotado desde el panel por ADMIN
+(`/api/agentes-impresion`, tabla `AgenteImpresion`, token guardado hasheado igual que
+`RefreshToken`).
+
 **Generación ESC/POS**: `src/modules/comanderas/escpos.ts`, a mano y sin dependencia nueva.
 Code page CP850 para los acentos, con tabla de fallback a ASCII para lo no mapeado
 (preferible "lena" a un byte basura que la impresora dibuje como símbolo). Si en el
@@ -954,6 +974,8 @@ referencia polimórfica al documento que lo causó.
 | **COMANDERAS** — `/api/configuracion-comandera` |||||
 | CRUD, `POST /:id/probar`, `GET /tickets/:pedidoId` | ✅ | ❌ | ❌ | ❌ | ❌ |
 | `POST /tickets/:ticketId/reimprimir` | ✅ | ❌ | ✅ | ✅ | ❌ |
+| **AGENTE DE IMPRESIÓN** — `/api/agentes-impresion` |||||
+| `GET /`, `POST /` (generar/rotar token) | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **RECARGOS** — `/api/recargos-tarjeta` |||||
 | `GET /` | ✅ | ✅ | ✅ | ✅ | ❌ |
 | `POST/PATCH /` | ✅ | ❌ | ❌ | ❌ | ❌ |
@@ -1036,7 +1058,8 @@ src/
     pedidos/             Flujo 4 — el núcleo del POS
     caja/                atenciones, gastos, retiros, marcado, costo cero
     stock-minimo/        Flujo 6
-    comanderas/          ESC/POS sobre TCP + CRUD de impresoras
+    comanderas/          ESC/POS sobre TCP + CRUD de impresoras + agente de impresión
+                         (agente-impresion.service.ts, agente-impresion.routes.ts)
     recargos/            porcentajes de recargo de tarjeta
     configuracion/       clave-valor (descuento a empleado)
     alertas/             solo admin, in-app + WebSocket
@@ -1057,6 +1080,10 @@ frontend/src/
     local/               CAJERO/ENCARGADO: POS, caja, recepción ciega, stock
     admin/               ADMIN/SOCIO: dashboard, reportes, catálogo, alertas,
                          stock, turnos, transferencias, fichas, auditoría, usuarios
+
+agente-impresion/        proceso standalone (no forma parte del build del backend) que
+                         corre en una PC de cada local — puente Railway ↔ LAN para las
+                         comanderas, ver su README.md y CLAUDE.md §5 Flujo 4
 
 tests/
   unit/                  lógica pura, corre sin DB
@@ -1171,8 +1198,9 @@ viewports.
 
 | Pendiente | Por qué importa | Acción |
 |---|---|---|
-| **Probar las comanderas contra una XP-V320N real** | El código está listo y testeado pero nunca tocó el hardware | Verificar acentos (code page CP850), corte de papel y ancho de 48 columnas. Único lugar a ajustar: las constantes de `escpos.ts` |
-| **Cargar las 4 IPs reales** | Sin esto los pedidos se registran pero no sale ticket | Pablo las carga desde Catálogo → Comanderas y valida cada una con "Imprimir prueba" |
+| **Instalar y correr el agente de impresión en una PC de cada local** | El backend corre en Railway (nube, ver `DEPLOY.md`) y **no tiene ninguna ruta de red hacia las IPs privadas de la LAN del local** (ej. `192.168.1.201`) — un `ping`/`Test-NetConnection` exitoso desde la PC del local no dice nada sobre si Railway puede llegar ahí. Sin esto, "Imprimir prueba" cuelga hasta el timeout y falla siempre, aunque la IP esté bien cargada. Hallado en la puesta en marcha del 23/8 | Generar el token desde Catálogo → Comanderas → Agente de impresión (solo ADMIN) y dejar corriendo `agente-impresion/` (ver su `README.md`) en una PC de cada local que quede siempre prendida. Un agente por sucursal — no por comandera |
+| **Probar las comanderas contra una XP-V320N real** | El código de `escpos.ts` está listo y testeado pero, hasta que el agente de arriba esté corriendo, ningún byte llega físicamente a la impresora — así que sigue sin validarse contra hardware real | Con el agente corriendo, verificar acentos (code page CP850), corte de papel y ancho de 48 columnas. Único lugar a ajustar si hay que corregir algo: las constantes de `escpos.ts` |
+| **Cargar las 4 IPs reales** | Sin esto los pedidos se registran pero no sale ticket | Pablo las carga desde Catálogo → Comanderas y valida cada una con "Imprimir prueba" (con el agente de esa sucursal ya conectado) |
 | **Secrets y usuarios reales** | El seed de desarrollo crea usuarios con contraseñas conocidas | `JWT_SECRET`/`JWT_REFRESH_SECRET` nuevos y distintos entre sí, `DATABASE_URL` de prod. **NUNCA correr el seed de dev contra prod** — los datos de catálogo/fichas sí sirven, los usuarios no |
 | **`ORIGENES_PERMITIDOS`** | El backend **no arranca** en producción sin esto | Cargar el dominio del frontend, sin barra final |
 | **Variables de R2** | El backend **no arranca** en producción sin las 5 | Ver `DEPLOY.md` |

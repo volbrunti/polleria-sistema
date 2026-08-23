@@ -84,4 +84,11 @@ export const Errores = {
     new AppError('VUELTO_SIN_EFECTIVO', 'El vuelto no puede superar el efectivo recibido', 400),
   medioSinRecargo: (medio: string) =>
     new AppError('MEDIO_SIN_RECARGO', `${medio} no lleva recargo — solo débito y crédito`, 400),
+  // ── Comanderas — agente de impresión ──
+  agenteImpresionNoConectado: () =>
+    new AppError(
+      'AGENTE_IMPRESION_NO_CONECTADO',
+      'El agente de impresión de esta sucursal no está conectado',
+      503,
+    ),
 };

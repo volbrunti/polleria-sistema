@@ -1,0 +1,24 @@
+{
+  "name": "polleria-agente-impresion",
+  "version": "0.1.0",
+  "description": "Puente entre el backend (Railway) y las comanderas de la LAN del local — ver README.md",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "build": "tsc",
+    "start:build": "node dist/index.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "socket.io-client": "^4.8.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.23.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

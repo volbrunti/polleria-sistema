@@ -30,6 +30,7 @@ import { recargosRoutes } from './modules/recargos/recargos.routes';
 import { descuentosRoutes } from './modules/descuentos/descuentos.routes';
 import { configuracionRoutes } from './modules/configuracion/configuracion.routes';
 import { comanderasRoutes } from './modules/comanderas/comanderas.routes';
+import { agenteImpresionRoutes } from './modules/comanderas/agente-impresion.routes';
 import { reportesRoutes } from './modules/reportes/reportes.routes';
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes';
 
@@ -146,6 +147,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(descuentosRoutes, { prefix: '/api/tipos-descuento' });
   await app.register(configuracionRoutes, { prefix: '/api/configuracion' });
   await app.register(comanderasRoutes, { prefix: '/api/configuracion-comandera' });
+  await app.register(agenteImpresionRoutes, { prefix: '/api/agentes-impresion' });
   // Módulo 3
   await app.register(reportesRoutes, { prefix: '/api/reportes' });
   await app.register(dashboardRoutes, { prefix: '/api/dashboard' });
