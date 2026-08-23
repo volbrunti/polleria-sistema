@@ -69,7 +69,13 @@ export function ShellAdmin() {
   const cerrarMenu = () => setMenuAbierto(false);
 
   return (
-    <div className="flex min-h-screen bg-[#f2f4ee]">
+    // h-screen + overflow-hidden acá (no min-h-screen): así el layout entero
+    // queda contenido en el alto de la pantalla y es SOLO el panel de la
+    // derecha (overflow-auto, más abajo) el que scrollea. Si fuera
+    // min-h-screen, una pantalla larga (ej. Auditoría con muchas filas)
+    // estira todo el contenedor y termina scrolleando la página entera,
+    // arrastrando al sidebar verde con ella.
+    <div className="flex h-screen overflow-hidden bg-[#f2f4ee]">
       {/* Barra superior: solo en celular, es lo que abre el menú */}
       <div className="fixed inset-x-0 top-0 z-30 flex items-center gap-3 bg-sidebar px-4 py-2.5 text-white md:hidden">
         <button
@@ -212,8 +218,9 @@ export function ShellAdmin() {
         </div>
       </div>
 
-      {/* pt-16 en celular: deja lugar a la barra superior fija */}
-      <div className="max-w-295 min-w-0 flex-1 overflow-auto p-4 pt-16 md:p-7">
+      {/* pt-16 en celular: deja lugar a la barra superior fija. Sin tope de
+          ancho — que use todo el espacio disponible en pantallas anchas. */}
+      <div className="min-w-0 flex-1 overflow-auto p-4 pt-16 md:p-7">
         <Routes>
           <Route path="/" element={<Navigate to={inicio} replace />} />
           <Route path="dashboard" element={<Dashboard />} />
