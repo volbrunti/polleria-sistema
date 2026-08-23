@@ -5,6 +5,7 @@ import { cobrarPedido, confirmarPedido, masVendidos } from '../../../api/pedidos
 import { calcularPrecioTotal, type TierPrecio } from '../../../lib/precios';
 import { nuevoToken } from '../../../lib/idempotencia';
 import { fmtMoneda } from '../../../lib/formato';
+import { normalizar } from '../../../lib/texto';
 import { ApiError } from '../../../api/client';
 import { CobrarPedido } from './CobrarPedido';
 import { SelectorHorario } from './SelectorHorario';
@@ -29,16 +30,6 @@ interface LineaCarrito {
 
 // Productos sin agrupador cargado (los da de alta el admin y puede olvidarse).
 const SIN_MADRE = 'Otros';
-
-// Búsqueda tolerante a tildes: "milanesa napolitana" tiene que salir con
-// "napolitana" y también con "napolitana" escrito sin acento.
-function normalizar(texto: string): string {
-  return texto
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .trim();
-}
 
 function Chip({
   activo,

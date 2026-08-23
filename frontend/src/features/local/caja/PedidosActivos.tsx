@@ -9,6 +9,7 @@ import {
   reasignarPedido,
 } from '../../../api/pedidos';
 import { fmtFechaHora, fmtMoneda, fmtNumero } from '../../../lib/formato';
+import { normalizar } from '../../../lib/texto';
 import { ApiError } from '../../../api/client';
 import { CobrarPedido } from './CobrarPedido';
 import { ModificarPedido } from './ModificarPedido';
@@ -51,6 +52,7 @@ export function PedidosActivos({ sucursalId }: Props) {
   const [vuelto, setVuelto] = useState<string | null>(null);
   const [confirmando, setConfirmando] = useState<{ accion: 'anular' | 'perdido'; pedido: Pedido } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [busquedaNombre, setBusquedaNombre] = useState('');
 
   const pedidosQ = useQuery({
     queryKey: ['pedidos', 'pendientes', sucursalId],
@@ -87,10 +89,27 @@ export function PedidosActivos({ sucursalId }: Props) {
   });
 
   const pedidos = pedidosQ.data ?? [];
+  const buscando = busquedaNombre.trim().length > 0;
+  const pedidosVisibles = buscando
+    ? pedidos.filter((p) => p.nombreCliente && normalizar(p.nombreCliente).includes(normalizar(busquedaNombre)))
+    : pedidos;
 
   return (
     <div className="flex flex-1 flex-col gap-3 overflow-auto p-4">
       <div className="text-[22px] font-extrabold">Pedidos activos</div>
+
+      <div className="relative">
+        <input
+          type="search"
+          value={busquedaNombre}
+          onChange={(e) => setBusquedaNombre(e.target.value)}
+          placeholder="Buscar por nombre del cliente…"
+          className="min-h-[50px] w-full rounded-xl border border-borde-fuerte bg-white pl-11 pr-4 text-base font-semibold"
+        />
+        <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-lg text-texto-suave">
+          🔍
+        </span>
+      </div>
 
       {error && (
         <div className="rounded-xl bg-error-suave px-3.5 py-3 text-base font-semibold text-error-texto">{error}</div>
@@ -102,8 +121,12 @@ export function PedidosActivos({ sucursalId }: Props) {
         <div className="rounded-2xl border border-borde bg-white p-8 text-center text-lg text-texto-suave">
           No hay pedidos pendientes.
         </div>
+      ) : pedidosVisibles.length === 0 ? (
+        <div className="rounded-2xl border border-borde bg-white p-8 text-center text-lg text-texto-suave">
+          No hay ningún pedido a nombre de "{busquedaNombre.trim()}".
+        </div>
       ) : (
-        pedidos.map((p) => {
+        pedidosVisibles.map((p) => {
           const etiqueta = ETIQUETA_ESTADO[p.estado] ?? { texto: p.estado, color: '#555', bg: '#eee' };
           const total = p.items.reduce((acc, i) => acc + Number(i.montoTotal), 0);
           const ocupado =
