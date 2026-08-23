@@ -192,6 +192,7 @@ model Sucursal {
   eventosMarcadoPollo        EventoMarcadoPollo[]
   configuracionesStockMinimo ConfiguracionStockMinimo[]
   comanderas                 ConfiguracionComandera[]
+  agenteImpresion            AgenteImpresion?
 
   @@map("sucursales")
 }
@@ -995,6 +996,23 @@ model ImpresionComandera {
 
   @@index([ticketCocinaId])
   @@map("impresiones_comandera")
+}
+
+// Credencial del proceso liviano que corre en una PC del local y hace de puente
+// entre el backend (en la nube, sin ruta a la LAN del local — ver DEPLOY.md) y
+// las comanderas: recibe el buffer ESC/POS por socket y lo manda por TCP crudo
+// a la impresora, igual que hacía el backend directo antes de estar en Railway.
+// El token se guarda hasheado (mismo criterio que RefreshToken en auth.service.ts)
+// y se muestra en texto plano una sola vez, al generarlo o rotarlo.
+model AgenteImpresion {
+  id             Int       @id @default(autoincrement())
+  sucursal       Sucursal  @relation(fields: [sucursalId], references: [id])
+  sucursalId     Int       @unique
+  tokenHash      String    @unique
+  ultimaConexion DateTime?
+  creadoEn       DateTime  @default(now())
+
+  @@map("agentes_impresion")
 }
 
 model ConfiguracionStockMinimo {

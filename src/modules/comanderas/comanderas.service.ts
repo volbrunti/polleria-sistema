@@ -5,6 +5,7 @@ import { registrarAuditoria } from '../../lib/auditoria';
 import { Errores } from '../../lib/errores';
 import { emitirASucursal } from '../alertas/alertas.service';
 import { construirTicket, type ContenidoTicket } from './escpos';
+import * as agenteImpresionService from './agente-impresion.service';
 
 // Cuánto esperamos a que la impresora acepte el trabajo antes de darla por
 // caída. Una térmica de red responde en decenas de milisegundos; si a los 4
@@ -43,6 +44,22 @@ export function enviarBufferATcp(
       socket.end(datos, () => terminar());
     });
   });
+}
+
+// Railway (donde corre el backend, ver DEPLOY.md) no tiene ruta a las IPs
+// privadas de la LAN del local — solo la PC del local puede llegar a la
+// impresora. Si la sucursal tiene un agente configurado (Catálogo → Agente de
+// impresión), se le relaya el ticket por Socket.io y es él quien hace el TCP
+// directo. Si no hay agente configurado, se sigue mandando directo (dev local
+// o cualquier deploy que sí esté en la misma LAN que las comanderas).
+async function enviarTicket(sucursalId: number, ip: string, puerto: number, datos: Buffer): Promise<void> {
+  const tieneAgente = await agenteImpresionService.tieneAgenteConfigurado(sucursalId);
+  if (!tieneAgente) return enviarBufferATcp(ip, puerto, datos);
+
+  const conectado = await agenteImpresionService.agenteConectado(sucursalId);
+  if (!conectado) throw Errores.agenteImpresionNoConectado();
+
+  return agenteImpresionService.enviarViaAgente(sucursalId, ip, puerto, datos, TIMEOUT_IMPRESION_MS);
 }
 
 // ── Registro del ticket (DENTRO de la transacción del pedido) ────────
@@ -96,7 +113,7 @@ export async function despacharImpresiones(ticketId: number): Promise<void> {
     ticket.impresiones.map(async (impresion) => {
       const { ip, puerto, destino, nombre } = impresion.configuracionComandera;
       try {
-        await enviarBufferATcp(ip, puerto, datos);
+        await enviarTicket(contenido.sucursalId, ip, puerto, datos);
         await prisma.impresionComandera.update({
           where: { id: impresion.id },
           data: { impreso: true, errorImpresion: null },
@@ -332,7 +349,7 @@ export async function probar(id: number): Promise<{ ok: boolean; error?: string 
   });
 
   try {
-    await enviarBufferATcp(comandera.ip, comandera.puerto, prueba);
+    await enviarTicket(comandera.sucursalId, comandera.ip, comandera.puerto, prueba);
     return { ok: true };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Error de impresión' };

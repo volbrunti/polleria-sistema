@@ -5,6 +5,7 @@ import { config } from './config';
 import { verificarAccessToken } from './plugins/auth';
 import { prisma } from './lib/prisma';
 import * as alertasService from './modules/alertas/alertas.service';
+import * as agenteImpresionService from './modules/comanderas/agente-impresion.service';
 import { pedidosNoRetiradosParaAvisar } from './modules/pedidos/pedidos.service';
 import { MINUTOS_PEDIDO_NO_RETIRADO_ALERTA, INTERVALO_CHEQUEO_NO_RETIRADO_MS } from './lib/constantes';
 
@@ -22,6 +23,24 @@ async function main() {
   });
 
   io.use((socket, next) => {
+    // El agente de impresión (proceso en una PC del local, ver
+    // agente-impresion.service.ts) se autentica con un token de sucursal
+    // opaco, no con el JWT de un usuario humano — no hay "usuario" detrás.
+    const tipoAgente = socket.handshake.auth?.tipoAgente as string | undefined;
+    if (tipoAgente === 'impresion') {
+      const token = socket.handshake.auth?.token as string | undefined;
+      if (!token) return next(new Error('NO_AUTORIZADO'));
+      agenteImpresionService
+        .verificarToken(token)
+        .then((sucursalId) => {
+          if (sucursalId == null) return next(new Error('NO_AUTORIZADO'));
+          socket.data.agenteSucursalId = sucursalId;
+          next();
+        })
+        .catch(() => next(new Error('NO_AUTORIZADO')));
+      return;
+    }
+
     try {
       const token = socket.handshake.auth?.token as string | undefined;
       if (!token) return next(new Error('NO_AUTORIZADO'));
@@ -33,6 +52,21 @@ async function main() {
   });
 
   io.on('connection', (socket) => {
+    const agenteSucursalId = socket.data.agenteSucursalId as number | undefined;
+    if (agenteSucursalId != null) {
+      // Un solo agente activo por sucursal: si queda uno viejo conectado (ej.
+      // se reinició sin cerrar prolijo), lo saca para no imprimir duplicado.
+      void io
+        .in(agenteImpresionService.salaAgente(agenteSucursalId))
+        .fetchSockets()
+        .then((previos) => {
+          for (const previo of previos) previo.disconnect(true);
+          void socket.join(agenteImpresionService.salaAgente(agenteSucursalId));
+          void agenteImpresionService.marcarConexion(agenteSucursalId);
+        });
+      return;
+    }
+
     const usuario = socket.data.usuario;
     if (usuario?.rol === 'ADMINISTRADOR') {
       socket.join(alertasService.SALA_ADMIN);
@@ -56,6 +90,7 @@ async function main() {
   });
 
   alertasService.configurarSocket(io);
+  agenteImpresionService.configurarSocket(io);
 
   // Timer de "pedido no retirado" (CLAUDE.md §5 Flujo 4): avisa a
   // los admins por WebSocket cuando un A_RETIRAR lleva más de N minutos en

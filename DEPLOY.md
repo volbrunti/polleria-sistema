@@ -71,6 +71,13 @@ node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 
 > Con `NODE_ENV=production` el server **no arranca** si falta `JWT_SECRET`, `JWT_REFRESH_SECRET`, `ORIGENES_PERMITIDOS` o cualquiera de las 5 variables de R2. Es a propósito: es preferible que no levante a que levante perdiendo datos o insegura.
 
+> **Agente de impresión de comanderas — no hace falta ninguna variable nueva acá.**
+> Railway no tiene ruta a la LAN de los locales (CLAUDE.md §5 Flujo 4), así que las
+> comanderas necesitan el proceso de `agente-impresion/` corriendo en una PC de cada
+> local. Su credencial es un token por sucursal que vive en la base
+> (`AgenteImpresion`, generado desde el panel), no una variable de entorno del
+> backend — no hay nada que tocar en Railway para esto.
+
 ### 2.3 Fotos de remito (Cloudflare R2)
 
 El disco del contenedor de Railway se borra en cada deploy, así que las fotos van directo a un bucket de R2 (API S3-compatible) en vez de a un volumen — ya queda hecho así de una vez, en vez de resolverlo después para producción.

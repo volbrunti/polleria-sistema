@@ -27,6 +27,7 @@ import {
   type Comandera,
   type DestinoComandera,
 } from '../../api/comanderas';
+import { listarEstadoAgentes, generarTokenAgente } from '../../api/agentesImpresion';
 import {
   listarConfiguracion,
   actualizarConfiguracion,
@@ -35,7 +36,7 @@ import {
 import { TecladoNumerico } from '../../components/ui/TecladoNumerico';
 import { ApiError } from '../../api/client';
 import { fmtFecha, fmtMoneda, fmtNumero } from '../../lib/formato';
-import type { Producto, Proveedor, TipoProducto, UnidadDeMedida } from '../../api/types';
+import type { Producto, Proveedor, TipoProducto, UnidadDeMedida, Sucursal } from '../../api/types';
 
 // "Hace cuánto que no cambia" al lado de la fecha. Pablo: "ahí donde le ponen
 // la fecha de la última vez que cambió, le haría una resta entre hoy y esa
@@ -1015,6 +1016,117 @@ const DESTINOS: { id: DestinoComandera; label: string; ayuda: string }[] = [
   { id: 'MOSTRADOR', label: 'Mostrador / Caja', ayuda: 'La copia que queda en la caja' },
 ];
 
+// Estado del agente de impresión por sucursal (Railway no tiene ruta a la LAN
+// del local — ver comanderas.service.ts). Sin un agente conectado, "Imprimir
+// prueba" siempre va a fallar aunque la IP de la comandera esté bien cargada.
+function SeccionAgentesImpresion({ locales }: { locales: Sucursal[] }) {
+  const queryClient = useQueryClient();
+  const estados = useQuery({ queryKey: ['agentes-impresion'], queryFn: () => listarEstadoAgentes() });
+  const [tokenGenerado, setTokenGenerado] = useState<{ sucursalId: number; token: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const mutGenerar = useMutation({
+    mutationFn: (sucursalId: number) => generarTokenAgente(sucursalId),
+    onSuccess: (resultado) => {
+      setTokenGenerado(resultado);
+      setError(null);
+      void queryClient.invalidateQueries({ queryKey: ['agentes-impresion'] });
+    },
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'No se pudo generar el token.'),
+  });
+
+  if (locales.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-2.5 rounded-2xl border border-borde bg-white p-4.5">
+      <div>
+        <div className="font-bold">Agente de impresión</div>
+        <p className="m-0 text-sm text-texto-suave">
+          El sistema corre en la nube y no puede llegar directo a la red del local. Para que
+          "Imprimir prueba" funcione, hace falta un proceso corriendo en una PC del local
+          conectado con este token — ver <code className="font-mono text-xs">agente-impresion/README.md</code>
+          en el repo.
+        </p>
+      </div>
+
+      {locales.map((s) => {
+        const estado = estados.data?.find((e) => e.sucursalId === s.id);
+        return (
+          <div
+            key={s.id}
+            className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-borde px-3.5 py-2.5"
+          >
+            <div className="min-w-32 flex-1 font-semibold">{s.nombre}</div>
+            <span
+              className="rounded-md px-2 py-0.5 text-xs font-extrabold"
+              style={
+                estado?.conectadoAhora
+                  ? { background: '#e6f4ea', color: '#1a7f3f' }
+                  : { background: '#fbe9e7', color: '#a02514' }
+              }
+            >
+              {estado?.conectadoAhora ? 'AGENTE CONECTADO' : 'AGENTE DESCONECTADO'}
+            </span>
+            {estado?.ultimaConexion && (
+              <span className="text-xs text-texto-suave">
+                Última conexión: {new Date(estado.ultimaConexion).toLocaleString('es-AR')}
+              </span>
+            )}
+            <button
+              type="button"
+              disabled={mutGenerar.isPending}
+              onClick={() => {
+                if (
+                  estado?.configurado &&
+                  !window.confirm(`Esto invalida el token actual de ${s.nombre}. ¿Rotarlo igual?`)
+                ) {
+                  return;
+                }
+                mutGenerar.mutate(s.id);
+              }}
+              className="min-h-9 cursor-pointer rounded-lg border border-borde-fuerte bg-white px-3 text-xs font-bold text-primario disabled:opacity-50"
+            >
+              {estado?.configurado ? 'Rotar token' : 'Generar token'}
+            </button>
+          </div>
+        );
+      })}
+
+      {error && (
+        <div className="rounded-xl bg-error-suave px-3.5 py-3 text-sm font-semibold text-error-texto">{error}</div>
+      )}
+
+      {tokenGenerado && (
+        <div className="flex flex-col gap-1.5 rounded-xl border border-primario bg-[#f3f8f0] px-3.5 py-3">
+          <div className="text-sm font-bold">
+            Token de {locales.find((s) => s.id === tokenGenerado.sucursalId)?.nombre} — copialo ahora,
+            no se vuelve a mostrar:
+          </div>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 overflow-x-auto rounded-md bg-white px-2.5 py-2 font-mono text-xs">
+              {tokenGenerado.token}
+            </code>
+            <button
+              type="button"
+              onClick={() => void navigator.clipboard.writeText(tokenGenerado.token)}
+              className="min-h-9 cursor-pointer rounded-lg bg-primario px-3 text-xs font-bold text-white"
+            >
+              Copiar
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => setTokenGenerado(null)}
+            className="self-start text-xs font-semibold text-texto-suave underline"
+          >
+            Ya lo copié
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TabComanderas() {
   const queryClient = useQueryClient();
   const comanderas = useQuery({ queryKey: ['comanderas'], queryFn: () => listarComanderas() });
@@ -1109,6 +1221,8 @@ function TabComanderas() {
           AGREGAR COMANDERA
         </button>
       </div>
+
+      <SeccionAgentesImpresion locales={locales} />
 
       {comanderas.data?.length === 0 && (
         <div className="rounded-2xl border border-borde bg-white p-6 text-center text-sm text-texto-suave">
