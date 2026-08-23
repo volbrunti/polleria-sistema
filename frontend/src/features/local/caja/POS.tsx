@@ -1,16 +1,15 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { listarProductos, tablasPrecioVigentes } from '../../../api/productos';
-import { listarConfiguracion, CLAVE_DESCUENTO_EMPLEADO } from '../../../api/configuracion';
 import { cobrarPedido, confirmarPedido, masVendidos } from '../../../api/pedidos';
 import { calcularPrecioTotal, type TierPrecio } from '../../../lib/precios';
 import { nuevoToken } from '../../../lib/idempotencia';
 import { fmtMoneda } from '../../../lib/formato';
 import { ApiError } from '../../../api/client';
 import { CobrarPedido } from './CobrarPedido';
+import { SelectorHorario } from './SelectorHorario';
 import type {
   AvisoStockMinimo,
-  BeneficiarioPedido,
   Pedido,
   Producto,
   SocioRetiro,
@@ -65,28 +64,6 @@ function Chip({
   );
 }
 
-function BotonBeneficiario({
-  activo,
-  onClick,
-  children,
-}: {
-  activo: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`min-h-[42px] flex-1 cursor-pointer rounded-xl text-sm font-bold ${
-        activo ? 'bg-texto text-white' : 'border border-borde-fuerte bg-white text-texto-suave'
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
 // POS táctil (CLAUDE.md §5 Flujo 4, INNEGOCIABLE): botones grandes por
 // categoría, productos ordenados por MÁS VENDIDOS (ranking del backend, no
 // manual), carrito siempre visible, total en tiempo real.
@@ -100,15 +77,6 @@ export function POS({ sucursalId }: Props) {
     queryFn: () => masVendidos(sucursalId),
     staleTime: 5 * 60 * 1000,
   });
-  const configQ = useQuery({
-    queryKey: ['configuracion'],
-    queryFn: listarConfiguracion,
-    staleTime: 10 * 60 * 1000,
-  });
-  const descuentoEmpleadoPct = Number(
-    configQ.data?.find((c) => c.clave === CLAVE_DESCUENTO_EMPLEADO)?.valor ?? 0,
-  );
-
   const tablaPorProducto = useMemo(() => {
     const mapa = new Map<number, TierPrecio[]>();
     for (const fila of preciosQ.data ?? []) {
@@ -166,13 +134,16 @@ export function POS({ sucursalId }: Props) {
     [vendibles, rankingPorProducto],
   );
   const [tipo, setTipo] = useState<TipoPedido>('PRESENCIAL');
-  // Retiro de socio / venta a empleado (reunión 4/8). null = venta normal.
-  const [beneficiario, setBeneficiario] = useState<BeneficiarioPedido | null>(null);
+  // Retiro de socio (reunión 4/8): switch simple, apagado = venta normal. La
+  // venta con descuento a empleado ahora se resuelve en la pantalla de cobro
+  // (selector de descuentos), no acá — ver CobrarPedido.tsx.
+  const [retiroSocio, setRetiroSocio] = useState(false);
   const [socio, setSocio] = useState<SocioRetiro | null>(null);
   // Nombre y hora prometida — se piden al confirmar (no al cobrar) porque el
   // ticket a cocina se imprime en ese momento (pedido post-prueba en vivo).
   const [nombreCliente, setNombreCliente] = useState('');
   const [horaEntrega, setHoraEntrega] = useState('');
+  const [eligiendoHora, setEligiendoHora] = useState(false);
   const [carrito, setCarrito] = useState<LineaCarrito[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [avisos, setAvisos] = useState<AvisoStockMinimo[] | null>(null);
@@ -215,25 +186,16 @@ export function POS({ sucursalId }: Props) {
   }
 
   // Mismo criterio que el backend (pedidos.calculos.ts): el socio se lo lleva
-  // a costo cero, el empleado paga con el descuento configurado redondeado
-  // hacia abajo. Acá es solo la previsualización — la autoridad es el POST.
-  function conBeneficio(precio: number): number {
-    if (beneficiario === 'SOCIO') return 0;
-    if (beneficiario === 'EMPLEADO' && descuentoEmpleadoPct > 0) {
-      return Math.floor((precio * (100 - descuentoEmpleadoPct)) / 100);
-    }
-    return precio;
-  }
-
+  // a costo cero. Acá es solo la previsualización — la autoridad es el POST.
   const lineasConTotal = carrito.map((l) => {
     const lista = calcularPrecioTotal(l.cantidad, tablaPorProducto.get(l.producto.id) ?? []);
-    return { ...l, lista, total: lista === null ? null : conBeneficio(lista) };
+    return { ...l, lista, total: lista === null ? null : retiroSocio ? 0 : lista };
   });
   const haySinPrecio = lineasConTotal.some((l) => l.total === null);
   const totalLista = lineasConTotal.reduce((acc, l) => acc + (l.lista ?? 0), 0);
   const totalCarrito = lineasConTotal.reduce((acc, l) => acc + (l.total ?? 0), 0);
   // Falta elegir el socio: no se puede confirmar un retiro sin decir de quién.
-  const faltaSocio = beneficiario === 'SOCIO' && socio === null;
+  const faltaSocio = retiroSocio && socio === null;
 
   const mutConfirmar = useMutation({
     mutationFn: () =>
@@ -242,8 +204,8 @@ export function POS({ sucursalId }: Props) {
         tipo,
         items: carrito.map((l) => ({ productoId: l.producto.id, cantidad: l.cantidad })),
         tokenIdempotencia: tokenPedido.current,
-        ...(beneficiario ? { beneficiario } : {}),
-        ...(beneficiario === 'SOCIO' && socio ? { socioBeneficiario: socio } : {}),
+        ...(retiroSocio ? { beneficiario: 'SOCIO' as const } : {}),
+        ...(retiroSocio && socio ? { socioBeneficiario: socio } : {}),
         ...(nombreCliente.trim() ? { nombreCliente: nombreCliente.trim() } : {}),
         ...(horaEntrega ? { horaEntregaSolicitada: horaEntrega } : {}),
       }),
@@ -252,8 +214,8 @@ export function POS({ sucursalId }: Props) {
       void queryClient.invalidateQueries({ queryKey: ['mas-vendidos'] });
       setCarrito([]);
       setCarritoAbierto(false); // en celular, vuelve a la grilla de productos
-      const eraRetiroDeSocio = beneficiario === 'SOCIO';
-      setBeneficiario(null);
+      const eraRetiroDeSocio = retiroSocio;
+      setRetiroSocio(false);
       setSocio(null);
       setNombreCliente('');
       setHoraEntrega('');
@@ -421,7 +383,8 @@ export function POS({ sucursalId }: Props) {
 
         {/* Nombre y hora prometida — opcionales, para ambos tipos de pedido
             (confirmado por Ariel: aplica también a PRESENCIAL, no solo a
-            retirar). Van a la comandera de cocina. */}
+            retirar). Van a la comandera de cocina. La hora sale del selector
+            de horarios fijos (SelectorHorario) — nada de tipeo libre. */}
         <div className="flex gap-1.5 px-3 pb-3">
           <input
             value={nombreCliente}
@@ -429,46 +392,49 @@ export function POS({ sucursalId }: Props) {
             placeholder="Nombre (opcional)"
             className="h-11 min-w-0 flex-[2] rounded-xl border border-borde-fuerte px-3 text-[15px]"
           />
-          <input
-            value={horaEntrega}
-            onChange={(e) => setHoraEntrega(e.target.value)}
-            type="time"
-            placeholder="Hora"
-            className="h-11 min-w-0 flex-1 rounded-xl border border-borde-fuerte px-2 text-[15px]"
-          />
+          <button
+            type="button"
+            onClick={() => setEligiendoHora(true)}
+            className={`h-11 min-w-0 flex-1 cursor-pointer rounded-xl border px-2 text-[15px] font-semibold ${
+              horaEntrega
+                ? 'border-primario bg-primario-suave text-primario'
+                : 'border-borde-fuerte text-texto-suave'
+            }`}
+          >
+            {horaEntrega || 'Hora'}
+          </button>
         </div>
 
-        {/* Retiro de socio / venta a empleado (reunión 4/8). El retiro de
-            PLATA sigue en Operaciones de caja — acá va solo la mercadería. */}
-        <div className="flex flex-col gap-2 border-t border-borde px-3 pb-3">
-          <div className="flex gap-1.5 pt-3">
-            <BotonBeneficiario
-              activo={beneficiario === null}
-              onClick={() => {
-                setBeneficiario(null);
-                setSocio(null);
-              }}
+        {/* Retiro de socio (reunión 4/8): switch simple, no una fila de
+            botones — la mayoría de los pedidos son venta normal. El retiro de
+            PLATA sigue en Operaciones de caja, acá va solo la mercadería. La
+            venta con descuento a empleado se resuelve en la pantalla de
+            cobro (selector de descuentos), no acá. */}
+        <div className="flex flex-col gap-2 border-t border-borde px-3 pb-3 pt-3">
+          <button
+            type="button"
+            onClick={() => {
+              setRetiroSocio((v) => !v);
+              setSocio(null);
+            }}
+            className={`flex min-h-[46px] w-full cursor-pointer items-center justify-between rounded-xl border px-3.5 text-[15px] font-bold ${
+              retiroSocio
+                ? 'border-primario bg-primario-suave text-primario'
+                : 'border-borde-fuerte bg-white text-texto-suave'
+            }`}
+          >
+            <span>Retiro de socio (no se cobra)</span>
+            <span
+              aria-hidden
+              className={`flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 ${
+                retiroSocio ? 'justify-end bg-primario' : 'justify-start bg-borde-fuerte'
+              }`}
             >
-              Cliente
-            </BotonBeneficiario>
-            <BotonBeneficiario
-              activo={beneficiario === 'SOCIO'}
-              onClick={() => setBeneficiario('SOCIO')}
-            >
-              Socio
-            </BotonBeneficiario>
-            <BotonBeneficiario
-              activo={beneficiario === 'EMPLEADO'}
-              onClick={() => {
-                setBeneficiario('EMPLEADO');
-                setSocio(null);
-              }}
-            >
-              Empleado
-            </BotonBeneficiario>
-          </div>
+              <span className="h-5 w-5 rounded-full bg-white" />
+            </span>
+          </button>
 
-          {beneficiario === 'SOCIO' && (
+          {retiroSocio && (
             <div className="flex gap-1.5">
               {SOCIOS.map((sc) => (
                 <button
@@ -485,16 +451,9 @@ export function POS({ sucursalId }: Props) {
             </div>
           )}
 
-          {beneficiario === 'SOCIO' && (
+          {retiroSocio && (
             <div className="rounded-xl bg-advertencia-suave px-3 py-2 text-[13px] font-semibold text-advertencia-texto">
               Retiro de mercadería: sale del stock y no se cobra. No es venta.
-            </div>
-          )}
-          {beneficiario === 'EMPLEADO' && (
-            <div className="rounded-xl bg-advertencia-suave px-3 py-2 text-[13px] font-semibold text-advertencia-texto">
-              {descuentoEmpleadoPct > 0
-                ? `Se aplica ${descuentoEmpleadoPct}% de descuento, redondeado para abajo.`
-                : 'No hay descuento de empleado configurado — se cobra precio de lista.'}
             </div>
           )}
         </div>
@@ -562,7 +521,7 @@ export function POS({ sucursalId }: Props) {
           )}
           <div className="flex items-baseline justify-between">
             <span className="text-base font-bold text-texto-suave">
-              {beneficiario === 'SOCIO' ? 'Se lleva' : 'Total'}
+              {retiroSocio ? 'Se lleva' : 'Total'}
             </span>
             <span className="text-[28px] font-extrabold">{fmtMoneda(totalCarrito)}</span>
           </div>
@@ -582,12 +541,27 @@ export function POS({ sucursalId }: Props) {
           >
             {mutConfirmar.isPending
               ? 'CONFIRMANDO…'
-              : beneficiario === 'SOCIO'
+              : retiroSocio
                 ? 'REGISTRAR RETIRO'
                 : 'CONFIRMAR PEDIDO'}
           </button>
         </div>
       </div>
+
+      {eligiendoHora && (
+        <SelectorHorario
+          valor={horaEntrega}
+          onElegir={(hora) => {
+            setHoraEntrega(hora);
+            setEligiendoHora(false);
+          }}
+          onQuitar={() => {
+            setHoraEntrega('');
+            setEligiendoHora(false);
+          }}
+          onCancelar={() => setEligiendoHora(false)}
+        />
+      )}
 
       {/* ── Barra del pedido: solo en celular, con el carrito cerrado ──
           Reemplaza al panel lateral, que en pantalla chica no entra. Muestra
