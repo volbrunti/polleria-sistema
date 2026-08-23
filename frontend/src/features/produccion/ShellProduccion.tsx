@@ -31,8 +31,12 @@ export function ShellProduccion() {
   }
 
   return (
-    <div className="flex min-h-screen justify-center bg-fondo px-3 py-7 sm:px-6">
-      <div className="relative flex min-h-[800px] w-full max-w-[402px] flex-col overflow-hidden rounded-[28px] border border-borde bg-panel shadow-2xl">
+    <div className="flex min-h-screen w-full justify-center bg-panel">
+      {/* Producción es mobile-first estricto (CLAUDE.md §4): se usa desde el
+          celular. El tope de ancho es a propósito — si algún día lo abren en
+          tablet/PC, que quede centrado y legible en vez de estirado, sin la
+          "maqueta de celular" (borde, sombra, recuadro) que tenía antes. */}
+      <div className="relative flex min-h-screen w-full max-w-[420px] flex-col">
         <div className="flex items-center gap-2.5 border-b border-borde bg-white px-4 py-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-acento text-sm font-extrabold text-texto">
             L&amp;C
