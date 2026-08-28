@@ -53,7 +53,8 @@ ser".
 - ~279 pedidos/semana, ~40 por turno, pico de ~78 órdenes en un turno de domingo
 - 5-6 usuarios concurrentes máximo
 - 2 turnos/día, **1 cajero por sucursal por turno**. Horario de atención confirmado el
-  2026-08-28: **mediodía 10:00–16:00** y **noche 19:00–00:00**. El turno del sistema no
+  2026-08-28: **mediodía 10:00–15:00** y **noche 19:00–23:00**, cerrado los **lunes** —
+  9 h/día, 6 días, ~234 h/mes de operación real. El turno del sistema no
   está atado a esas horas (se abre y se cierra a mano), pero el selector de hora prometida
   del POS sí — ver §5 Flujo 4
 - Mercado Pago domina (~61,5% de las ventas), efectivo ~38,5%
@@ -438,13 +439,14 @@ sistema, en una sola transacción:
 - La **hora prometida** sigue siendo opcional, y sale del selector de horarios fijos
   (`SelectorHorario`) — nada de tipeo libre. Se ofrecen **solo las horas en que el local
   atiende**, en pasos de 15 minutos y separadas por tramo (2026-08-28):
-  **Mediodía 10:00–16:00** y **Noche 19:00–00:00**, ambos extremos inclusive. Antes se
+  **Mediodía 10:00–15:00** y **Noche 19:00–23:00**, ambos extremos inclusive. Antes se
   listaba el día entero (96 franjas) y el cajero scrolleaba por 40 botones muertos.
   Cambiar los horarios de atención = tocar la constante `TRAMOS` de `SelectorHorario.tsx`,
   nada más depende de ella.
-  > El cierre de la noche es `00:00`, que ya es el día siguiente. `estadoHora()` en
-  > `PedidosActivos.tsx` corrige el salto: un desfasaje de más de 12 h hacia atrás se lee
-  > como "mañana", si no un pedido cargado 23:00 para las 00:00 salía en rojo al instante.
+  > `generarTramo()` sigue soportando cruzar la medianoche (`24:00` se muestra como
+  > `00:00`) por si alguna vez estiran la noche, y `estadoHora()` en `PedidosActivos.tsx`
+  > corrige el salto de día: un desfasaje de más de 12 h hacia atrás se lee como "mañana",
+  > si no un pedido cargado 23:00 para las 00:00 saldría en rojo al instante.
 
 #### Catálogo y precios
 
@@ -535,9 +537,9 @@ Desde EN_PREPARACION o LISTO:
   - **Si algún día se corre más de una instancia del backend, este gate hay que
     revisarlo**: el estado es por proceso, así que cada instancia solo se arma con los
     pedidos que atendió ella.
-  - Lo que sigue despertando la base sin necesidad es el **polling del frontend**: una
-    pestaña de admin abierta consulta cada 30 s (`ShellAdmin.tsx`) y sola alcanza para
-    tener el compute prendido toda la noche. Pendiente de resolver.
+  - El otro lado del mismo problema era el **polling del frontend**, que también mantenía
+    el compute prendido toda la noche con una pestaña olvidada. Resuelto con la pausa por
+    inactividad — ver §8.
 
 #### Cobro
 
@@ -1078,8 +1080,28 @@ a la sala de sucursal.
 | `turno:desbloqueado` | POS del cajero bloqueado | Admin o clave desbloquea |
 | `pedido:listo_no_retirado` | Admin | Pedido pendiente > 30 min (job cada 2 min) |
 
-**Polling de respaldo**: turno activo cada 20 s, pedidos cada 30 s. Existe porque el
-desbloqueo remoto no puede depender de que el socket esté vivo.
+**Polling de respaldo**: turno activo cada 20 s, transferencias cada 15 s, pedidos y
+alertas cada 30 s. Existe porque el desbloqueo remoto no puede depender de que el socket
+esté vivo.
+
+**Se pausa solo a los 20 minutos sin que nadie toque el equipo** (`src/lib/inactividad.ts`,
+2026-08-28). Una pestaña abierta y olvidada seguía consultando toda la noche, y cada
+request despierta el compute de Neon (que suspende recién a los 5 min): una sola pestaña
+de admin olvidada de 23:00 a 10:00 son ~71 CU-hours/mes, sola alcanza para pasarse de las
+100 del plan Free.
+
+- **Cómo se apaga**: React Query solo dispara un `refetchInterval` cuando
+  `focusManager.isFocused()` (verificado en `queryObserver.js:215` de la versión instalada,
+  y `refetchIntervalInBackground` no se usa en ningún lado). Marcar la app como "no
+  enfocada" pausa **todos** los intervalos de una, sin tocar ninguna pantalla.
+- Cualquier toque, tecla o movimiento reanuda al instante **y dispara un
+  `invalidateQueries()`**, así lo que se ve no quedó viejo.
+- **Los WebSockets no se tocan**: van contra Railway, no contra Neon, y siguen siendo el
+  canal primario. Esto pausa solo el respaldo.
+- **`useMantenerPollingVivo()`** es la excepción, y hoy la usa `PantallaBloqueada`: ahí el
+  cajero espera sin tocar nada a que el admin desbloquee, y el polling es justamente el
+  respaldo para cuando el socket está caído. Pausarlo lo dejaría esperando para siempre.
+  **Si aparece otra pantalla donde se espera algo sin interactuar, va este hook.**
 
 ---
 

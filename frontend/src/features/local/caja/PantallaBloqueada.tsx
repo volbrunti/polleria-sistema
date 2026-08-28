@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { usarClaveEmergencia } from '../../../api/turnos';
+import { useMantenerPollingVivo } from '../../../lib/inactividad';
 
 interface Props {
   turnoId: number;
@@ -27,6 +28,10 @@ function textoConcepto(conceptos: string[] | undefined): string | null {
 // y sin decir de qué lado está el error. La opción de clave de emergencia es
 // discreta (chica, en un rincón).
 export function PantallaBloqueada({ turnoId, conceptos, onReintentar, onDesbloqueado }: Props) {
+  // Acá el cajero espera sin tocar nada a que el admin desbloquee, así que el
+  // polling NO se puede pausar por inactividad: el aviso llega por WebSocket,
+  // pero el polling es el respaldo para cuando el socket está caído (§8).
+  useMantenerPollingVivo();
   const detalleConcepto = textoConcepto(conceptos);
   const [mostrarClave, setMostrarClave] = useState(false);
   const [codigo, setCodigo] = useState('');

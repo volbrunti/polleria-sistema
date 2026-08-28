@@ -5,10 +5,16 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import './index.css';
 import App from './App.tsx';
 import { AuthProvider } from './auth/AuthContext';
+import { iniciarPausaPorInactividad } from './lib/inactividad';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
 });
+
+// Corta el polling de respaldo cuando nadie toca el equipo: una pestaña
+// olvidada mantenía despierto el compute de Neon toda la noche. Ver
+// src/lib/inactividad.ts.
+iniciarPausaPorInactividad(queryClient);
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

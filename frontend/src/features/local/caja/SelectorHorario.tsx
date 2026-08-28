@@ -3,14 +3,14 @@
 // — nada más depende de ella.
 export const PASO_HORARIO_MIN = 15;
 
-// Solo las horas en que el local realmente atiende (§1.3: dos turnos por día).
-// Antes se listaban las 96 franjas del día entero y el cajero tenía que
-// scrollear por 40 botones muertos (00:00, 03:30…) para llegar a las útiles.
-// El cierre de la noche es 00:00 del día siguiente, por eso el tramo cruza
-// medianoche.
+// Solo las horas en que el local realmente atiende (§1.3): mediodía 10 a 15 y
+// noche 19 a 23, cerrado los lunes. Antes se listaban las 96 franjas del día
+// entero y el cajero tenía que scrollear por 40 botones muertos (00:00,
+// 03:30…) para llegar a las útiles.
+// Si alguna vez estiran el horario, se cambia acá y nada más depende de esto.
 const TRAMOS = [
-  { titulo: 'Mediodía', desde: '10:00', hasta: '16:00' },
-  { titulo: 'Noche', desde: '19:00', hasta: '24:00' },
+  { titulo: 'Mediodía', desde: '10:00', hasta: '15:00' },
+  { titulo: 'Noche', desde: '19:00', hasta: '23:00' },
 ] as const;
 
 function aMinutos(hhmm: string): number {
@@ -19,7 +19,8 @@ function aMinutos(hhmm: string): number {
 }
 
 // Extremos INCLUSIVOS: el último botón de cada tramo es la hora de cierre.
-// 24:00 se muestra como 00:00 — es la medianoche con la que cierra la noche.
+// Soporta pasar la medianoche ('24:00' se muestra como '00:00') por si alguna
+// vez estiran el horario de la noche.
 function generarTramo(desde: string, hasta: string, pasoMinutos: number): string[] {
   const horarios: string[] = [];
   for (let m = aMinutos(desde); m <= aMinutos(hasta); m += pasoMinutos) {
