@@ -137,8 +137,26 @@ export function PedidosActivos({ sucursalId }: Props) {
           const pagado = p.pagos.length > 0;
           return (
             <div key={p.id} className="rounded-2xl border border-borde bg-white px-4.5 py-4">
-              <div className="flex flex-wrap items-center gap-2.5">
-                <span className="text-lg font-extrabold">#{p.id}</span>
+              {/* El nombre es el titular de la tarjeta: es con lo que el cajero
+                  encuentra el pedido cuando el cliente se para en el mostrador
+                  y dice cómo se llama. El número queda de chip — sirve para
+                  cruzar con la comanda de cocina, pero no es lo que se busca a
+                  simple vista. `capitalize` porque se tipea apurado y en
+                  minúscula. Los pedidos viejos no tienen nombre: ahí el
+                  titular vuelve a ser el número. */}
+              <div className="flex items-start justify-between gap-3">
+                <span className="min-w-0 break-words text-[26px] font-extrabold capitalize leading-tight">
+                  {p.nombreCliente || `Pedido #${p.id}`}
+                </span>
+                <span className="shrink-0 text-[22px] font-extrabold">{fmtMoneda(total)}</span>
+              </div>
+
+              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                {p.nombreCliente && (
+                  <span className="rounded-lg bg-chip px-2.5 py-1 text-[13px] font-bold text-texto-suave">
+                    #{p.id}
+                  </span>
+                )}
                 <span
                   className="rounded-lg px-2.5 py-1 text-[13px] font-bold"
                   style={{ color: etiqueta.color, background: etiqueta.bg }}
@@ -159,11 +177,7 @@ export function PedidosActivos({ sucursalId }: Props) {
                   </span>
                 )}
                 <span className="text-sm text-texto-suave">{fmtFechaHora(p.fechaCreacion)}</span>
-                <span className="ml-auto text-lg font-extrabold">{fmtMoneda(total)}</span>
               </div>
-              {p.nombreCliente && (
-                <div className="mt-1 text-[15px] font-bold text-texto">{p.nombreCliente}</div>
-              )}
 
               <div className="mt-2 flex flex-col gap-0.5">
                 {p.items.map((i) => (
