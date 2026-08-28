@@ -520,6 +520,24 @@ Desde EN_PREPARACION o LISTO:
   un job `setInterval` en `server.ts` cada 2 min. Umbral: 30 minutos
   (`MINUTOS_PEDIDO_NO_RETIRADO_ALERTA` en `src/lib/constantes.ts`) — **es el default de la
   spec, sin confirmar con Pablo**.
+  - **El job pasa por un gate y no consulta la base si no hay nada que revisar**
+    (`revisarNoRetirados()` en `pedidos.service.ts`, 2026-08-28). **No es una optimización
+    cosmética**: Neon suspende el compute recién a los 5 minutos de inactividad, así que
+    un `findMany` cada 2 minutos mantenía la base prendida 24/7 — incluidos los lunes y
+    las 15 h diarias que el local está cerrado. Al piso de 0,25 CU son ~182 CU-hours/mes
+    contra las 100 del plan Free: **la cuota se agotaba cerca del día 17**, que es lo que
+    venía pasando con los proyectos Neon que se quemaban.
+  - El gate guarda **en memoria** el `fechaListoNoRetirado` más viejo sin avisar; si no
+    hay ninguno, el job no toca la base. **El momento del aviso no cambia** — solo se
+    saltean las corridas en que la query volvía vacía igual. Se rehidrata al arrancar con
+    `hidratarRevisionNoRetirado()`, y se auto-limpia si el pedido se reasignó, se perdió o
+    se anuló antes de que el aviso saliera.
+  - **Si algún día se corre más de una instancia del backend, este gate hay que
+    revisarlo**: el estado es por proceso, así que cada instancia solo se arma con los
+    pedidos que atendió ella.
+  - Lo que sigue despertando la base sin necesidad es el **polling del frontend**: una
+    pestaña de admin abierta consulta cada 30 s (`ShellAdmin.tsx`) y sola alcanza para
+    tener el compute prendido toda la noche. Pendiente de resolver.
 
 #### Cobro
 

@@ -757,8 +757,8 @@ export async function marcarListo(pedidoId: number, usuarioId: number) {
   }, OPCIONES_TX);
 }
 
-export const marcarNoRetirado = (pedidoId: number, usuarioId: number) =>
-  cambiarEstado({
+export const marcarNoRetirado = async (pedidoId: number, usuarioId: number) => {
+  const pedido = await cambiarEstado({
     pedidoId,
     hacia: 'LISTO_NO_RETIRADO',
     usuarioId,
@@ -766,12 +766,76 @@ export const marcarNoRetirado = (pedidoId: number, usuarioId: number) =>
     // Arranca el reloj del timer de aviso al admin (ver pedidosNoRetiradosParaAvisar).
     datosExtra: { fechaListoNoRetirado: new Date() },
   });
+  // Arma el gate del job: hasta acá no había nada que revisar.
+  if (pedido.fechaListoNoRetirado) registrarNoRetiradoPendiente(pedido.fechaListoNoRetirado);
+  return pedido;
+};
+
+// ── Gate del timer de no retirados ──
+//
+// El job de server.ts corría un findMany cada 2 minutos, siempre, sin importar
+// si había algo que revisar. Neon suspende el compute recién a los 5 minutos de
+// inactividad, así que esa query sola alcanzaba para mantener la base prendida
+// las 24 horas — incluidos los lunes y las 15 h diarias que el local está
+// cerrado. Medido contra el plan Free (100 CU-hours/mes): 24/7 al piso de
+// 0,25 CU son ~182 CU-hours, o sea que la cuota se agotaba cerca del día 17.
+//
+// Este gate guarda en memoria la fecha del `fechaListoNoRetirado` más viejo que
+// todavía no generó aviso. Si no hay ninguno, el job no toca la base y el
+// compute se suspende solo. **El momento en que llega el aviso no cambia**: el
+// gate solo evita las corridas en que la query iba a volver vacía igual.
+//
+// Ojo si algún día se corre más de una instancia del backend: el estado es
+// por proceso, así que cada instancia solo se arma con los pedidos que atendió
+// ella. Con una sola instancia (lo actual) no hay problema, y un reinicio se
+// resuelve con hidratarRevisionNoRetirado() al arrancar.
+let proximoNoRetiradoSinAvisar: number | null = null;
+
+export function registrarNoRetiradoPendiente(fechaListo: Date) {
+  const t = fechaListo.getTime();
+  if (proximoNoRetiradoSinAvisar === null || t < proximoNoRetiradoSinAvisar) {
+    proximoNoRetiradoSinAvisar = t;
+  }
+}
+
+// Relee de la base cuál es el próximo pendiente. Se llama solo cuando el job ya
+// decidió consultar, así que no agrega despertadas: o hay trabajo, o deja el
+// gate en null y el job se calla hasta el próximo marcarNoRetirado.
+async function reprogramarDesdeDb() {
+  const proximo = await prisma.pedido.findFirst({
+    where: { estado: 'LISTO_NO_RETIRADO', avisoNoRetiradoEmitido: false },
+    orderBy: { fechaListoNoRetirado: 'asc' },
+    select: { fechaListoNoRetirado: true },
+  });
+  proximoNoRetiradoSinAvisar = proximo?.fechaListoNoRetirado?.getTime() ?? null;
+}
+
+/** Al arrancar: recupera el estado del gate por si quedaron pendientes de antes. */
+export async function hidratarRevisionNoRetirado() {
+  await reprogramarDesdeDb();
+}
+
+/**
+ * Lo que llama el job. Si no hay nada que pueda haber vencido, devuelve vacío
+ * SIN tocar la base — que es el punto de todo esto.
+ */
+export async function revisarNoRetirados(umbralMinutos: number) {
+  if (proximoNoRetiradoSinAvisar === null) return [];
+  if (Date.now() < proximoNoRetiradoSinAvisar + umbralMinutos * 60 * 1000) return [];
+  const vencidos = await pedidosNoRetiradosParaAvisar(umbralMinutos);
+  // Reprograma con lo que haya quedado: puede ser otro pendiente todavía no
+  // vencido, o nada (si el pedido se reasignó, se perdió o se anuló antes de
+  // que el aviso llegara a dispararse, la query no lo trajo y acá se limpia).
+  await reprogramarDesdeDb();
+  return vencidos;
+}
 
 // ── Timer de pedido no retirado (CLAUDE.md §5 Flujo 4) ──
-// Corrido periódicamente por un job en server.ts. Devuelve los pedidos que
-// llevan más de MINUTOS_PEDIDO_NO_RETIRADO_ALERTA en LISTO_NO_RETIRADO y
-// todavía no generaron el aviso, y los marca como avisados en la misma
-// pasada (evita reemitir el evento en cada corrida del job).
+// Devuelve los pedidos que llevan más de MINUTOS_PEDIDO_NO_RETIRADO_ALERTA en
+// LISTO_NO_RETIRADO y todavía no generaron el aviso, y los marca como avisados
+// en la misma pasada (evita reemitir el evento en cada corrida del job).
+// El job NO llama a esta función directamente: pasa por revisarNoRetirados(),
+// que es la que evita despertar la base al pedo. Los tests sí la usan directo.
 export async function pedidosNoRetiradosParaAvisar(umbralMinutos: number) {
   const limite = new Date(Date.now() - umbralMinutos * 60 * 1000);
   const vencidos = await prisma.pedido.findMany({

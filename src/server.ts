@@ -6,7 +6,7 @@ import { verificarAccessToken } from './plugins/auth';
 import { prisma } from './lib/prisma';
 import * as alertasService from './modules/alertas/alertas.service';
 import * as agenteImpresionService from './modules/comanderas/agente-impresion.service';
-import { pedidosNoRetiradosParaAvisar } from './modules/pedidos/pedidos.service';
+import { hidratarRevisionNoRetirado, revisarNoRetirados } from './modules/pedidos/pedidos.service';
 import { MINUTOS_PEDIDO_NO_RETIRADO_ALERTA, INTERVALO_CHEQUEO_NO_RETIRADO_MS } from './lib/constantes';
 
 async function main() {
@@ -96,8 +96,18 @@ async function main() {
   // los admins por WebSocket cuando un A_RETIRAR lleva más de N minutos en
   // LISTO_NO_RETIRADO. No bloquea nada — es un aviso, igual que el resto de
   // las alertas del sistema.
+  //
+  // revisarNoRetirados() NO consulta la base si no hay ningún pedido esperando
+  // aviso: sin ese gate, esta query cada 2 minutos mantenía el compute de Neon
+  // despierto las 24 h (suspende recién a los 5 min de inactividad) aunque el
+  // local esté cerrado. Ver el comentario largo en pedidos.service.ts.
+  // El estado del gate vive en memoria, así que se rehidrata en cada arranque.
+  await hidratarRevisionNoRetirado().catch((err) =>
+    app.log.error(err, 'No se pudo hidratar el gate de pedidos no retirados'),
+  );
+
   const timerNoRetirado = setInterval(() => {
-    void pedidosNoRetiradosParaAvisar(MINUTOS_PEDIDO_NO_RETIRADO_ALERTA)
+    void revisarNoRetirados(MINUTOS_PEDIDO_NO_RETIRADO_ALERTA)
       .then((vencidos) => {
         for (const pedido of vencidos) {
           alertasService.emitirAAdmins('pedido:listo_no_retirado', {

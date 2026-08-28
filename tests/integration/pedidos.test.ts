@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
 import {
@@ -11,7 +11,11 @@ import {
   stockDe,
   type Fixtures,
 } from './helpers';
-import { pedidosNoRetiradosParaAvisar } from '../../src/modules/pedidos/pedidos.service';
+import {
+  hidratarRevisionNoRetirado,
+  pedidosNoRetiradosParaAvisar,
+  revisarNoRetirados,
+} from '../../src/modules/pedidos/pedidos.service';
 
 // Módulo 2 — Pedidos / POS (CLAUDE.md §5 Flujo 4). Corre en serie: el stock
 // y el turno se encadenan entre tests.
@@ -657,6 +661,61 @@ describe('Timer de pedido no retirado (CLAUDE.md §5 Flujo 4)', () => {
 
     const actualizado = await prisma.pedido.findUniqueOrThrow({ where: { id } });
     expect(actualizado.avisoNoRetiradoEmitido).toBe(true);
+  });
+
+  // ── Gate del job (ahorro de cómputo en Neon) ──
+  // El job de server.ts corría un findMany cada 2 minutos pasara lo que pasara.
+  // Neon suspende el compute a los 5 min de inactividad, así que esa query sola
+  // mantenía la base prendida 24/7 con el local cerrado. revisarNoRetirados()
+  // no puede tocar la base cuando no hay nada que revisar — eso es lo que se
+  // verifica acá, espiando el cliente Prisma que usa el servicio.
+
+  it('con el gate armado pero sin vencer el umbral, no consulta la base', async () => {
+    const prisma = await getPrisma();
+    await crearPedidoNoRetirado();
+    await hidratarRevisionNoRetirado();
+
+    const findMany = vi.spyOn(prisma.pedido, 'findMany');
+    const vencidos = await revisarNoRetirados(30);
+
+    expect(vencidos).toEqual([]);
+    expect(findMany).not.toHaveBeenCalled();
+    findMany.mockRestore();
+  });
+
+  it('avisa igual que antes cuando el pedido ya venció', async () => {
+    const prisma = await getPrisma();
+    const id = await crearPedidoNoRetirado();
+    await prisma.pedido.update({
+      where: { id },
+      data: { fechaListoNoRetirado: new Date(Date.now() - 40 * 60 * 1000) },
+    });
+    await hidratarRevisionNoRetirado();
+
+    const vencidos = await revisarNoRetirados(30);
+    expect(vencidos.map((p) => p.id)).toContain(id);
+  });
+
+  it('sin ningún pedido esperando aviso, el job no toca la base en absoluto', async () => {
+    const prisma = await getPrisma();
+    // Deja la base sin pendientes: es el estado del local cerrado.
+    await prisma.pedido.updateMany({
+      where: { estado: 'LISTO_NO_RETIRADO' },
+      data: { avisoNoRetiradoEmitido: true },
+    });
+    await hidratarRevisionNoRetirado();
+
+    const findMany = vi.spyOn(prisma.pedido, 'findMany');
+    const findFirst = vi.spyOn(prisma.pedido, 'findFirst');
+    const vencidos = await revisarNoRetirados(30);
+
+    expect(vencidos).toEqual([]);
+    // Ni la query de vencidos ni la de reprogramación: cero tráfico contra la
+    // base, que es lo que deja al compute suspenderse.
+    expect(findMany).not.toHaveBeenCalled();
+    expect(findFirst).not.toHaveBeenCalled();
+    findMany.mockRestore();
+    findFirst.mockRestore();
   });
 });
 
