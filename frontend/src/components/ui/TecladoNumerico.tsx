@@ -25,8 +25,6 @@ export interface PropsTecladoNumerico {
    * Pablo, reunión 4/8: "no te genera ninguna diferencia visual").
    */
   variante?: 'normal' | 'contraste';
-  /** Ícono grande al lado del título. Refuerza de qué paso se trata. */
-  icono?: string;
   onConfirmar: (valor: number) => void;
   onCancelar: () => void;
 }
@@ -47,7 +45,6 @@ export function TecladoNumerico({
   pistaDisponible,
   valorInicial,
   variante = 'normal',
-  icono,
   onConfirmar,
   onCancelar,
 }: PropsTecladoNumerico) {
@@ -91,12 +88,9 @@ export function TecladoNumerico({
           contraste ? 'border-t-8 border-acento sm:border-t-0 sm:ring-8 sm:ring-acento' : ''
         }`}
       >
-        <div className="flex items-start gap-2.5">
-          {icono && <span className="text-2xl leading-none">{icono}</span>}
-          <div className="min-w-0 flex-1">
-            <div className="text-lg font-extrabold">{titulo}</div>
-            {subtitulo && <div className="text-sm text-texto-suave">{subtitulo}</div>}
-          </div>
+        <div className="min-w-0">
+          <div className="text-lg font-extrabold">{titulo}</div>
+          {subtitulo && <div className="text-sm text-texto-suave">{subtitulo}</div>}
         </div>
         {pistaDisponible && (
           <div

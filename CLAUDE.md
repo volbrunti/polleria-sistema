@@ -52,7 +52,10 @@ ser".
 - Facturación semanal: ~$12.848.750 ARS
 - ~279 pedidos/semana, ~40 por turno, pico de ~78 órdenes en un turno de domingo
 - 5-6 usuarios concurrentes máximo
-- 2 turnos/día (día y noche, horarios variables), **1 cajero por sucursal por turno**
+- 2 turnos/día, **1 cajero por sucursal por turno**. Horario de atención confirmado el
+  2026-08-28: **mediodía 10:00–16:00** y **noche 19:00–00:00**. El turno del sistema no
+  está atado a esas horas (se abre y se cierra a mano), pero el selector de hora prometida
+  del POS sí — ver §5 Flujo 4
 - Mercado Pago domina (~61,5% de las ventas), efectivo ~38,5%
 - Hasta 10 proveedores, pedidos rutinarios
 
@@ -420,7 +423,15 @@ sistema, en una sola transacción:
   > Zod rompería los tests de integración que confirman sin nombre. Si alguna vez se
   > agrega otro canal de alta (WhatsApp), hay que subir la regla al backend.
 - La **hora prometida** sigue siendo opcional, y sale del selector de horarios fijos
-  (`SelectorHorario`) — nada de tipeo libre.
+  (`SelectorHorario`) — nada de tipeo libre. Se ofrecen **solo las horas en que el local
+  atiende**, en pasos de 15 minutos y separadas por tramo (2026-08-28):
+  **Mediodía 10:00–16:00** y **Noche 19:00–00:00**, ambos extremos inclusive. Antes se
+  listaba el día entero (96 franjas) y el cajero scrolleaba por 40 botones muertos.
+  Cambiar los horarios de atención = tocar la constante `TRAMOS` de `SelectorHorario.tsx`,
+  nada más depende de ella.
+  > El cierre de la noche es `00:00`, que ya es el día siguiente. `estadoHora()` en
+  > `PedidosActivos.tsx` corrige el salto: un desfasaje de más de 12 h hacia atrás se lee
+  > como "mañana", si no un pedido cargado 23:00 para las 00:00 salía en rojo al instante.
 
 #### Catálogo y precios
 

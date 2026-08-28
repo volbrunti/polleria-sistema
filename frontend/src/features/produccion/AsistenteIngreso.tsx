@@ -43,7 +43,7 @@ function AvisoSaldoPrevio({ producto, saldo }: { producto: Producto; saldo: Line
   return (
     <div className="rounded-xl border-2 border-error bg-error-suave px-3.5 py-2.5">
       <div className="text-[15px] font-extrabold text-error-texto">
-        ⚠️ Ojo: todavía te quedan {fmtNumero(total)} {u} de antes
+        Ojo: todavía te quedan {fmtNumero(total)} {u} de antes
       </div>
       <div className="mt-1 flex flex-col gap-0.5 text-sm font-semibold text-error-texto">
         {saldo.map((l) => (
@@ -426,7 +426,6 @@ export function AsistenteIngreso({ onVolver, onFinalizado, onIrAProducir }: Prop
         <TecladoNumerico
           titulo="¿Cuánto dice el remito?"
           subtitulo={overlay.producto.nombre}
-          icono="📄"
           unidad={overlay.producto.unidadDeMedida === 'KG' ? 'kg' : 'u'}
           permiteDecimal={overlay.producto.unidadDeMedida === 'KG'}
           pistaDisponible={
@@ -453,7 +452,6 @@ export function AsistenteIngreso({ onVolver, onFinalizado, onIrAProducir }: Prop
         <TecladoNumerico
           titulo={overlay.producto.unidadDeMedida === 'KG' ? 'Ahora pesalo vos' : 'Ahora contalo vos'}
           subtitulo={overlay.producto.nombre}
-          icono={overlay.producto.unidadDeMedida === 'KG' ? '⚖️' : '🔢'}
           variante="contraste"
           pistaDisponible={`El remito decía ${fmtNumero(overlay.remito)} ${fmtUnidad(overlay.producto.unidadDeMedida, overlay.remito)} — cargá lo que ${
             overlay.producto.unidadDeMedida === 'KG' ? 'da la balanza' : 'contaste de verdad'

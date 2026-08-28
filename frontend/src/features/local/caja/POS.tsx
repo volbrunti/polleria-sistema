@@ -217,18 +217,13 @@ export function POS({ sucursalId }: Props) {
       {/* ── Grilla de productos ── */}
       {/* pb-24 en celular: deja aire para la barra fija del pedido */}
       <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-auto p-4 pb-24 md:pb-4">
-        <div className="relative">
-          <input
-            type="search"
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar producto…"
-            className="min-h-[50px] w-full rounded-xl border border-borde-fuerte bg-white pl-11 pr-4 text-base font-semibold"
-          />
-          <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-lg text-texto-suave">
-            🔍
-          </span>
-        </div>
+        <input
+          type="search"
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+          placeholder="Buscar producto…"
+          className="min-h-[50px] w-full rounded-xl border border-borde-fuerte bg-white px-4 text-base font-semibold"
+        />
 
         {destacados.length > 0 && (
           <div className="flex flex-col gap-1.5">
@@ -487,7 +482,7 @@ export function POS({ sucursalId }: Props) {
       {avisos && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/45 p-6">
           <div className="flex w-full max-w-md flex-col gap-3 rounded-3xl bg-white p-5">
-            <div className="text-xl font-extrabold">⚠️ Queda poco stock</div>
+            <div className="text-xl font-extrabold">Queda poco stock</div>
             {avisos.map((a) => (
               <div key={a.productoId} className="rounded-xl bg-error-suave px-4 py-3 text-base font-semibold text-error-texto">
                 {a.producto}: quedan {a.stockRestante} (mínimo {a.minimo})

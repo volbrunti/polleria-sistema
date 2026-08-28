@@ -143,7 +143,6 @@ export function LoteAbierto({ loteId, onVolverMenu, onCerrado }: Props) {
         <TecladoNumerico
           titulo={`¿Cuánto usaste realmente de ${overlay.nombre}?`}
           subtitulo="Pesá lo que quedó y cargá lo que gastaste de verdad."
-          icono="⚖️"
           variante="contraste"
           unidad={overlay.unidad === 'kg' ? 'kg' : 'u'}
           permiteDecimal={overlay.unidad === 'kg'}

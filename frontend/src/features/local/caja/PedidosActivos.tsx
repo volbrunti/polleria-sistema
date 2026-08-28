@@ -31,7 +31,12 @@ function estadoHora(hora: string): 'ok' | 'proximo' | 'vencido' {
   const [h, m] = hora.split(':').map(Number);
   const objetivo = new Date();
   objetivo.setHours(h ?? 0, m ?? 0, 0, 0);
-  const minutosRestantes = (objetivo.getTime() - Date.now()) / 60_000;
+  let minutosRestantes = (objetivo.getTime() - Date.now()) / 60_000;
+  // El turno noche cierra a las 00:00, que ya es el día siguiente: un pedido
+  // cargado a las 23:00 para las 00:00 daría −1380 minutos y saldría en rojo
+  // apenas se confirma. Más de 12 h "atrasado" es siempre eso — la hora es de
+  // mañana, no un pedido que se pasó.
+  if (minutosRestantes < -12 * 60) minutosRestantes += 24 * 60;
   if (minutosRestantes < 0) return 'vencido';
   if (minutosRestantes <= 15) return 'proximo';
   return 'ok';
@@ -98,18 +103,13 @@ export function PedidosActivos({ sucursalId }: Props) {
     <div className="flex flex-1 flex-col gap-3 overflow-auto p-4">
       <div className="text-[22px] font-extrabold">Pedidos activos</div>
 
-      <div className="relative">
-        <input
-          type="search"
-          value={busquedaNombre}
-          onChange={(e) => setBusquedaNombre(e.target.value)}
-          placeholder="Buscar por nombre del cliente…"
-          className="min-h-[50px] w-full rounded-xl border border-borde-fuerte bg-white pl-11 pr-4 text-base font-semibold"
-        />
-        <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-lg text-texto-suave">
-          🔍
-        </span>
-      </div>
+      <input
+        type="search"
+        value={busquedaNombre}
+        onChange={(e) => setBusquedaNombre(e.target.value)}
+        placeholder="Buscar por nombre del cliente…"
+        className="min-h-[50px] w-full rounded-xl border border-borde-fuerte bg-white px-4 text-base font-semibold"
+      />
 
       {error && (
         <div className="rounded-xl bg-error-suave px-3.5 py-3 text-base font-semibold text-error-texto">{error}</div>

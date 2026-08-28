@@ -37,12 +37,12 @@ export function OperacionesCaja({ sucursalId }: Props) {
   const [operacion, setOperacion] = useState<Operacion>(null);
   const [exito, setExito] = useState<string | null>(null);
 
-  const BOTONES: { op: Exclude<Operacion, null>; titulo: string; detalle: string; icono: string }[] = [
-    { op: 'marcado', titulo: 'Tirar pollos a la parrilla', detalle: 'Del freezer a marcados', icono: '🔥' },
-    { op: 'gasto', titulo: 'Gasto de caja', detalle: 'Papas, leña, limpieza…', icono: '🧾' },
-    { op: 'retiro', titulo: 'Retiro de socio', detalle: 'Ariel, Eliana o Ema', icono: '💸' },
-    { op: 'atencion', titulo: 'Atención / regalía', detalle: 'Producto sin cargo con motivo', icono: '🎁' },
-    { op: 'costoCero', titulo: 'Quemado o vuelve a stock', detalle: 'Merma o devolución', icono: '♻️' },
+  const BOTONES: { op: Exclude<Operacion, null>; titulo: string; detalle: string }[] = [
+    { op: 'marcado', titulo: 'Tirar pollos a la parrilla', detalle: 'Del freezer a marcados' },
+    { op: 'gasto', titulo: 'Gasto de caja', detalle: 'Papas, leña, limpieza…' },
+    { op: 'retiro', titulo: 'Retiro de socio', detalle: 'Ariel, Eliana o Ema' },
+    { op: 'atencion', titulo: 'Atención / regalía', detalle: 'Producto sin cargo con motivo' },
+    { op: 'costoCero', titulo: 'Quemado o vuelve a stock', detalle: 'Merma o devolución' },
   ];
 
   return (
@@ -54,13 +54,10 @@ export function OperacionesCaja({ sucursalId }: Props) {
             key={b.op}
             type="button"
             onClick={() => setOperacion(b.op)}
-            className="flex min-h-[92px] cursor-pointer items-center gap-4 rounded-2xl border border-borde bg-white px-5 text-left hover:border-primario"
+            className="flex min-h-[92px] cursor-pointer flex-col justify-center rounded-2xl border border-borde bg-white px-5 text-left hover:border-primario"
           >
-            <span className="text-4xl">{b.icono}</span>
-            <span>
-              <span className="block text-lg font-extrabold">{b.titulo}</span>
-              <span className="block text-[15px] text-texto-suave">{b.detalle}</span>
-            </span>
+            <span className="text-lg font-extrabold">{b.titulo}</span>
+            <span className="text-[15px] text-texto-suave">{b.detalle}</span>
           </button>
         ))}
       </div>
@@ -491,14 +488,14 @@ function FormCostoCero({ sucursalId, onListo, onCancelar }: { sucursalId: number
           onClick={() => setTipo('DESPERDICIO_QUEMADO')}
           className={`flex-1 ${chips(tipo === 'DESPERDICIO_QUEMADO')}`}
         >
-          🔥 Se quemó / se tira
+          Se quemó / se tira
         </button>
         <button
           type="button"
           onClick={() => setTipo('RETORNO_A_PRODUCCION')}
           className={`flex-1 ${chips(tipo === 'RETORNO_A_PRODUCCION')}`}
         >
-          ♻️ Vuelve a stock
+          Vuelve a stock
         </button>
       </div>
       <SelectorProducto valor={productoId} onCambiar={setProductoId} />

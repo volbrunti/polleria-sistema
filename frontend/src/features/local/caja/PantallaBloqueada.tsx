@@ -41,7 +41,6 @@ export function PantallaBloqueada({ turnoId, conceptos, onReintentar, onDesbloqu
 
   return (
     <div className="relative flex flex-1 flex-col items-center justify-center gap-5 p-8 text-center">
-      <div className="flex h-24 w-24 items-center justify-center rounded-full bg-chip text-5xl">🔒</div>
       <div className="max-w-[440px]">
         <div className="text-[24px] font-extrabold">Hay una diferencia en el conteo</div>
         {detalleConcepto && (

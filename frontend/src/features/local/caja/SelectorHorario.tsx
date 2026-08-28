@@ -3,17 +3,38 @@
 // — nada más depende de ella.
 export const PASO_HORARIO_MIN = 15;
 
-function generarHorarios(pasoMinutos: number): string[] {
+// Solo las horas en que el local realmente atiende (§1.3: dos turnos por día).
+// Antes se listaban las 96 franjas del día entero y el cajero tenía que
+// scrollear por 40 botones muertos (00:00, 03:30…) para llegar a las útiles.
+// El cierre de la noche es 00:00 del día siguiente, por eso el tramo cruza
+// medianoche.
+const TRAMOS = [
+  { titulo: 'Mediodía', desde: '10:00', hasta: '16:00' },
+  { titulo: 'Noche', desde: '19:00', hasta: '24:00' },
+] as const;
+
+function aMinutos(hhmm: string): number {
+  const [h, m] = hhmm.split(':').map(Number);
+  return (h ?? 0) * 60 + (m ?? 0);
+}
+
+// Extremos INCLUSIVOS: el último botón de cada tramo es la hora de cierre.
+// 24:00 se muestra como 00:00 — es la medianoche con la que cierra la noche.
+function generarTramo(desde: string, hasta: string, pasoMinutos: number): string[] {
   const horarios: string[] = [];
-  for (let m = 0; m < 24 * 60; m += pasoMinutos) {
-    const hh = String(Math.floor(m / 60)).padStart(2, '0');
-    const mm = String(m % 60).padStart(2, '0');
+  for (let m = aMinutos(desde); m <= aMinutos(hasta); m += pasoMinutos) {
+    const enElDia = m % (24 * 60);
+    const hh = String(Math.floor(enElDia / 60)).padStart(2, '0');
+    const mm = String(enElDia % 60).padStart(2, '0');
     horarios.push(`${hh}:${mm}`);
   }
   return horarios;
 }
 
-const HORARIOS = generarHorarios(PASO_HORARIO_MIN);
+const HORARIOS_POR_TRAMO = TRAMOS.map((t) => ({
+  titulo: t.titulo,
+  horarios: generarTramo(t.desde, t.hasta, PASO_HORARIO_MIN),
+}));
 
 interface Props {
   valor: string;
@@ -40,22 +61,29 @@ export function SelectorHorario({ valor, onElegir, onQuitar, onCancelar }: Props
           </button>
         )}
 
-        <div className="grid grid-cols-4 gap-2">
-          {HORARIOS.map((h) => (
-            <button
-              key={h}
-              type="button"
-              onClick={() => onElegir(h)}
-              className={`min-h-[52px] cursor-pointer rounded-xl text-base font-bold ${
-                valor === h
-                  ? 'bg-primario text-white'
-                  : 'border-2 border-borde-fuerte bg-white text-texto hover:border-primario'
-              }`}
-            >
-              {h}
-            </button>
-          ))}
-        </div>
+        {HORARIOS_POR_TRAMO.map((tramo) => (
+          <div key={tramo.titulo} className="flex flex-col gap-2">
+            <div className="text-xs font-extrabold tracking-wide text-texto-suave">
+              {tramo.titulo.toUpperCase()}
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {tramo.horarios.map((h) => (
+                <button
+                  key={h}
+                  type="button"
+                  onClick={() => onElegir(h)}
+                  className={`min-h-[52px] cursor-pointer rounded-xl text-base font-bold ${
+                    valor === h
+                      ? 'bg-primario text-white'
+                      : 'border-2 border-borde-fuerte bg-white text-texto hover:border-primario'
+                  }`}
+                >
+                  {h}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
 
         <button
           type="button"
