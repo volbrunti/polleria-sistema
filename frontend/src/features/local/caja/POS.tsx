@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { listarProductos, tablasPrecioVigentes } from '../../../api/productos';
-import { cobrarPedido, confirmarPedido, masVendidos } from '../../../api/pedidos';
+import { confirmarPedido, masVendidos } from '../../../api/pedidos';
 import { calcularPrecioTotal, type TierPrecio } from '../../../lib/precios';
 import { nuevoToken } from '../../../lib/idempotencia';
 import { fmtMoneda } from '../../../lib/formato';
@@ -9,15 +9,7 @@ import { normalizar } from '../../../lib/texto';
 import { ApiError } from '../../../api/client';
 import { CobrarPedido } from './CobrarPedido';
 import { SelectorHorario } from './SelectorHorario';
-import type {
-  AvisoStockMinimo,
-  Pedido,
-  Producto,
-  SocioRetiro,
-  TipoPedido,
-} from '../../../api/types';
-
-const SOCIOS: SocioRetiro[] = ['ARIEL', 'ELIANA', 'EMA'];
+import type { AvisoStockMinimo, Pedido, Producto, TipoPedido } from '../../../api/types';
 
 interface Props {
   sucursalId: number;
@@ -125,13 +117,10 @@ export function POS({ sucursalId }: Props) {
     [vendibles, rankingPorProducto],
   );
   const [tipo, setTipo] = useState<TipoPedido>('PRESENCIAL');
-  // Retiro de socio (reunión 4/8): switch simple, apagado = venta normal. La
-  // venta con descuento a empleado ahora se resuelve en la pantalla de cobro
-  // (selector de descuentos), no acá — ver CobrarPedido.tsx.
-  const [retiroSocio, setRetiroSocio] = useState(false);
-  const [socio, setSocio] = useState<SocioRetiro | null>(null);
   // Nombre y hora prometida — se piden al confirmar (no al cobrar) porque el
   // ticket a cocina se imprime en ese momento (pedido post-prueba en vivo).
+  // El nombre es OBLIGATORIO: es con lo que se llama al cliente y con lo que
+  // se lo busca en Pedidos activos.
   const [nombreCliente, setNombreCliente] = useState('');
   const [horaEntrega, setHoraEntrega] = useState('');
   const [eligiendoHora, setEligiendoHora] = useState(false);
@@ -141,7 +130,6 @@ export function POS({ sucursalId }: Props) {
   const [pedidoACobrar, setPedidoACobrar] = useState<Pedido | null>(null);
   const [vueltoFinal, setVueltoFinal] = useState<string | null>(null);
   const [confirmadoSinCobro, setConfirmadoSinCobro] = useState(false);
-  const [retiroConfirmado, setRetiroConfirmado] = useState<Pedido | null>(null);
   // Solo aplica en celular: en tablet/escritorio el carrito está siempre a la vista.
   const [carritoAbierto, setCarritoAbierto] = useState(false);
 
@@ -176,17 +164,17 @@ export function POS({ sucursalId }: Props) {
     );
   }
 
-  // Mismo criterio que el backend (pedidos.calculos.ts): el socio se lo lleva
-  // a costo cero. Acá es solo la previsualización — la autoridad es el POST.
-  const lineasConTotal = carrito.map((l) => {
-    const lista = calcularPrecioTotal(l.cantidad, tablaPorProducto.get(l.producto.id) ?? []);
-    return { ...l, lista, total: lista === null ? null : retiroSocio ? 0 : lista };
-  });
+  // Previsualización con la tabla de volumen (mismo greedy que el backend en
+  // pedidos.calculos.ts). La autoridad del precio sigue siendo el POST; los
+  // descuentos se aplican después, en la pantalla de cobro.
+  const lineasConTotal = carrito.map((l) => ({
+    ...l,
+    total: calcularPrecioTotal(l.cantidad, tablaPorProducto.get(l.producto.id) ?? []),
+  }));
   const haySinPrecio = lineasConTotal.some((l) => l.total === null);
-  const totalLista = lineasConTotal.reduce((acc, l) => acc + (l.lista ?? 0), 0);
   const totalCarrito = lineasConTotal.reduce((acc, l) => acc + (l.total ?? 0), 0);
-  // Falta elegir el socio: no se puede confirmar un retiro sin decir de quién.
-  const faltaSocio = retiroSocio && socio === null;
+  // El nombre del cliente es regla de negocio: sin nombre no se confirma.
+  const faltaNombre = nombreCliente.trim().length === 0;
 
   const mutConfirmar = useMutation({
     mutationFn: () =>
@@ -195,9 +183,7 @@ export function POS({ sucursalId }: Props) {
         tipo,
         items: carrito.map((l) => ({ productoId: l.producto.id, cantidad: l.cantidad })),
         tokenIdempotencia: tokenPedido.current,
-        ...(retiroSocio ? { beneficiario: 'SOCIO' as const } : {}),
-        ...(retiroSocio && socio ? { socioBeneficiario: socio } : {}),
-        ...(nombreCliente.trim() ? { nombreCliente: nombreCliente.trim() } : {}),
+        nombreCliente: nombreCliente.trim(),
         ...(horaEntrega ? { horaEntregaSolicitada: horaEntrega } : {}),
       }),
     onSuccess: (pedido) => {
@@ -205,32 +191,15 @@ export function POS({ sucursalId }: Props) {
       void queryClient.invalidateQueries({ queryKey: ['mas-vendidos'] });
       setCarrito([]);
       setCarritoAbierto(false); // en celular, vuelve a la grilla de productos
-      const eraRetiroDeSocio = retiroSocio;
-      setRetiroSocio(false);
-      setSocio(null);
       setNombreCliente('');
       setHoraEntrega('');
       if (pedido.avisosStockMinimo && pedido.avisosStockMinimo.length > 0) {
         setAvisos(pedido.avisosStockMinimo);
       }
-      // El retiro del socio no se cobra: se cierra solo y no abre la pantalla
-      // de cobro (la maneja cobrarPedido con pagos vacíos).
-      if (eraRetiroDeSocio) setRetiroConfirmado(pedido);
-      else if (tipo === 'PRESENCIAL') setPedidoACobrar(pedido);
+      if (tipo === 'PRESENCIAL') setPedidoACobrar(pedido);
       else setConfirmadoSinCobro(true);
     },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'No se pudo confirmar el pedido.'),
-  });
-
-  // Cierra el retiro del socio sin pagos: queda ENTREGADO igual que un cobro.
-  const mutCerrarRetiro = useMutation({
-    mutationFn: (pedidoId: number) => cobrarPedido(pedidoId, []),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['pedidos'] });
-      setRetiroConfirmado(null);
-    },
-    onError: (e) =>
-      setError(e instanceof ApiError ? e.message : 'El retiro quedó abierto — cerralo desde Pedidos.'),
   });
 
   function precioBoton(p: Producto): string {
@@ -372,16 +341,18 @@ export function POS({ sucursalId }: Props) {
           ))}
         </div>
 
-        {/* Nombre y hora prometida — opcionales, para ambos tipos de pedido
-            (confirmado por Ariel: aplica también a PRESENCIAL, no solo a
-            retirar). Van a la comandera de cocina. La hora sale del selector
-            de horarios fijos (SelectorHorario) — nada de tipeo libre. */}
+        {/* Nombre (OBLIGATORIO) y hora prometida (opcional), para ambos tipos
+            de pedido — confirmado por Ariel: aplica también a PRESENCIAL, no
+            solo a retirar. Van a la comandera de cocina. La hora sale del
+            selector de horarios fijos (SelectorHorario) — nada de tipeo libre. */}
         <div className="flex gap-1.5 px-3 pb-3">
           <input
             value={nombreCliente}
             onChange={(e) => setNombreCliente(e.target.value)}
-            placeholder="Nombre (opcional)"
-            className="h-11 min-w-0 flex-[2] rounded-xl border border-borde-fuerte px-3 text-[15px]"
+            placeholder="Nombre del cliente"
+            className={`h-11 min-w-0 flex-[2] rounded-xl border px-3 text-[15px] ${
+              faltaNombre && carrito.length > 0 ? 'border-error' : 'border-borde-fuerte'
+            }`}
           />
           <button
             type="button"
@@ -396,60 +367,7 @@ export function POS({ sucursalId }: Props) {
           </button>
         </div>
 
-        {/* Retiro de socio (reunión 4/8): switch simple, no una fila de
-            botones — la mayoría de los pedidos son venta normal. El retiro de
-            PLATA sigue en Operaciones de caja, acá va solo la mercadería. La
-            venta con descuento a empleado se resuelve en la pantalla de
-            cobro (selector de descuentos), no acá. */}
-        <div className="flex flex-col gap-2 border-t border-borde px-3 pb-3 pt-3">
-          <button
-            type="button"
-            onClick={() => {
-              setRetiroSocio((v) => !v);
-              setSocio(null);
-            }}
-            className={`flex min-h-[46px] w-full cursor-pointer items-center justify-between rounded-xl border px-3.5 text-[15px] font-bold ${
-              retiroSocio
-                ? 'border-primario bg-primario-suave text-primario'
-                : 'border-borde-fuerte bg-white text-texto-suave'
-            }`}
-          >
-            <span>Retiro de socio (no se cobra)</span>
-            <span
-              aria-hidden
-              className={`flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 ${
-                retiroSocio ? 'justify-end bg-primario' : 'justify-start bg-borde-fuerte'
-              }`}
-            >
-              <span className="h-5 w-5 rounded-full bg-white" />
-            </span>
-          </button>
-
-          {retiroSocio && (
-            <div className="flex gap-1.5">
-              {SOCIOS.map((sc) => (
-                <button
-                  key={sc}
-                  type="button"
-                  onClick={() => setSocio(sc)}
-                  className={`min-h-[42px] flex-1 cursor-pointer rounded-xl text-sm font-bold ${
-                    socio === sc ? 'bg-primario text-white' : 'border border-borde-fuerte bg-white text-texto-suave'
-                  }`}
-                >
-                  {sc.charAt(0) + sc.slice(1).toLowerCase()}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {retiroSocio && (
-            <div className="rounded-xl bg-advertencia-suave px-3 py-2 text-[13px] font-semibold text-advertencia-texto">
-              Retiro de mercadería: sale del stock y no se cobra. No es venta.
-            </div>
-          )}
-        </div>
-
-        <div className="flex-1 overflow-auto px-3">
+        <div className="flex-1 overflow-auto border-t border-borde px-3 pt-3">
           {carrito.length === 0 ? (
             <div className="p-5 text-center text-[15px] text-texto-suave">
               Tocá los productos para armar el pedido
@@ -460,13 +378,8 @@ export function POS({ sucursalId }: Props) {
                 <div key={l.producto.id} className="rounded-xl border border-borde bg-panel px-3 py-2.5">
                   <div className="flex items-start justify-between gap-2">
                     <span className="text-[15px] font-extrabold leading-tight">{l.producto.nombre}</span>
-                    <span className="flex flex-col items-end text-[15px] font-extrabold">
+                    <span className="text-[15px] font-extrabold">
                       {l.total !== null ? fmtMoneda(l.total) : 'sin precio'}
-                      {l.lista !== null && l.total !== null && l.total !== l.lista && (
-                        <span className="text-[13px] font-semibold text-texto-suave line-through">
-                          {fmtMoneda(l.lista)}
-                        </span>
-                      )}
                     </span>
                   </div>
                   <div className="mt-1.5 flex items-center gap-2">
@@ -504,37 +417,25 @@ export function POS({ sucursalId }: Props) {
         )}
 
         <div className="flex flex-col gap-2.5 border-t border-borde p-3">
-          {totalCarrito !== totalLista && (
-            <div className="flex items-baseline justify-between text-sm">
-              <span className="text-texto-suave">Precio de lista</span>
-              <span className="font-semibold text-texto-suave line-through">{fmtMoneda(totalLista)}</span>
-            </div>
-          )}
           <div className="flex items-baseline justify-between">
-            <span className="text-base font-bold text-texto-suave">
-              {retiroSocio ? 'Se lleva' : 'Total'}
-            </span>
+            <span className="text-base font-bold text-texto-suave">Total</span>
             <span className="text-[28px] font-extrabold">{fmtMoneda(totalCarrito)}</span>
           </div>
-          {faltaSocio && (
+          {faltaNombre && carrito.length > 0 && (
             <div className="rounded-xl bg-error-suave px-3.5 py-2.5 text-[14px] font-semibold text-error-texto">
-              Elegí qué socio se lleva la mercadería.
+              Poné el nombre del cliente para confirmar.
             </div>
           )}
           <button
             type="button"
-            disabled={carrito.length === 0 || haySinPrecio || faltaSocio || mutConfirmar.isPending}
+            disabled={carrito.length === 0 || haySinPrecio || faltaNombre || mutConfirmar.isPending}
             onClick={() => {
               setError(null);
               mutConfirmar.mutate();
             }}
             className="min-h-[60px] w-full cursor-pointer rounded-2xl bg-primario text-lg font-extrabold text-white hover:bg-primario-hover disabled:opacity-50"
           >
-            {mutConfirmar.isPending
-              ? 'CONFIRMANDO…'
-              : retiroSocio
-                ? 'REGISTRAR RETIRO'
-                : 'CONFIRMAR PEDIDO'}
+            {mutConfirmar.isPending ? 'CONFIRMANDO…' : 'CONFIRMAR PEDIDO'}
           </button>
         </div>
       </div>
@@ -631,26 +532,6 @@ export function POS({ sucursalId }: Props) {
               className="mt-1 min-h-[56px] w-full cursor-pointer rounded-2xl bg-primario text-lg font-extrabold text-white"
             >
               LISTO
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Retiro de socio: no hay cobro, solo se confirma y se cierra */}
-      {retiroConfirmado && (
-        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/45 p-6">
-          <div className="flex w-full max-w-sm flex-col items-center gap-3 rounded-3xl bg-white p-6 text-center">
-            <div className="text-xl font-extrabold">Retiro registrado ✓</div>
-            <div className="text-base text-texto-suave">
-              La mercadería salió del stock. No se cobra nada.
-            </div>
-            <button
-              type="button"
-              disabled={mutCerrarRetiro.isPending}
-              onClick={() => mutCerrarRetiro.mutate(retiroConfirmado.id)}
-              className="mt-1 min-h-[56px] w-full cursor-pointer rounded-2xl bg-primario text-lg font-extrabold text-white disabled:opacity-50"
-            >
-              {mutCerrarRetiro.isPending ? 'CERRANDO…' : 'LISTO'}
             </button>
           </div>
         </div>

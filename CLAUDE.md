@@ -410,6 +410,17 @@ sistema, en una sola transacción:
   historial de `ItemDePedido` por sucursal (`GET /pedidos/mas-vendidos`). **No es orden
   manual.** Hay además un bloque fijo de "más vendidos" y un buscador.
 - El total del pedido se actualiza en tiempo real. El carrito siempre está visible.
+- **`nombreCliente` es OBLIGATORIO para confirmar** (regla de negocio, 2026-08-28): sin
+  nombre el botón CONFIRMAR PEDIDO queda deshabilitado, con borde rojo en el campo y el
+  mensaje *"Poné el nombre del cliente para confirmar."* Aplica a los **dos** tipos de
+  pedido, no solo a A_RETIRAR: es con lo que se llama al cliente, lo que se imprime en la
+  comanda y lo que busca el buscador de Pedidos activos.
+  > La validación es **de pantalla**. En el backend `nombreCliente` sigue siendo
+  > `z.string().max(80).optional()`: el POS es el único que crea pedidos, y endurecer el
+  > Zod rompería los tests de integración que confirman sin nombre. Si alguna vez se
+  > agrega otro canal de alta (WhatsApp), hay que subir la regla al backend.
+- La **hora prometida** sigue siendo opcional, y sale del selector de horarios fijos
+  (`SelectorHorario`) — nada de tipeo libre.
 
 #### Catálogo y precios
 
@@ -501,27 +512,33 @@ Desde EN_PREPARACION o LISTO:
   el total del pedido siga cerrando contra la suma de los montos. No es dato ciego: el
   cliente ve el recargo.
 
-#### Retiro de socio y venta a empleado (reunión 4/8)
+#### Descuentos (y el retiro de socio, que ya no está en el POS)
 
-En el carrito, junto a Presencial / A retirar, el cajero elige quién se lleva el pedido:
-**Cliente** (default), **Socio** o **Empleado**. Es solo por **mercadería** — el retiro de
-**plata** sigue donde estaba, en Operaciones de caja (Pablo lo aclaró expresamente).
+**Todo pedido del POS es una venta normal.** El descuento —empleado, encargado, o el que
+el admin haya cargado— **se elige en la pantalla de cobro**, no al armar el carrito:
+botón "− Descuento" → `SelectorDescuento` con la lista de `TipoDescuento`
+(`GET /descuentos`) y "SIN DESCUENTO" siempre arriba.
 
-- **Socio** → obliga a elegir cuál (`ARIEL`/`ELIANA`/`EMA`, mismo selector cerrado). El
-  pedido queda a **costo cero**: cada línea con `montoTotal = 0`, `esVentaCostoCero = true`
-  y `tipoCostoCero = RETIRO_SOCIO`, así **no cuenta como venta** en ningún total. **El
-  stock igual se descuenta** — se lo llevó. No se cobra: se cierra con
-  `POST /:id/cobrar` sin pagos, queda `ENTREGADO` **sin ningún `Pago`** (si generara uno
-  ensuciaría el arqueo) y se audita como `ENTREGAR_SIN_COBRO` con el socio.
-- **Empleado** → sí es venta, con el **descuento global configurable**
-  (`ConfiguracionGeneral.DESCUENTO_EMPLEADO_PCT`, editable en Catálogo → Recargos y
-  descuentos, default 20%). Se aplica **por línea y redondeando hacia abajo** a pesos
-  enteros: el empleado nunca paga de más por un redondeo y la suma de las líneas da exacto
-  el total.
-- El `%` queda **congelado en `Pedido.descuentoPct`** al confirmar. Cambiarlo después no
-  toca lo ya vendido, y si el pedido se modifica se le reaplica **el suyo**, no el vigente.
+- Se aplica **por línea y redondeando hacia abajo** a pesos enteros (`aplicarDescuentoEmpleado`
+  en el backend; `CobrarPedido.tsx` espeja el mismo `Math.floor`): el empleado nunca paga
+  de más por un redondeo y la suma de las líneas da exacto el total.
+- El `%` queda **congelado en `Pedido.descuentoPct`** al cobrar. Cambiarlo después no toca
+  lo ya vendido, y si el pedido se modifica se le reaplica **el suyo**, no el vigente.
 - Un pedido normal **no** se puede cerrar sin pagos (`PAGO_INSUFICIENTE`): la vía sin cobro
   existe solo cuando el total es 0.
+
+**El "Retiro de socio (no se cobra)" salió del POS el 2026-08-28**, a pedido de Pablo: no
+lo usaban, y el selector de descuentos al cobrar ya cubre el caso. Se eliminó el switch,
+los tres botones de socio y el modal de cierre sin pagos.
+
+- **El backend NO cambió.** `POST /pedidos` sigue aceptando `beneficiario` y
+  `socioBeneficiario`, y `POST /:id/cobrar` sin pagos sigue cerrando un pedido de total 0
+  como `ENTREGADO` sin ningún `Pago`, auditado como `ENTREGAR_SIN_COBRO`. Los pedidos
+  históricos con `tipoCostoCero = RETIRO_SOCIO` y el reporte de retiros por socio siguen
+  funcionando: lo que se sacó es **la puerta de entrada en pantalla**, no el circuito.
+- Si algún día lo quieren de vuelta, es UI nueva sobre un backend que ya lo soporta.
+- El retiro de **plata** nunca estuvo acá: sigue en Operaciones de caja (Pablo lo aclaró
+  expresamente). Eso no se tocó.
 
 > `ConfiguracionGeneral` es una tabla clave-valor a propósito: cada parámetro nuevo que el
 > admin deba poder tocar no debería costar una migración.
