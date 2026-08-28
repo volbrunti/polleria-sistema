@@ -413,6 +413,12 @@ sistema, en una sola transacción:
   historial de `ItemDePedido` por sucursal (`GET /pedidos/mas-vendidos`). **No es orden
   manual.** Hay además un bloque fijo de "más vendidos" y un buscador.
 - El total del pedido se actualiza en tiempo real. El carrito siempre está visible.
+- **Pedidos activos es un tablero, no una lista** (2026-08-28): grilla responsive de 1 / 2 /
+  3 / 4 columnas (celular / 768 / 1024 / 1536), con el **nombre del cliente como titular**
+  en 26px y el total a la derecha. El `#id` baja a chip — sigue estando para cruzar contra
+  la comanda de cocina. Cada tarjeta lleva una franja de color a la izquierda con el color
+  de su estado. Medido en 375/768/1024/1366/1920: sin desborde horizontal y con los
+  botones en 48px de alto en todos.
 - **`nombreCliente` es OBLIGATORIO para confirmar** (regla de negocio, 2026-08-28): sin
   nombre el botón CONFIRMAR PEDIDO queda deshabilitado, con borde rojo en el campo y el
   mensaje *"Poné el nombre del cliente para confirmar."* Aplica a los **dos** tipos de

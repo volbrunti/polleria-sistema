@@ -126,7 +126,13 @@ export function PedidosActivos({ sucursalId }: Props) {
           No hay ningún pedido a nombre de "{busquedaNombre.trim()}".
         </div>
       ) : (
-        pedidosVisibles.map((p) => {
+        // Tablero tipo comandera: tantas columnas como entren en la pantalla,
+        // en vez de una sola tira vertical. Con 40 pedidos por turno (y picos
+        // de 78 los domingos) la lista de a uno obligaba a scrollear para ver
+        // qué hay pendiente. `items-start` deja que cada tarjeta mida lo suyo:
+        // un pedido de 1 ítem no se estira para igualar al de 8 al lado.
+        <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+          {pedidosVisibles.map((p) => {
           const etiqueta = ETIQUETA_ESTADO[p.estado] ?? { texto: p.estado, color: '#555', bg: '#eee' };
           const total = p.items.reduce((acc, i) => acc + Number(i.montoTotal), 0);
           const ocupado =
@@ -136,7 +142,14 @@ export function PedidosActivos({ sucursalId }: Props) {
           // no hay nada más para cobrar, solo falta que cocina lo termine.
           const pagado = p.pagos.length > 0;
           return (
-            <div key={p.id} className="rounded-2xl border border-borde bg-white px-4.5 py-4">
+            // Franja de color del estado a la izquierda: en un tablero de 4
+            // columnas el chip de texto solo no alcanza para barrer con la
+            // vista qué está en preparación y qué ya está listo.
+            <div
+              key={p.id}
+              className="rounded-2xl border border-borde border-l-8 bg-white px-4.5 py-4"
+              style={{ borderLeftColor: etiqueta.color }}
+            >
               {/* El nombre es el titular de la tarjeta: es con lo que el cajero
                   encuentra el pedido cuando el cliente se para en el mostrador
                   y dice cómo se llama. El número queda de chip — sirve para
@@ -181,12 +194,12 @@ export function PedidosActivos({ sucursalId }: Props) {
 
               <div className="mt-2 flex flex-col gap-0.5">
                 {p.items.map((i) => (
-                  <div key={i.id} className="flex justify-between text-[15px]">
-                    <span>
+                  <div key={i.id} className="flex justify-between gap-2 text-[15px]">
+                    <span className="min-w-0 break-words">
                       {fmtNumero(i.cantidad, 1)} × {i.producto?.nombre}
                       {i.aclaraciones && <span className="text-texto-suave"> — {i.aclaraciones}</span>}
                     </span>
-                    <span className="font-semibold">{fmtMoneda(i.montoTotal)}</span>
+                    <span className="shrink-0 font-semibold">{fmtMoneda(i.montoTotal)}</span>
                   </div>
                 ))}
               </div>
@@ -197,7 +210,7 @@ export function PedidosActivos({ sucursalId }: Props) {
                     type="button"
                     disabled={ocupado}
                     onClick={() => mutListo.mutate(p.id)}
-                    className="min-h-12 cursor-pointer rounded-xl bg-primario px-5 text-[15px] font-extrabold text-white hover:bg-primario-hover disabled:opacity-50"
+                    className="min-h-12 flex-1 cursor-pointer rounded-xl bg-primario px-5 text-[15px] font-extrabold text-white hover:bg-primario-hover disabled:opacity-50 basis-[132px]"
                   >
                     {/* Ya está pagado: no queda nada más que esperar, así que
                         este toque cierra el pedido directo (ver marcarListo). */}
@@ -208,7 +221,7 @@ export function PedidosActivos({ sucursalId }: Props) {
                   <button
                     type="button"
                     onClick={() => setPedidoACobrar(p)}
-                    className="min-h-12 cursor-pointer rounded-xl border-2 border-primario bg-white px-5 text-[15px] font-extrabold text-primario hover:bg-chip"
+                    className="min-h-12 flex-1 cursor-pointer rounded-xl border-2 border-primario bg-white px-5 text-[15px] font-extrabold text-primario hover:bg-chip basis-[132px]"
                   >
                     COBRAR
                   </button>
@@ -238,7 +251,7 @@ export function PedidosActivos({ sucursalId }: Props) {
                       type="button"
                       disabled={ocupado}
                       onClick={() => mutReasignar.mutate(p.id)}
-                      className="min-h-12 cursor-pointer rounded-xl bg-primario px-5 text-[15px] font-extrabold text-white hover:bg-primario-hover disabled:opacity-50"
+                      className="min-h-12 flex-1 cursor-pointer rounded-xl bg-primario px-5 text-[15px] font-extrabold text-white hover:bg-primario-hover disabled:opacity-50 basis-[132px]"
                     >
                       REASIGNAR A OTRO CLIENTE
                     </button>
@@ -261,7 +274,8 @@ export function PedidosActivos({ sucursalId }: Props) {
               </div>
             </div>
           );
-        })
+          })}
+        </div>
       )}
 
       {pedidoACobrar && (
