@@ -270,6 +270,13 @@ cargar un ingreso aparecen como acceso rápido en vez de buscar cada producto de
 1. El usuario elige qué producto elaborado va a producir. La lista se filtra a los
    productos **con ficha técnica activa** (`GET /produccion/productos-producibles`) — no
    aparecen los que se arman en el local ni los productos de sistema.
+   - El camino inverso también existe: **"Materia prima disponible"**
+     (`ExploradorMateriaPrima`) arranca por el insumo y muestra qué se puede producir con
+     él (`GET /produccion/materia-prima/:id/producible`).
+     **Ordenado por lo último que entró** y recortado a **6 filas con un "Ver más"**
+     (2026-08-28): son más de 20 insumos, es una pantalla de celular, y el operario abre
+     esto justo después de descargar al proveedor — lo que va a producir es lo que acaba
+     de recibir. Buscando se muestran todas las coincidencias, sin recorte.
 2. **Selección de `LineaIngreso` de origen**: el sistema muestra las líneas con
    `cantidadRestanteDisponible > 0` de la materia prima principal. El usuario elige sobre
    cuál(es) trabaja. **La trazabilidad va por partida.**

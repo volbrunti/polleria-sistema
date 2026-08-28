@@ -10,8 +10,15 @@ interface GrupoMateriaPrima {
   nombre: string;
   unidadDeMedida: 'KG' | 'UNIDAD';
   total: number;
+  /** Timestamp del ingreso más nuevo del grupo — 0 si ninguna partida tiene fecha. */
+  ultimoIngreso: number;
   partidas: LineaIngresoDisponible[];
 }
+
+// Cuántas materias primas se muestran antes del "Ver más". El listado completo
+// pasa de 20 insumos y en el celular eso es un scroll largo para llegar al
+// resto del menú; lo que se busca casi siempre es lo que acaba de entrar.
+const VISIBLES_AL_INICIO = 6;
 
 function unidadTexto(unidad: 'KG' | 'UNIDAD'): string {
   return unidad === 'KG' ? 'kg' : 'u';
@@ -36,6 +43,7 @@ interface Props {
 export function ExploradorMateriaPrima({ onElegirProducible, titulo }: Props) {
   const [busqueda, setBusqueda] = useState('');
   const [elegida, setElegida] = useState<GrupoMateriaPrima | null>(null);
+  const [verTodo, setVerTodo] = useState(false);
 
   const disponible = useQuery({
     queryKey: ['ingresos', 'lineas-disponibles', 'todas'],
@@ -56,15 +64,27 @@ export function ExploradorMateriaPrima({ onElegirProducible, titulo }: Props) {
       nombre: l.producto.nombre,
       unidadDeMedida: l.producto.unidadDeMedida,
       total: 0,
+      ultimoIngreso: 0,
       partidas: [],
     };
     actual.total += Number(l.cantidadRestanteDisponible);
+    const entrada = l.ingresoMercaderia ? Date.parse(l.ingresoMercaderia.fechaHora) : 0;
+    if (entrada > actual.ultimoIngreso) actual.ultimoIngreso = entrada;
     actual.partidas.push(l);
     agrupado.set(l.productoId, actual);
   }
+  const buscando = busqueda.trim().length > 0;
+  // Ordenado por lo último que entró, no alfabético: el operario abre esto
+  // justo después de descargar al proveedor, y lo que va a producir es lo que
+  // acaba de recibir. Sin fecha (partidas sintéticas de retorno) va al final.
   const lista = [...agrupado.values()]
-    .filter((g) => (busqueda.trim() ? g.nombre.toLowerCase().includes(busqueda.trim().toLowerCase()) : true))
-    .sort((a, b) => a.nombre.localeCompare(b.nombre));
+    .filter((g) => (buscando ? g.nombre.toLowerCase().includes(busqueda.trim().toLowerCase()) : true))
+    .sort((a, b) => b.ultimoIngreso - a.ultimoIngreso || a.nombre.localeCompare(b.nombre));
+
+  // Buscando se muestran todas las coincidencias: recortar un resultado de
+  // búsqueda a 6 esconde justo lo que el operario fue a buscar.
+  const visibles = buscando || verTodo ? lista : lista.slice(0, VISIBLES_AL_INICIO);
+  const ocultas = lista.length - visibles.length;
 
   if (elegida) {
     return (
@@ -134,14 +154,24 @@ export function ExploradorMateriaPrima({ onElegirProducible, titulo }: Props) {
       />
       {disponible.isLoading && <div className="text-sm text-texto-suave">Cargando…</div>}
       <div className="flex flex-col gap-1.5">
-        {lista.map((g) => (
+        {visibles.map((g) => (
           <button
             key={g.productoId}
             type="button"
             onClick={() => setElegida(g)}
             className="flex min-h-14 w-full cursor-pointer items-center justify-between gap-2.5 rounded-xl border border-borde bg-white px-3.5 py-2.5 text-left hover:border-primario"
           >
-            <span className="min-w-0 flex-1 truncate text-[15px] font-bold">{g.nombre}</span>
+            <span className="min-w-0 flex-1">
+              {/* Sin truncate: la fila ya es de dos renglones, y cortar
+                  "Discos de empanada grandes…" con puntos suspensivos obliga
+                  a abrir el producto para saber cuál es. */}
+              <span className="block break-words text-[15px] font-bold">{g.nombre}</span>
+              {g.ultimoIngreso > 0 && (
+                <span className="block text-[13px] text-texto-suave">
+                  Entró el {fmtFecha(new Date(g.ultimoIngreso).toISOString())}
+                </span>
+              )}
+            </span>
             <span className="shrink-0 text-[15px] font-extrabold">
               {fmtNumero(g.total)} {unidadTexto(g.unidadDeMedida)}
             </span>
@@ -151,6 +181,16 @@ export function ExploradorMateriaPrima({ onElegirProducible, titulo }: Props) {
           <div className="py-4 text-center text-sm text-texto-suave">Sin resultados.</div>
         )}
       </div>
+
+      {!buscando && (ocultas > 0 || verTodo) && (
+        <button
+          type="button"
+          onClick={() => setVerTodo((v) => !v)}
+          className="min-h-12 w-full cursor-pointer rounded-xl border border-borde-fuerte bg-white text-sm font-bold text-texto-suave hover:border-primario"
+        >
+          {verTodo ? 'VER MENOS' : `VER MÁS (${ocultas})`}
+        </button>
+      )}
     </div>
   );
 }
